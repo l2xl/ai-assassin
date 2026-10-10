@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE]
 order: 70
 test: 6fd49e542b0a717538b586851acafb6324a582544de0bdd114fe2f9c6132afdd
-review: 0a249c31389f2cb4a41a37235aac24224681a11f0cc27785d38718cbdbef185a
+review: cd488429e8d74c329b60645f31b04f80a2880f9a27501fa4bf118175e0d7f9bf
 ---
 A turn of the Claude Code connector shall last until the `claude` process exits, the output of its last answer being the turn's answer
 

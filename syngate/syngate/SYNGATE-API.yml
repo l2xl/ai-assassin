@@ -1,8 +1,8 @@
 ---
 parents: [SYNGATE, SYNTHETIC-020]
 order: -20
-test: 4cb9269ded0fc2cf51f4e405d61ec1384b14b7cac1626f8f01f28073eb1c3513
-review: 10c61f6c95f47d402db672a9daa6c1db61b841ea1a5beb43159184021bcb6ea7
+test: a72fbed94d5879af7e0cdbf21d97b20b8011d61504d482755f641ee67d352aa2
+review: a633b5660fa45f5c23363a1aa7a00694b2405535e7bc770ef1fcb1d2e7fa6c49
 ---
 Syngate API
 

@@ -1,6 +1,9 @@
-header: Prompt library
-description: |
-  Prompt library: a set of named prompts — skills and tools — added to the context automatically or on explicit request by name, in the manner of Claude skills. A tool defines the format of a structured answer the harness recognises and turns into a call, whose result reaches the model with the next turn; a skill is additional description only, so the rules of how to call a tool are themselves a skill. Every prompt is one markdown file under the package's `prompts/` folder named by its stem, opened by a front matter with its `kind` (skill or tool), a `description` and, for a skill, whether it is `default`.
+---
 parents: [SYNTHETIC]
 order: 40
-test: ~
+test: 937672081423c36ff8e3a355126dbaed1741c6af7fe4021f0165dfe79ca9093d
+review: 9888f0c7a560bda1609f222c8f6a5bf1c56b065e3ea17b38a8b3b05299431be1
+---
+The prompt library shall be the markdown files under the package's `prompts/` folder, each a skill or a tool named by its file stem
+
+A file opens with a front matter giving its `kind` (skill or tool), a `description` and, for a skill, whether it is `default`. The harness adds a prompt to the context by default or on request by name, in the manner of Claude skills.

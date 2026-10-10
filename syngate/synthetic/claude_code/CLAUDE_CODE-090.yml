@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 90
-test: ~
+test: ca91cbd285ea78f054e4a64b16f7e5a7a165c693b4b1e9715bcb37c95d655433
+review: 72fd64709acf3633e870bb9a2cb2e592947b5de9288ca9adb3ed19826830b42a
 ---
 The Claude Code connector shall dispatch a turn as a stream of events, every message, tool call and result reaching the turn as a step when it happens
 

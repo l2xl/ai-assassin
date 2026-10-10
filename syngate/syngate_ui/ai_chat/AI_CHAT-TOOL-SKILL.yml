@@ -1,5 +1,7 @@
-header: Skill loading tool
-description: |
-  The skill tool, [src/ai_scratcher/prompts/skill.md](src/ai_scratcher/prompts/skill.md) shall bring the named skill's text back as the next prompt of the same session, the way a query's result does; an unknown name shall be refused.
+---
 parents: [AI_CHAT-PROMPTS-TOOLS]
-test: ~
+sources: [src/ai_scratcher/prompts/skill.md]
+test: 451ec2e4f62c0dbec17d29e0695ae34b4861e58753e4db643ec27f061b78457d
+review: 07b514be65ba2abbe27dd1238f918a1633ca0822ecc0deb74f0ee63714bd94e4
+---
+The skill tool shall bring the named skill's text back as the next prompt of the same session, the way a query's result does, an unknown name being refused

@@ -1,5 +1,6 @@
-header: Default prompt
-description: |
-  The default prompt — composed from the library, not a CLAUDE.md — shall head every seed context and consist of the default skills, the list of the skills on request by name and description, and every tool definition.
+---
 parents: [AI_CHAT-PROMPTS]
-test: ~
+test: 1665c1a758a14ee57838a1657f55a4139dc8567cb997faed5631e69dba66dbb7
+review: 68e535fc1036b54494c375cde916171b8138612b6f503957d7e3c133b6200a0b
+---
+The default prompt, composed from the library and deliberately not a `CLAUDE.md`, shall head every seed context with the default skills, the list of the skills on request by name and description, and every tool definition

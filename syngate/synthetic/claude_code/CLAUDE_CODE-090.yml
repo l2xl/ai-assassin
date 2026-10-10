@@ -1,0 +1,8 @@
+---
+parents: [CLAUDE_CODE]
+order: 90
+test: ~
+---
+The Claude Code connector shall dispatch a turn as a stream of events, every message, tool call and result reaching the turn as a step when it happens
+
+A subagent's launch with its prompt and its final report are steps of their own.

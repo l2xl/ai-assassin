@@ -73,7 +73,7 @@ INDEX_TEMPLATE = """<!doctype html><meta charset="utf-8"><title>Syngate Status</
 <tr>
 <td><a href="items/{{ it.uid }}.html">{{ it.uid }}</a></td>
 <td>{{ it.folder }}</td>
-<td>{{ it.header or (it.description[:70] ~ ('...' if it.description|length > 70 else '')) }}</td>
+<td>{{ it.title }}</td>
 <td><span class="status status-{{ it.status_class }}"><span class="ball"></span>{{ it.status_label }}</span></td>
 </tr>
 {% endfor %}
@@ -86,8 +86,10 @@ ITEM_TEMPLATE = """<!doctype html><meta charset="utf-8"><title>{{ uid }}</title>
 <div class="card">
 <h1>{{ uid }} <span class="status status-{{ status_class }}"><span class="ball"></span>{{ status_label }}</span></h1>
 <div class="field"><div class="label">Folder</div>{{ folder }}</div>
-{% if header %}<div class="field"><div class="label">Header</div>{{ header }}</div>{% endif %}
 <div class="field"><div class="label">Description</div><div>{{ description }}</div></div>
+{% if sources %}<div class="field"><div class="label">Sources</div>
+<ul class="links">{% for s in sources %}<li>{{ s }}</li>{% endfor %}</ul>
+</div>{% endif %}
 <div class="field"><div class="label">Reviewed</div>{{ reviewed }}</div>
 {% if problems %}<div class="field"><div class="label">Validation</div>
 <pre>{% for p in problems %}{{ p }}
@@ -115,7 +117,7 @@ place they're referenced, marked <span class="tree-dup">(also under ...)</span>.
 
 
 def _label(uid, entry):
-    title = entry["header"] or (entry["description"][:60] + ("..." if len(entry["description"]) > 60 else ""))
+    title = entry["title"]
     status = entry["status"]
     cls = STATUS_CLASS[status]
     return (
@@ -175,8 +177,7 @@ def run(status_path, out_dir):
             "uid": uid,
             "folder": entry["folder"],
             "order": entry["order"],
-            "header": entry["header"],
-            "description": entry["description"],
+            "title": entry["title"],
             "status_class": STATUS_CLASS[entry["status"]],
             "status_label": STATUS_LABEL[entry["status"]],
         })
@@ -184,8 +185,8 @@ def run(status_path, out_dir):
             css=BASE_CSS,
             uid=uid,
             folder=entry["folder"],
-            header=entry["header"],
             description=entry["description"],
+            sources=entry.get("sources") or [],
             reviewed=entry["reviewed"],
             status_class=STATUS_CLASS[entry["status"]],
             status_label=STATUS_LABEL[entry["status"]],

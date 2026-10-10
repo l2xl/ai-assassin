@@ -12,7 +12,7 @@ import syngatelib
 
 
 def _stamp_for(header, description, parents, tests):
-    item = syngatelib.Item(uid="X", path=syngatelib.ROOT, header=header, description=description, parents=list(parents), tests=tests)
+    item = syngatelib.Item(uid="X", path=syngatelib.ROOT, description=f"{header}\n\n{description}", parents=list(parents), tests=tests)
     return syngatelib.compute_stamp(item)
 
 
@@ -45,9 +45,9 @@ def test_reviewed_item_left_untouched_passes_validate_structure(syngate_tree):
 def test_strict_validate_reports_every_unreviewed_item(monkeypatch, capsys):
     import syngate as syngate_cli
 
-    root = syngatelib.Item(uid="ROOT-1", path=syngatelib.ROOT, header="root", description="Root branch.\n", parents=[], features={"test": True, "review": True})
+    root = syngatelib.Item(uid="ROOT-1", path=syngatelib.ROOT, description="Root branch.\n", parents=[], features={"test": True, "review": True})
     child = syngatelib.Item(
-        uid="CHILD-1", path=syngatelib.ROOT, header="leaf", description="The child shall do work.\n",
+        uid="CHILD-1", path=syngatelib.ROOT, description="The child shall do work.\n",
         parents=["ROOT-1"], tests={None: "b" * 64},
     )
     items = {"ROOT-1": root, "CHILD-1": child}
@@ -67,7 +67,7 @@ def test_non_strict_validate_does_not_report_unreviewed_items(monkeypatch, capsy
     import syngate as syngate_cli
 
     root = syngatelib.Item(
-        uid="ROOT-1", path=syngatelib.ROOT, header="root", description="The root shall stand alone.\n",
+        uid="ROOT-1", path=syngatelib.ROOT, description="The root shall stand alone.\n",
         parents=[], tests={None: "c" * 64}, features={"test": True, "review": True},
     )
     items = {"ROOT-1": root}

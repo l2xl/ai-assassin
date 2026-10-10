@@ -147,17 +147,18 @@ def test_report_entry_exposes_presentation_fields(syngate_tree, monkeypatch):
     report = syngatelib.compute_status(items, {("LEAF-1", None): [_rec(True, name="mytest", log="ok")]})
 
     parent = report["PARENT-1"]
-    assert parent["header"] == "Parent"
+    assert parent["title"] == "Parent"
     assert parent["parents"] == ["ROOT-1"]
     assert parent["children"] == ["CB-1", "CC-1", "CA-1"]
     assert parent["folder"] == "syngate"
     assert parent["reviewed"] is False
     assert parent["tests"] == []
+    assert parent["sources"] == []
 
     leaf = report["LEAF-1"]
-    assert leaf["header"] == "Leaf"
+    assert leaf["title"] == "Leaf"
     assert leaf["reviewed"] is True
-    assert leaf["description"] == "shall report cleanly"
+    assert leaf["description"] == "Leaf\n\nshall report cleanly"
     assert leaf["tests"] == [{"binding": "", "name": "mytest", "passed": True, "log": "ok"}]
 
     assert report["STUB-1"]["status"] == syngatelib.NOT_IMPLEMENTED
@@ -224,7 +225,7 @@ def test_test_and_review_axes_roll_up_independently(syngate_tree):
     make(syngate_dir, "PASS-2", "shall pass", parents=["D-1"], tests=None)
     make(syngate_dir, "UNK-2", "shall run some day", parents=["D-1"], tests=None)
     for uid, parent in (("STALE-1", "B-1"), ("OK-1", "C-1")):
-        frozen = syngatelib.Item(uid=uid, path=syngate_dir / f"{uid}.yml", header=uid, description="It shall hold.\n", parents=[parent], tests={None: "a" * 64})
+        frozen = syngatelib.Item(uid=uid, path=syngate_dir / f"{uid}.yml", description="It shall hold.\n", parents=[parent], tests={None: "a" * 64})
         frozen.reviewed = syngatelib.compute_stamp(frozen)
         syngatelib.write_item(frozen)
     (syngate_dir / "STALE-1.yml").write_text((syngate_dir / "STALE-1.yml").read_text().replace("It shall hold.", "It shall have drifted."))

@@ -5,6 +5,7 @@
 """Synthetic agent library: item seed context and AI connectors."""
 
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -15,30 +16,61 @@ import synthetic
 import syngate_ui
 import syngatelib
 
-# Stub `claude`: answers the JSON a non-interactive turn prints, echoing its argv and the seed file it was handed.
+# Stub `claude`: answers the result event a non-interactive stream-json turn closes with, echoing its argv and the seed file it was handed.
 STUB_CLAUDE = """
 import json, sys
 argv = sys.argv[1:]
 if "rc-1" in argv[1]:
-    print(json.dumps({"is_error": True, "result": "model overloaded"})); sys.exit(1)
+    print(json.dumps({"type": "result", "is_error": True, "result": "model overloaded"})); sys.exit(1)
 seed = open(argv[argv.index("--append-system-prompt-file") + 1], encoding="utf-8").read()
-print(json.dumps({"result": json.dumps({"argv": argv, "seed": seed}), "session_id": "session-7", "is_error": False}))
+print(json.dumps({"type": "result", "result": json.dumps({"argv": argv, "seed": seed}), "session_id": "session-7", "is_error": False}))
 """
 
 
 @pytest.mark.syngate("SYNTHETIC-010")
-def test_seed_context_opens_with_the_default_prompt_then_every_ancestor_once_parents_first(syngate_tree):
+def test_seed_context_opens_with_the_default_prompt_then_the_ancestry_the_item_and_its_descendants_each_once(syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
-    make_item(syngate_dir, "SIDE-A", "Side A.\n", parents=("ROOT",))
-    make_item(syngate_dir, "SIDE-B", "Side B.\n", parents=("ROOT",))
-    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("SIDE-A", "SIDE-B"), tests=None)
+    make_item(syngate_dir, "SIDE-A", "Side A.\n", parents=("ROOT",), order=10)
+    make_item(syngate_dir, "SIDE-B", "Side B.\n", parents=("ROOT",), order=20)
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("SIDE-A", "SIDE-B"), order=20, tests=None)
+    make_item(syngate_dir, "NOTE-001", "A note.\n", parents=("SIDE-B",), order=10)
+    make_item(syngate_dir, "DEEP-001", "It shall go deep.\n", parents=("NOTE-001",), tests=None)
     items, errors = syngatelib.load_tree(syngate_dir)
     assert not errors
     prompt = synthetic.PROMPTS["default"] + "\n"
-    assert synthetic.seed_context(items, "ROOT") == prompt + "Root.\n"
-    assert synthetic.seed_context(items, "SIDE-B") == prompt + "Root.\nSide B.\n"
+    assert synthetic.seed_context(items, "ROOT") == prompt + "Root.\nSide A.\nIt shall leaf.\nSide B.\nA note.\nIt shall go deep.\n"
+    assert synthetic.seed_context(items, "SIDE-B") == prompt + "Root.\nSide B.\nA note.\nIt shall go deep.\nIt shall leaf.\n"
+    assert synthetic.seed_context(items, "NOTE-001") == prompt + "Root.\nSide B.\nA note.\nIt shall go deep.\n"
     assert synthetic.seed_context(items, "LEAF-001") == prompt + "Root.\nSide A.\nSide B.\nIt shall leaf.\n"
+
+
+def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(tmp_path, syngate_tree):
+    syngate_dir, _ = syngate_tree
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "root.py").write_text("ROOT = 1\n")
+    (tmp_path / "src" / "leaf.py").write_text("```\nLEAF = 2")
+    (syngate_dir / "ROOT.yml").write_text("---\nparents: []\nsources: [src/root.py]\ntest: enabled\nreview: enabled\n---\nRoot.\n")
+    (syngate_dir / "SIDE-A.yml").write_text("---\nparents: [ROOT]\nsources: [src/leaf.py, src/root.py]\n---\nSide A.\n")
+    (syngate_dir / "LEAF-001.yml").write_text("---\nparents: [SIDE-A]\nsources: [src/leaf.py, docs/GONE.md]\ntest: ~\n---\nIt shall leaf.\n")
+    items, errors = syngatelib.load_tree(syngate_dir)
+    assert not errors and synthetic.item_view(items, "SIDE-A")["sources"] == ["src/leaf.py", "src/root.py"]
+    prompt = synthetic.PROMPTS["default"] + "\n"
+    root_source = "\n# Source src/root.py\n````\nROOT = 1\n````\n"
+    leaf_sources = "\n# Source src/leaf.py\n````\n```\nLEAF = 2\n````\n" + "\n# Source docs/GONE.md\n(file not found)\n"
+    assert synthetic.seed_context(items, "ROOT", root=tmp_path) == prompt + "Root.\nSide A.\nIt shall leaf.\n" + root_source + leaf_sources
+    assert synthetic.seed_context(items, "SIDE-A", root=tmp_path) == synthetic.seed_context(items, "ROOT", root=tmp_path)
+    seed = synthetic.seed_context(items, "LEAF-001", root=tmp_path)
+    assert seed == prompt + "Root.\nSide A.\nIt shall leaf.\n" + root_source + leaf_sources
+    assert synthetic.apply_call(items, "ROOT", {"tool": "context", "uid": "LEAF-001"}, syngate_dir=syngate_dir) == f"- context of LEAF-001:\n{seed}"
+    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    app.connectors = {"echo": EchoAnswer()}
+    reply = app.chat({"uid": "LEAF-001", "connector": "echo", "model": "model-a", "effort": "low", "text": "Go."})["reply"]
+    assert reply == f"{seed}|Go.|model-a|low||None"
+    synthetic.apply_call(items, "ROOT", {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow.", "sources": ["src/leaf.py"]}, syngate_dir=syngate_dir)
+    assert items["LEAF-002"].sources == ["src/leaf.py"] and synthetic.seed_context(items, "LEAF-002", root=tmp_path).endswith(root_source + "\n# Source src/leaf.py\n````\n```\nLEAF = 2\n````\n")
+    synthetic.apply_call(items, "ROOT", {"tool": "edit", "uid": "LEAF-002", "sources": []}, syngate_dir=syngate_dir)
+    assert items["LEAF-002"].sources == [] and synthetic.seed_context(items, "LEAF-002", root=tmp_path).endswith("It shall follow.\n" + root_source)
 
 
 def _library(folder):
@@ -81,15 +113,6 @@ def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_requ
     assert all(f'"tool": "{tool}"' in shipped for tool in synthetic.CALLS)
 
 
-@pytest.mark.syngate("AI_CHAT-PROMPTS-SKILLS")
-def test_every_skill_carries_a_description_and_only_the_skills_on_request_are_listed_for_loading(tmp_path):
-    library = _library(tmp_path / "prompts")
-    listed = synthetic.default_prompt(library).split(synthetic.SKILLS_ON_REQUEST, 1)[1]
-    assert listed.startswith("- `brief`: Be brief\n") and "rules" not in listed and "echo" not in listed
-    assert synthetic.SKILLS and all(entry.description for entry in synthetic.SKILLS.values())
-    assert "skill" in synthetic.CALLS and synthetic.LIBRARY["skill"].kind == "tool"
-
-
 @pytest.mark.syngate("AI_CHAT-SKILL-CALL-TOOL")
 def test_the_tool_call_skill_is_a_default_skill_stating_the_answer_format_and_the_result_round_trip():
     skill = synthetic.SKILLS["call_tool"]
@@ -108,14 +131,14 @@ def test_the_syngate_rules_skill_is_a_default_skill_stating_the_dag_rules():
         assert phrase in skill.text
 
 
-@pytest.mark.syngate("AI_CHAT-PROMPTS-TOOLS")
-def test_every_tool_definition_is_in_the_default_prompt_and_every_call_is_defined_by_a_tool():
-    tools = {name: entry for name, entry in synthetic.LIBRARY.items() if entry.kind == "tool"}
-    assert set(tools) == {"skill", "syngate_api"} and all(entry.description for entry in tools.values())
+@pytest.mark.syngate("AI_CHAT-SKILL-DELEGATE")
+def test_the_delegation_skill_is_a_default_skill_stating_how_separable_children_are_delegated_and_subagents_anchored():
+    skill = synthetic.SKILLS["delegate"]
+    assert skill.default and skill.text.startswith("# Delegation\n")
+    for phrase in ("with children", "`query`", "separable", '{"tool": "agent"', "next prompt", "first line", "`@UID`"):
+        assert phrase in skill.text
     shipped = synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
-    assert all(entry.text in shipped for entry in tools.values())
-    assert all(any(f'"tool": "{call}"' in entry.text for entry in tools.values()) for call in synthetic.CALLS)
-    assert all(f'"tool": "{call}"' in tools["syngate_api"].text for call in list(synthetic.TOOLS) + ["query", "context", "test"])
+    assert skill.text in shipped and synthetic.LIBRARY["agent"].kind == "tool" and synthetic.LIBRARY["agent"].text in shipped
 
 
 @pytest.mark.syngate("AI_CHAT-TOOL-SKILL")
@@ -146,8 +169,16 @@ def test_the_skill_call_brings_the_named_skill_back_as_the_next_prompt_and_an_un
 class EchoConnection:
     label, models, efforts, modes = "Echo", ("model-a", "model-b"), ("low", "high"), ("edit",)
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
         return f"{context}|{text}|{model}|{effort}|{','.join(modes)}|{session}", "session-1"
+
+
+class EchoAnswer(EchoConnection):
+    """The echo as a structured answer: the seed context it quotes carries the ```syngate example of the tool definitions."""
+
+    def dispatch(self, context, text, **kwargs):
+        reply, session = super().dispatch(context, text, **kwargs)
+        return {"kind": "text", "text": reply}, session
 
 
 @pytest.mark.syngate("SYNTHETIC-011")
@@ -173,12 +204,12 @@ def test_claude_code_connector_dispatches_a_non_interactive_turn(tmp_path):
     stub = tmp_path / "claude_stub.py"
     stub.write_text(STUB_CLAUDE)
     connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
-    reply, session = connector.dispatch("Root.\nIt shall leaf.\n", "What is missing?", model="claude-haiku-4-5-20251001", effort="low", session="session-6")
+    reply, session = connector.dispatch("Root.\nIt shall leaf.\n", "What is missing?", model="claude-sonnet-5", effort="low", session="session-6")
     echoed = json.loads(reply)
     assert session == "session-7" and echoed["seed"] == "Root.\nIt shall leaf.\n"
     argv = echoed["argv"]
-    assert argv[:4] == ["-p", "What is missing?", "--output-format", "json"]
-    for flag, value in (("--model", "claude-haiku-4-5-20251001"), ("--effort", "low"), ("--resume", "session-6")):
+    assert argv[:4] == ["-p", "What is missing?", "--output-format", "stream-json"]
+    for flag, value in (("--model", "claude-sonnet-5"), ("--effort", "low"), ("--resume", "session-6")):
         assert argv[argv.index(flag) + 1] == value
     assert "--model" not in json.loads(connector.dispatch("", "Defaults?")[0])["argv"]
     with pytest.raises(synthetic.connection_error, match="model overloaded"):
@@ -189,10 +220,11 @@ def test_claude_code_connector_dispatches_a_non_interactive_turn(tmp_path):
 def test_claude_code_settings_list_models_by_display_name_efforts_and_modes():
     settings = synthetic.claude_code_connector().settings()
     assert settings["label"] == "Claude Code"
-    assert {"id": "claude-opus-5-5", "name": "opus-5-5"} in settings["models"]
+    assert {"id": "claude-opus-5-5", "name": "opus-5-5", "efforts": ["low", "medium", "high", "xhigh", "max"]} in settings["models"]
+    assert {"id": "claude-haiku-4-5-20251001", "name": "haiku-4-5-20251001", "efforts": []} in settings["models"]
     assert [model["id"] for model in settings["models"]] == list(synthetic.CLAUDE_MODELS)
+    assert all(model["efforts"] == list(synthetic.CLAUDE_MODEL_EFFORTS[model["id"]]) for model in settings["models"])
     assert not [model for model in settings["models"] if model["name"].startswith("claude")]
-    assert settings["efforts"] == ["low", "medium", "high", "xhigh", "max"]
     assert [(mode["id"], mode["label"], mode["hint"], mode["default"]) for mode in settings["modes"]] == [
         ("edit", "Edit", "project files", True), ("internet", "Internet", "access", True), ("workflows", "Workflows", "run subagents", False)]
 
@@ -246,7 +278,7 @@ def test_the_seed_context_is_the_appended_system_prompt_and_tree_file_edits_are_
 
 @pytest.mark.syngate("SYNTHETIC-020")
 def test_an_answer_is_text_or_one_block_of_tree_calls_never_both():
-    calls = [{"tool": "add", "uid": "AREA-030", "parent": "@", "header": "H", "description": "D"}, {"tool": "remove", "uid": "AREA-020"},
+    calls = [{"tool": "add", "uid": "AREA-030", "parent": "@", "description": "D"}, {"tool": "remove", "uid": "AREA-020"},
              {"tool": "move", "uid": "AREA-010", "to": "AREA", "before": "AREA-030"}]
     block = "```syngate\n" + json.dumps(calls) + "\n```"
     prose = "Plain prose, even with ```json\n[]\n``` inside."
@@ -255,7 +287,7 @@ def test_an_answer_is_text_or_one_block_of_tree_calls_never_both():
     for mixed in (f"Here you go:\n{block}", f"{block}\nDone.", f"{block}\n{block}"):
         with pytest.raises(synthetic.protocol_error, match="never both"):
             synthetic.parse_reply(mixed)
-    for malformed in ("[{", "[]", '{"tool": "add"}', '[{"tool": "rename", "uid": "X"}]', '[{"tool": "add", "uid": "X", "header": "H"}]', '[{"tool": "move", "uid": "X"}]'):
+    for malformed in ("[{", "[]", '{"tool": "add"}', '[{"tool": "rename", "uid": "X"}]', '[{"tool": "add", "uid": "X", "sources": ["a"]}]', '[{"tool": "move", "uid": "X"}]'):
         with pytest.raises(synthetic.protocol_error):
             synthetic.parse_reply(f"```syngate\n{malformed}\n```")
 
@@ -263,7 +295,7 @@ def test_an_answer_is_text_or_one_block_of_tree_calls_never_both():
 # Stub `claude` answering through structured output, the reply text being something else entirely.
 STUB_STRUCTURED = """
 import json
-print(json.dumps({"result": "the text the model also printed", "structured_output": {"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]},
+print(json.dumps({"type": "result", "result": "the text the model also printed", "structured_output": {"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]},
                   "session_id": "session-8", "is_error": False}))
 """
 
@@ -277,8 +309,8 @@ def test_the_answer_schema_carries_every_tool_call_and_the_structured_output_is_
     assert schema == synthetic.ANSWER_SCHEMA and schema["properties"]["kind"]["enum"] == ["text", "calls"]
     shapes = {shape["properties"]["tool"]["const"]: shape["required"] for shape in schema["properties"]["calls"]["items"]["anyOf"]}
     assert shapes == {tool: ["tool", *fields] for tool, fields in synthetic.CALLS.items()}
-    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"}
-    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS)
+    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"} and set(synthetic.DELEGATIONS) == {"agent"}
+    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS) | set(synthetic.DELEGATIONS)
     structured = tmp_path / "structured_stub.py"
     structured.write_text(STUB_STRUCTURED)
     answer, session = synthetic.claude_code_connector(cli=(sys.executable, str(structured)), cwd=tmp_path).dispatch("", "Go.")
@@ -299,7 +331,7 @@ class ScriptedConnection:
     def __init__(self, *answers):
         self.answers, self.prompts = list(answers), []
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
         self.prompts.append((text, session))
         return self.answers[min(len(self.prompts), len(self.answers)) - 1], f"session-{len(self.prompts)}"
 
@@ -311,17 +343,21 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
     app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
-    query, add = {"tool": "query", "uid": "@"}, {"tool": "add", "uid": "LEAF-002", "header": "Second", "description": "It shall follow."}
+    query, add = {"tool": "query", "uid": "@"}, {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow."}
+    agent = {"tool": "agent", "uid": "LEAF-002", "prompt": "Check it."}
     ask = lambda connection: app.chat({"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "text": "Add a second leaf."})
 
-    app.connectors = {"scripted": (scripted := ScriptedConnection(calls(query), calls(add, query), {"kind": "text", "text": "Done."}))}
+    app.connectors = {"scripted": (scripted := ScriptedConnection(calls(query), calls(add, query), calls(agent), {"kind": "text", "text": "Checked."},
+                                                                  {"kind": "text", "text": "Done."}))}
     result = ask(scripted)
-    assert [session for _, session in scripted.prompts] == [None, "session-1", "session-2"]
+    assert [session for _, session in scripted.prompts] == [None, "session-1", "session-2", None, "session-3"]
+    assert scripted.prompts[3][0] == "Check it." and scripted.prompts[4][0] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-002: Checked."
     assert scripted.prompts[0][0] == "Add a second leaf."
     for prompt, children in ((scripted.prompts[1][0], ["LEAF-001"]), (scripted.prompts[2][0], ["LEAF-001", "LEAF-002"])):
         assert prompt.startswith(synthetic.RESULTS_PREAMBLE) and json.loads(prompt.split("- ROOT: ", 1)[1])["children"] == children
     assert scripted.prompts[2][0].split("\n")[1] == "- added LEAF-002 under ROOT"
-    assert result["session"] == "session-3" and result["calls"] == [query, add, query] and result["reply"].endswith("- added LEAF-002 under ROOT\n- ROOT: " + json.dumps(synthetic.item_view(app._load(), "ROOT"), ensure_ascii=False) + "\nDone.")
+    assert result["session"] == "session-5" and result["calls"] == [query, add, query, agent] and result["reply"].endswith(
+        "- added LEAF-002 under ROOT\n- ROOT: " + json.dumps(synthetic.item_view(app._load(), "ROOT"), ensure_ascii=False) + "\n- agent LEAF-002: Checked.\nDone.")
 
     app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}
     with pytest.raises(syngate_ui.ApiError, match="kept querying") as refused:
@@ -348,7 +384,7 @@ with open(argv[argv.index("--coverage-out") + 1], "a") as out:
 """
 
 
-@pytest.mark.syngate("SYNGATE-API-AI", "run")
+@pytest.mark.syngate("SYNGATE-API-AI")
 def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports_the_outcome(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
@@ -383,11 +419,89 @@ def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports
         app.jobs.cancel()
 
 
+class DelegatedConnection(ScriptedConnection):
+    """The parent's scripted answers; a delegated `Do …` prompt is answered only once two of them are out at the same time, `Hold`
+    once released."""
+    models = ("model-a", "model-b")
+
+    def __init__(self, *answers):
+        super().__init__(*answers)
+        self.gate, self.release = threading.Barrier(2, timeout=5), threading.Event()
+
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+        if text == "Hold":
+            self.release.wait(5)
+            return {"kind": "text", "text": "Held."}, None
+        if not text.startswith("Do "):
+            return super().dispatch(context, text, model, effort, modes, session, on_step)
+        on_step({"kind": "reasoning", "text": f"On it: {text}", "at": 0.0})
+        try:
+            self.gate.wait()
+        except threading.BrokenBarrierError:
+            return {"kind": "text", "text": "alone"}, None
+        return {"kind": "text", "text": f"did: {text}"}, f"session-{model}"
+
+
+def _awaited(predicate):
+    deadline = time.monotonic() + 5
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    return predicate()
+
+
+@pytest.mark.syngate("AI_CHAT-TOOL-AGENT")
+def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_and_report_back_as_the_next_prompt(tmp_path, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=())
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
+    make_item(syngate_dir, "LEAF-002", "It shall follow.\n", parents=("ROOT",), order=10, tests=None)
+    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
+    leaf = {"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf", "model": "model-b"}
+    other = {"tool": "agent", "uid": "LEAF-002", "prompt": "Do the other"}
+    setup = {"connector": "scripted", "model": "model-a", "effort": "low"}
+
+    app.connectors = {"scripted": (connection := DelegatedConnection(calls(leaf, other), {"kind": "text", "text": "All done."}))}
+    started = app.start_turn({**setup, "uid": "ROOT", "text": "Split the work."})
+    outcome = app.turn_snapshot(started["turn"], wait=10)
+    chats = app.chats_snapshot()["chats"]
+    assert started["turn"] == "ROOT:1" and outcome["reply"].endswith("- agent LEAF-001: did: Do the leaf\n- agent LEAF-002: did: Do the other\nAll done.")
+    assert connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-001: did: Do the leaf\n- agent LEAF-002: did: Do the other"
+    for child, prompt, model in (("LEAF-001", "Do the leaf", "model-b"), ("LEAF-002", "Do the other", "model-a")):
+        assert chats[child]["log"][0] == {"role": "user", "text": prompt, "agent": "ROOT:1"}
+        assert (chats[child]["log"][1]["text"], chats[child]["model"], chats[child]["session"]) == (f"did: {prompt}", model, f"session-{model}")
+    agents = [step for step in outcome["steps"] if step["kind"] == "agent"]
+    assert _without_at(agents) == [{"kind": "agent", "uid": child, "prompt": prompt, "report": f"did: {prompt}", "steps": [{"kind": "reasoning", "text": f"On it: {prompt}"}]}
+                                   for child, prompt in (("LEAF-001", "Do the leaf"), ("LEAF-002", "Do the other"))]
+
+    held = app.start_turn({**setup, "uid": "LEAF-001", "text": "Hold"})["turn"]
+    app.connectors["scripted"].answers = [calls(dict(other, prompt="Hold"), leaf, {"tool": "agent", "uid": "@", "prompt": "Me"})]
+    with pytest.raises(syngate_ui.ApiError, match=f"agent LEAF-001 refused: a turn of LEAF-001 is running \\({held}\\)") as refused:
+        threading.Timer(0.3, connection.release.set).start()
+        app.chat({**setup, "uid": "ROOT", "text": "Again."})
+    assert refused.value.status == 409 and str(refused.value).startswith("- agent LEAF-002: Held.\n")
+    assert app.turn_snapshot(held, wait=5)["reply"] == "Held."
+
+    connection.release.clear()
+    app.connectors["scripted"].answers = [calls(dict(other, prompt="Hold"))]
+    parent = app.start_turn({**setup, "uid": "ROOT", "text": "Once more."})["turn"]
+    assert _awaited(lambda: app.chats["LEAF-002"].running)
+    app.stop_turn(parent)
+    assert _awaited(lambda: app.chats["LEAF-002"].turn.stopped)
+    connection.release.set()
+    stopped = app.turn_snapshot(parent, wait=5)
+    assert (stopped["status"], stopped["error"]) == (409, "- agent LEAF-002: turn stopped\nturn stopped")
+
+    app.connectors["scripted"].answers = [calls({"tool": "agent", "uid": "@", "prompt": "Me"})]
+    itself = app.turn_snapshot(app.start_turn({**setup, "uid": "ROOT", "text": "Delegate to yourself."})["turn"], wait=5)
+    assert (itself["status"], itself["error"]) == (409, "agent ROOT refused: a turn of ROOT is running (ROOT:3)")
+
+
 STUB_AWAITED = """
 import json, sys, time
 open("started", "w").write("the first answer, given before the subagent reported")
 time.sleep(0.3)
-print(json.dumps({"result": "the agent reported", "structured_output": {"kind": "text", "text": "the agent reported"}, "session_id": "session-9", "is_error": False}))
+print(json.dumps({"type": "result", "result": "the agent reported", "structured_output": {"kind": "text", "text": "the agent reported"}, "session_id": "session-9", "is_error": False}))
 """
 
 
@@ -426,3 +540,183 @@ def test_an_interrupted_turn_kills_its_process_and_fails_as_a_connection_error(t
     connector.interrupt(thread.ident)
     thread.join(5)
     assert not thread.is_alive() and failures == ["claude exited with -9"] and connector.live == {}
+
+
+# Stub `claude` streaming the events of `events.json` next to it, one NDJSON line each: "await" holds the stream until a `go` file
+# appears there, {"write"|"remove": path} changes a project file, then the result event closes the turn; its argv lands in `argv.json`.
+STUB_STREAM = """
+import json, os, sys, time
+here = os.path.dirname(os.path.abspath(sys.argv[0]))
+json.dump(sys.argv[1:], open(os.path.join(here, "argv.json"), "w"))
+for event in json.load(open(os.path.join(here, "events.json"))):
+    if event == "await":
+        deadline = time.time() + 10
+        while not os.path.exists(os.path.join(here, "go")) and time.time() < deadline:
+            time.sleep(0.02)
+        if not os.path.exists(os.path.join(here, "go")):
+            sys.exit(3)
+    elif "write" in event:
+        os.makedirs(os.path.dirname(event["write"]) or ".", exist_ok=True)
+        open(event["write"], "wb").write(event["text"].encode("latin-1"))
+    elif "remove" in event:
+        os.remove(event["remove"])
+    else:
+        print(json.dumps(event), flush=True)
+print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "Done.",
+                  "structured_output": {"kind": "text", "text": "Done."}, "session_id": "session-s"}), flush=True)
+"""
+
+
+def _streaming(tmp_path, events, **kwargs):
+    """A connector whose `claude` streams `events` in the project folder `tmp_path/project`."""
+    (tmp_path / "events.json").write_text(json.dumps(events))
+    (tmp_path / "claude_stub.py").write_text(STUB_STREAM)
+    (tmp_path / "project").mkdir(exist_ok=True)
+    return synthetic.claude_code_connector(cli=(sys.executable, str(tmp_path / "claude_stub.py")), cwd=tmp_path / "project",
+                                           transcripts_dir=tmp_path / "transcripts", **kwargs)
+
+
+def _said(*content, parent=None, role="assistant"):
+    return {"type": role, "message": {"role": role, "content": list(content)}, "parent_tool_use_id": parent}
+
+
+def _use(ident, name, **given):
+    return {"type": "tool_use", "id": ident, "name": name, "input": given}
+
+
+def _result(ident, content, parent=None):
+    return _said({"type": "tool_result", "tool_use_id": ident, "content": content}, parent=parent, role="user")
+
+
+def _without_at(steps):
+    return [{**{key: value for key, value in step.items() if key not in ("at", "seconds")},
+             **({"steps": _without_at(step["steps"])} if "steps" in step else {})} for step in steps]
+
+
+def _announced(connector, text, go=None, **kwargs):
+    """(answer, the top-level steps in order, a copy of every announcement) of one dispatch, every announcement touching `go`."""
+    announced, steps = [], []
+
+    def on_step(step):
+        if go:
+            go.touch()
+        announced.append(json.loads(json.dumps(step)))
+        if not any(step is known for known in steps):
+            steps.append(step)
+    answer, _ = connector.dispatch("", text, on_step=on_step, **kwargs)
+    return answer, steps, announced
+
+
+@pytest.mark.syngate("CLAUDE_CODE-090")
+def test_a_turn_streams_its_messages_tool_calls_results_and_subagents_as_steps_when_they_happen(tmp_path):
+    events = [_said({"type": "thinking", "thinking": "Let me look."}), "await",
+              _said(_use("t1", "Read", file_path="README.md")), _result("t1", "readme text"),
+              _said(_use("a1", "Agent", description="Check", prompt="@LEAF-001 check it\nthoroughly")),
+              _said(_use("t2", "Grep", pattern="x"), parent="a1"), _result("t2", [{"type": "text", "text": "found"}], parent="a1"),
+              _said({"type": "text", "text": "Found it."}, parent="a1"), _said({"type": "text", "text": "leaf checked"}, parent="a1"),
+              _result("a1", [{"type": "text", "text": "leaf checked"}]),
+              _said(_use("w1", "Workflow", script="run()")), _said(_use("t3", "Bash", command="ls"), parent="w1"), _result("t3", "inside", parent="w1"),
+              _result("w1", "workflow done"),
+              _said({"type": "text", "text": "Answering."}, _use("s1", "StructuredOutput", kind="text", text="Done.")), "not json"]
+    answer, steps, announced = _announced(_streaming(tmp_path, events), "Go.", go=tmp_path / "go")
+    assert answer == {"kind": "text", "text": "Done."}
+    assert announced[0] == {"kind": "reasoning", "text": "Let me look.", "at": announced[0]["at"]}
+    assert _without_at(steps) == [
+        {"kind": "reasoning", "text": "Let me look."},
+        {"kind": "tool", "name": "Read", "input": {"file_path": "README.md"}, "result": "readme text"},
+        {"kind": "agent", "uid": "LEAF-001", "prompt": "@LEAF-001 check it\nthoroughly", "report": "leaf checked",
+         "steps": [{"kind": "tool", "name": "Grep", "input": {"pattern": "x"}, "result": "found"}, {"kind": "message", "text": "Found it."}]},
+        {"kind": "workflow", "input": {"script": "run()"}, "result": "workflow done"},
+        {"kind": "message", "text": "Answering."}]
+    assert all(isinstance(step["seconds"], float) and step["seconds"] >= 0 for step in (steps[1], steps[2]["steps"][0]))
+    ats = [step["at"] for step in steps]
+    assert ats == sorted(ats) and all(isinstance(at, float) for at in ats)
+    launches = [step for step in announced if step["kind"] == "agent"]
+    assert (launches[0]["prompt"], launches[0]["report"], launches[0]["steps"]) == ("@LEAF-001 check it\nthoroughly", None, [])
+    assert launches[-1]["report"] == "leaf checked" and [step["kind"] for step in launches[-1]["steps"]] == ["tool", "message"]
+    assert "leaf checked" in [step["text"] for launch in launches for step in launch["steps"] if step["kind"] == "message"]
+    assert [step["result"] for step in announced if step["kind"] == "tool" and step["name"] == "Read"] == [None, "readme text"]
+    _, steps, _ = _announced(_streaming(tmp_path, [_said(_use("a2", "Task", prompt="No anchor here\n@LATE-001 below"))]), "Go.")
+    assert _without_at(steps) == [{"kind": "agent", "uid": None, "prompt": "No anchor here\n@LATE-001 below", "report": None, "steps": []}]
+
+
+
+@pytest.mark.syngate("CLAUDE_CODE-100")
+def test_reasoning_is_requested_through_the_effort_of_a_model_that_has_one_and_recorded_only_when_it_comes(tmp_path):
+    connector = _streaming(tmp_path, [_said({"type": "thinking", "thinking": "Pondering."}), _said({"type": "thinking", "thinking": "", "signature": "x"})])
+    _, steps, _ = _announced(connector, "Go.", model="claude-opus-5-5", effort="high")
+    assert _without_at(steps) == [{"kind": "reasoning", "text": "Pondering."}]
+    argv = lambda: json.loads((tmp_path / "argv.json").read_text())
+    assert argv()[argv().index("--effort") + 1] == "high" and "--verbose" in argv()
+    assert synthetic.CLAUDE_MODEL_EFFORTS["claude-haiku-4-5-20251001"] == ()
+    connector.dispatch("", "Go.", model="claude-haiku-4-5-20251001", effort="high")
+    assert "--effort" not in argv() and argv()[argv().index("--model") + 1] == "claude-haiku-4-5-20251001"
+    connector.dispatch("", "Go.", effort="low")
+    assert argv()[argv().index("--effort") + 1] == "low"
+    _, steps, _ = _announced(_streaming(tmp_path, [_said({"type": "text", "text": "No thinking."})]), "Go.", model="claude-sonnet-5", effort="max")
+    assert [step["kind"] for step in steps] == ["message"] and argv()[argv().index("--effort") + 1] == "max"
+
+
+def _jsonl(path, *entries):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join((entry if isinstance(entry, str) else json.dumps(entry)) + "\n" for entry in entries))
+
+
+@pytest.mark.syngate("CLAUDE_CODE-110")
+def test_the_subagents_own_turns_are_read_from_the_session_transcript_once_the_turn_ends(tmp_path, monkeypatch):
+    events = [_said(_use("a1", "Agent", prompt="@LEAF-002 Dig\ndeep")), _said({"type": "thinking", "thinking": "Digging."}, parent="a1"),
+              _result("a1", "dug"), _said(_use("a2", "Task", prompt="Read the guide")), _result("a2", "read"),
+              _said(_use("a3", "Agent", prompt="Untold")), _result("a3", "nothing kept")]
+    connector = _streaming(tmp_path, events)
+    stamp = "2026-10-10T10:00:00.000Z"
+    sidechain = lambda agent, entry: {**entry, "isSidechain": True, "agentId": agent, "parentUuid": None, "timestamp": stamp}
+    session = tmp_path / "transcripts" / "session-s"
+    _jsonl(session / "subagents" / "agent-x1.jsonl",
+           sidechain("x1", {"type": "user", "message": {"role": "user", "content": "@LEAF-002 Dig\ndeep"}}),
+           sidechain("x1", {"type": "attachment", "attachment": {}}), "not json",
+           sidechain("x1", _said({"type": "thinking", "thinking": "Digging."})), sidechain("x1", _said(_use("g1", "Grep", pattern="dig"))),
+           sidechain("x1", _result("g1", "hit")), sidechain("x1", _said({"type": "text", "text": "dug"})))
+    (session / "subagents" / "agent-x1.meta.json").write_text(json.dumps({"agentType": "general-purpose", "toolUseId": "a1"}))
+    _jsonl(session.with_suffix(".jsonl"), {"type": "user", "message": {"role": "user", "content": "Go."}},
+           sidechain("y2", {"type": "user", "message": {"role": "user", "content": "Read the guide"}}),
+           sidechain("y2", _said(_use("r1", "Read", file_path="docs/GUIDE.md"))), sidechain("y2", _result("r1", "guide text")),
+           sidechain("z9", {"type": "user", "message": {"role": "user", "content": "Somebody else's prompt"}}),
+           sidechain("z9", _said(_use("r9", "Read", file_path="elsewhere"))))
+    _, steps, announced = _announced(connector, "Go.")
+    assert _without_at(steps) == [
+        {"kind": "agent", "uid": "LEAF-002", "prompt": "@LEAF-002 Dig\ndeep", "report": "dug", "steps": [
+            {"kind": "reasoning", "text": "Digging."}, {"kind": "tool", "name": "Grep", "input": {"pattern": "dig"}, "result": "hit"}]},
+        {"kind": "agent", "uid": None, "prompt": "Read the guide", "report": "read", "steps": [
+            {"kind": "tool", "name": "Read", "input": {"file_path": "docs/GUIDE.md"}, "result": "guide text"}]},
+        {"kind": "agent", "uid": None, "prompt": "Untold", "report": "nothing kept", "steps": []}]
+    assert all(isinstance(step["at"], float) for agent in steps for step in agent["steps"])
+    assert _without_at(list({step["prompt"]: step for step in announced}.values())) == _without_at(steps)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    assert synthetic.claude_transcripts_dir("/home/me/my_project.d") == synthetic.Path.home() / ".claude" / "projects" / "-home-me-my-project-d"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "config"))
+    assert synthetic.claude_transcripts_dir("/srv/app") == tmp_path / "config" / "projects" / "-srv-app"
+    assert synthetic.claude_code_connector(cwd=tmp_path).transcripts_dir is None
+
+
+@pytest.mark.syngate("CLAUDE_CODE-120")
+def test_the_project_files_a_turn_changed_are_its_diff_step_from_snapshots_before_and_after(tmp_path):
+    project = tmp_path / "project"
+    for rel, text in (("keep.txt", "same\n"), ("edit.txt", "a\nb\nc\n"), ("gone.txt", "bye\n"), ("image.bin", "\0\1"),
+                      (".cache/x", "hidden"), ("__pycache__/m.pyc", "old"), ("node_modules/z.js", "old")):
+        (project / rel).parent.mkdir(parents=True, exist_ok=True)
+        (project / rel).write_text(text)
+    events = [{"write": "edit.txt", "text": "a\nB\nc\n"}, {"write": "src/new.txt", "text": "hello"}, {"remove": "gone.txt"},
+              {"write": "image.bin", "text": "\0\2"}, {"write": ".cache/x", "text": "changed"}, {"write": "__pycache__/m.pyc", "text": "new"},
+              {"write": "node_modules/z.js", "text": "new"}, _said(_use("e1", "Edit", file_path="edit.txt")), _result("e1", "ok")]
+    _, steps, announced = _announced(_streaming(tmp_path, events), "Go.")
+    assert [step["kind"] for step in steps] == ["tool", "diff"] and announced[-1] == steps[-1]
+    assert steps[-1]["files"] == [{"path": "edit.txt", "status": "M", "hunks": "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n"},
+                                  {"path": "gone.txt", "status": "D", "hunks": "@@ -1 +0,0 @@\n-bye\n"},
+                                  {"path": "image.bin", "status": "M", "hunks": ""},
+                                  {"path": "src/new.txt", "status": "A", "hunks": "@@ -0,0 +1 @@\n+hello\n"}]
+    _, steps, _ = _announced(_streaming(tmp_path, [_said({"type": "thinking", "thinking": "Nothing to change."})]), "Go.")
+    assert [step["kind"] for step in steps] == ["reasoning"]
+    subprocess.run(["git", "init", "-q"], cwd=project, check=True)
+    (project / ".gitignore").write_text("build/\n")
+    _, steps, _ = _announced(_streaming(tmp_path, [{"write": "build/out.o", "text": "binary"}, {"write": "keep.txt", "text": "kept\n"}]), "Go.")
+    assert [(file["path"], file["status"]) for file in steps[-1]["files"]] == [("keep.txt", "M")]

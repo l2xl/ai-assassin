@@ -1,6 +1,6 @@
-header: Tool call answer
-description: |
-  An answer shall be either plain text or exactly one block of tool calls. An answer carrying both, or a malformed call, shall be refused.
+---
 parents: [SYNTHETIC]
 order: 50
 test: ~
+---
+An answer shall be either plain text or exactly one block of tool calls, one carrying both or a malformed call being refused

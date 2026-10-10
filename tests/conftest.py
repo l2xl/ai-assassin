@@ -45,7 +45,8 @@ def pytest_runtest_makereport(item, call):
 
 
 def make_item(syngate_dir, uid, description, parents=(), header="", order=0, tests="absent", reviewed=None, features=("test", "review")):
-    """Write a syngate item file; tests: 'absent' | None | sha | {name: sha}. A root (no parents) switches on `features`, both by default."""
+    """Write a syngate item file in the legacy flat shape, so the whole suite keeps reading it -- `header` reads as the first line of
+    the body; tests: 'absent' | None | sha | {name: sha}. A root (no parents) switches on `features`, both by default."""
     syngate_dir.mkdir(parents=True, exist_ok=True)
     data = {"header": header, "description": description, "parents": list(parents)}
     if order:

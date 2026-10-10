@@ -49,17 +49,17 @@ def _mutate(run):
 
 def cmd_add(args):
     def run(items):
-        item = syngatelib.add_item(items, args.uid, args.parent, header=args.header, description=args.description,
+        item = syngatelib.add_item(items, args.uid, args.parent, description=args.description,
                                    kind="branch" if args.branch else "leaf", folder=args.dir, order=args.order,
-                                   clear=args.clear_review)
+                                   sources=args.source, clear=args.clear_review)
         return f"created {item.path.relative_to(syngatelib.ROOT)}"
     return _mutate(run)
 
 
 def cmd_edit(args):
-    changes = {field: value for field, value in (("header", args.header), ("description", args.description), ("order", args.order)) if value is not None}
+    changes = {field: value for field, value in (("description", args.description), ("order", args.order), ("sources", args.source)) if value is not None}
     if not changes:
-        print("nothing to edit: pass --header, --description or --order", file=sys.stderr)
+        print("nothing to edit: pass --description, --order or --source", file=sys.stderr)
         return 1
 
     def run(items):
@@ -405,15 +405,15 @@ def main():
     p.add_argument("--parent", action="append", required=True)
     p.add_argument("--dir", help="folder under the repo root, e.g. syngate/infra")
     p.add_argument("--order", type=int, default=0)
-    p.add_argument("--header")
-    p.add_argument("--description")
+    p.add_argument("--description", help="the body: its first line names the item in the outline")
+    p.add_argument("--source", action="append", help="root-relative key source file read into the seed context; repeatable")
     p.add_argument("--branch", action="store_true", help="carry no test binding of its own")
     p.set_defaults(func=cmd_add)
 
-    p = mutation("edit", "change an item's header, description or sibling order")
-    p.add_argument("--header")
-    p.add_argument("--description")
+    p = mutation("edit", "change an item's description, key sources or sibling order")
+    p.add_argument("--description", help="the body: its first line names the item in the outline")
     p.add_argument("--order", type=int)
+    p.add_argument("--source", action="append", help="root-relative key source file; repeatable, the given list replaces the item's")
     p.set_defaults(func=cmd_edit)
 
     p = mutation("move", "add and remove an item's parent links, and place it among its siblings")
@@ -426,7 +426,7 @@ def main():
     p = mutation("delete", "remove a childless item")
     p.set_defaults(func=cmd_delete)
 
-    for name, help, func in (("query", "print an item as JSON: header, description, parents, children and kind", cmd_query),
+    for name, help, func in (("query", "print an item as JSON: description, parents, sources, children and kind", cmd_query),
                              ("context", "print the seed AI-context of an item as an AI call anchored at it is formed", cmd_context)):
         p = sub.add_parser(name, help=help)
         p.add_argument("uid")

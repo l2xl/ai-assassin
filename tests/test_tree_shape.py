@@ -250,7 +250,31 @@ def test_bindings_and_stamp_are_read_from_test_and_review_and_their_old_spelling
     items, load_errors = syngatelib.load_tree(syngate_dir)
     assert load_errors == ["BOTH-1: both 'test' and its old spelling 'tests'"]
     assert (items["OLD-1"].tests, items["OLD-1"].reviewed) == ({"a": sha}, stamp) == (items["NEW-1"].tests, items["NEW-1"].reviewed)
-    assert yaml.safe_load(syngatelib.dump_item(items["OLD-1"])) == {"header": "old", "description": "old shall bind\n", "parents": ["ROOT-1"], "test": {"a": sha}, "review": stamp}
-    assert yaml.safe_load(syngatelib.dump_item(items["ROOT-1"])) == {"header": "root", "description": "root shall exist\n", "parents": [], "test": "enabled", "review": "enabled"}
+    assert syngatelib.parse_item(syngatelib.dump_item(items["OLD-1"])) == {"description": "old\n\nold shall bind\n", "parents": ["ROOT-1"], "test": {"a": sha}, "review": stamp}
+    assert syngatelib.parse_item(syngatelib.dump_item(items["ROOT-1"])) == {"description": "root\n\nroot shall exist\n", "parents": [], "test": "enabled", "review": "enabled"}
     items["ROOT-1"].features["review"] = False
-    assert yaml.safe_load(syngatelib.dump_item(items["ROOT-1"]))["review"] == "disabled"
+    assert syngatelib.parse_item(syngatelib.dump_item(items["ROOT-1"]))["review"] == "disabled"
+
+
+def test_an_item_is_a_front_matter_of_attributes_over_a_body_whose_first_line_is_its_title_and_a_legacy_flat_mapping_reads_the_same(syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root")
+    stamp = "b" * 64
+    body = "New shape\n\nIt shall read.\n\nTwice.\n"
+    front_matter = f"---\nparents: [ROOT-1]\norder: 10\nsources: [src/new.py, docs/NEW.md]\ntest: ~\nreview: {stamp}\n---\n{body}"
+    (syngate_dir / "NEW-1.yml").write_text(front_matter, encoding="utf-8")
+    make_item(syngate_dir, "OLD-1", "It shall read.\n\nTwice.\n", header="New shape", parents=["ROOT-1"], order=10, tests=None, reviewed=stamp)
+    (syngate_dir / "BARE-1.yml").write_text("---\nparents: [ROOT-1]\n---\n  Bare  \nIt shall follow without a blank line.\n", encoding="utf-8")
+    (syngate_dir / "ATTR-1.yml").write_text("---\nheader: Misplaced\nparents: [ROOT-1]\n---\nIt shall be refused.\n", encoding="utf-8")
+    (syngate_dir / "AWAY-1.yml").write_text("---\nparents: [ROOT-1]\nsources: [../secret]\n---\nIt shall list no file outside the project.\n", encoding="utf-8")
+    items, load_errors = syngatelib.load_tree(syngate_dir)
+    assert load_errors == ["ATTR-1: 'header' is the body of a front-matter item, not an attribute", "AWAY-1: '../secret' is not a normalised root-relative path"]
+    new, old = items["NEW-1"], items["OLD-1"]
+    assert (new.description, new.title, new.order, new.sources, new.tests, new.reviewed) == (body, "New shape", 10, ["src/new.py", "docs/NEW.md"], {None: None}, stamp)
+    assert (old.description, old.sources) == (body, []) and items["AWAY-1"].sources == []
+    assert syngatelib.compute_stamp(new) == syngatelib.compute_stamp(old)  # the header folded into the body, the sources outside the stamp
+    assert (items["BARE-1"].title, items["BARE-1"].description) == ("Bare", "  Bare  \nIt shall follow without a blank line.\n")
+    assert syngatelib.dump_item(new) == front_matter  # the writer emits the front-matter shape, the stamp standing
+    assert syngatelib.dump_item(old) == front_matter.replace("sources: [src/new.py, docs/NEW.md]\n", "")
+    syngatelib.write_item(items["BARE-1"])
+    assert (syngate_dir / "BARE-1.yml").read_text() == "---\nparents: [ROOT-1]\n---\n  Bare  \nIt shall follow without a blank line.\n"

@@ -5,20 +5,28 @@
 """Synergy Context Gate (syngate) toolkit core (no doorstop).
 
 Tree layout: every `*.yml` under `syngate/` (any depth) is a syngate item; the
-UID is the file stem; folders carry no semantics. Item schema:
+UID is the file stem; folders carry no semantics. Item file: a YAML front matter
+of attributes over a markdown body, the body being the item's statement (its
+`description`) and the body's first line naming it in the outline (its `title`):
 
-    header: one-line title
-    description: |
-      free-form prose
+    ---
     parents: [UID, ...]        # DAG edges; exactly one item in the tree has none
     order: 10                  # optional presentation-only sibling sort key
+    sources: [src/a.py, ...]   # optional root-relative key source files, read into the seed context
     test: ~ | <sha> | {name: sha|~, ...}   # test bindings; absent on items without own tests
     review: <sha256 hex>       # user-only approval stamp, or absent; a malformed stamp reads as absent
+    ---
+    One-line title
 
-The old spellings `tests` / `reviewed` are read as the same keys. On the root
-item (empty parents) `test: enabled|disabled` and `review: enabled|disabled`
-switch the tree's test and review features; both are off when absent, and a
-root's own binding or stamp switches its feature on as well.
+    Free-form markdown prose.
+
+A legacy file is one flat mapping holding `header` and `description` as keys next
+to the attributes; its header reads as the first line of the body and the file
+takes the front-matter shape when written back. The old spellings `tests` /
+`reviewed` are read as the same keys. On the root item (empty parents)
+`test: enabled|disabled` and `review: enabled|disabled` switch the tree's test
+and review features; both are off when absent, and a root's own binding or stamp
+switches its feature on as well.
 
 A binding is identified purely by tags: the default binding is the `[UID]` tag
 alone, a named binding is the `[UID][name]` tag pair (binding name immediately
@@ -28,9 +36,11 @@ discovered from tags at check time, never declared in items.
 The reviewed stamp is transparent: sha256 hex over the canonical JSON
     {"children": [UID, ...], "description": ..., "header": ..., "parents": [...], "tests": {name: sha} | null}
 serialized with sort_keys=True, separators=(",", ":"), ensure_ascii=False,
-UTF-8 encoded (default binding name is ""; unstamped shas are ""). "children"
-holds the immediate child UIDs and is present only for an item that has any, so
-adding or removing a child moves its parent's stamp. Verify with:
+UTF-8 encoded (default binding name is ""; unstamped shas are ""). "header" is
+the body's first line and "description" the rest past one blank line -- the split
+the body carried as two fields before -- so the stamps of that time stand.
+"children" holds the immediate child UIDs and is present only for an item that
+has any, so adding or removing a child moves its parent's stamp. Verify with:
     python3 -c 'import syngatelib,sys; items,_=syngatelib.load_tree(); print(syngatelib.item_stamp(items, sys.argv[1]))' <UID>
 
 Coverage joins `syngate_coverage.jsonl` records `{"tags": [...], "passed": bool}`
@@ -81,7 +91,9 @@ SYNGATE_DIR = ROOT / "syngate"
 UID_RE = re.compile(r"^[A-Z][A-Z_]*(-[A-Z0-9_]+)*$")
 BINDING_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
-KNOWN_FIELDS = {"header", "description", "parents", "order", "test", "review", "tests", "reviewed"}
+KNOWN_FIELDS = {"header", "description", "parents", "order", "sources", "test", "review", "tests", "reviewed"}
+BODY_FIELDS = ("header", "description")  # the legacy spelling of the body; refused as attributes of a front matter
+FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)^---[ \t]*(?:\n|\Z)", re.DOTALL | re.MULTILINE)
 FEATURES = ("test", "review")
 SWITCH = {"enabled": True, "disabled": False}
 
@@ -105,10 +117,10 @@ REVIEW_RANK = (REVIEW_VIOLATED, NOT_REVIEWED, REVIEWED)
 class Item:
     uid: str
     path: Path
-    header: str = ""
     description: str = ""
     parents: list = field(default_factory=list)
     order: float = 0
+    sources: list = field(default_factory=list)
     tests: dict = None  # None = branch (no tests key); {name|None: sha|None} otherwise
     reviewed: str = None
     folder: str = ""
@@ -117,6 +129,10 @@ class Item:
     @property
     def is_leaf(self):
         return self.tests is not None
+
+    @property
+    def title(self):
+        return self.description.partition("\n")[0].strip()
 
 
 def features(items):
@@ -189,6 +205,44 @@ def _read_feature(item, data, key, legacy, parse, errors):
     return parse(value, errors, item.uid)
 
 
+def _split_body(body):
+    """(first line, the rest past one blank line): the two fields the body was before, as the review stamp still reads it."""
+    header, _, description = body.partition("\n")
+    return header.strip(), description.removeprefix("\n")
+
+
+def _join_body(header, description):
+    """The body of a legacy item: its header as the first line over its description, kept byte for byte so its stamp stands."""
+    header, description = str(header or "").strip(), str(description or "")
+    return f"{header}\n\n{description}" if header and description else header + "\n" if header else description
+
+
+def parse_item(text):
+    """The fields of an item file in the flat spelling `load_tree` reads: the front matter's attributes with the body as
+    `description`, or the mapping of a legacy file with its `header` folded into the description as the first line."""
+    match = FRONT_MATTER_RE.match(text)
+    if not match:
+        data = yaml.safe_load(text)
+        if isinstance(data, dict) and "header" in data:
+            data["description"] = _join_body(data.pop("header"), data.get("description"))
+        return data
+    data = yaml.safe_load(match.group(1)) or {}
+    if isinstance(data, dict):
+        for key in BODY_FIELDS:
+            if key in data:
+                raise ValueError(f"'{key}' is the body of a front-matter item, not an attribute")
+        data["description"] = text[match.end():]
+    return data
+
+
+def _parse_sources(value, errors, uid):
+    try:
+        return parse_sources(value)
+    except tree_error as err:
+        errors.append(f"{uid}: {err}")
+        return []
+
+
 def load_tree(syngate_dir=None):
     syngate_dir = Path(syngate_dir) if syngate_dir else SYNGATE_DIR
     """Return ({uid: Item}, [errors]); items with unusable YAML are skipped."""
@@ -199,9 +253,12 @@ def load_tree(syngate_dir=None):
             errors.append(f"{uid}: duplicate UID ({path.relative_to(syngate_dir)} and {items[uid].path.relative_to(syngate_dir)})")
             continue
         try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            data = parse_item(path.read_text(encoding="utf-8"))
         except yaml.YAMLError as exc:
             errors.append(f"{uid}: unparsable YAML: {exc}")
+            continue
+        except ValueError as exc:
+            errors.append(f"{uid}: {exc}")
             continue
         if not isinstance(data, dict):
             errors.append(f"{uid}: item file is not a mapping")
@@ -209,7 +266,6 @@ def load_tree(syngate_dir=None):
         item = Item(uid=uid, path=path, folder=str(path.parent.relative_to(syngate_dir.parent)))
         for key in sorted(set(data) - KNOWN_FIELDS):
             errors.append(f"{uid}: unknown field '{key}'")
-        item.header = str(data.get("header") or "").strip()
         item.description = str(data.get("description") or "")
         parents = data.get("parents")
         if parents is None:
@@ -223,6 +279,7 @@ def load_tree(syngate_dir=None):
             errors.append(f"{uid}: 'order' must be a number")
             order = 0
         item.order = order
+        item.sources = _parse_sources(data.get("sources"), errors, uid)
         item.tests = _read_feature(item, data, "test", "tests", _parse_tests, errors)
         item.reviewed = _read_feature(item, data, "review", "reviewed", _parse_stamp, errors)
         items[uid] = item
@@ -274,7 +331,8 @@ def stamp_payload(item, children=()):
     tests = None
     if item.tests is not None:
         tests = {name or "": sha or "" for name, sha in item.tests.items()}
-    payload = {"description": item.description, "header": item.header, "parents": list(item.parents), "tests": tests}
+    header, description = _split_body(item.description)
+    payload = {"description": description, "header": header, "parents": list(item.parents), "tests": tests}
     # Only when the item has children, so a childless item's stamp is the one it
     # always was; it is what makes a child added or removed move its parent's stamp.
     if children:
@@ -628,11 +686,12 @@ def compute_status(items, records, problems=None):
                     tests.append({"binding": name or "", "name": record["name"] or binding_tag(uid, name), "passed": record["passed"], "log": record["log"]})
         report[uid] = {
             "status": status_of(uid),
-            "header": item.header,
+            "title": item.title,
             "description": item.description.strip(),
             "parents": list(item.parents),
             "children": sorted_children(items, children, uid),
             "order": item.order,
+            "sources": list(item.sources),
             "folder": item.folder,
             "reviewed": bool(item.reviewed),
             "problems": list(problems.get(uid, ())),
@@ -682,22 +741,19 @@ def compute_axes(items, records, problems=None):
     return {uid: dict(zip(("test", "review"), axes(uid))) for uid in items}
 
 
-class _BlockStr(str):
-    pass
-
-
 class _ItemDumper(yaml.SafeDumper):
     pass
 
 
-_ItemDumper.add_representer(_BlockStr, lambda dumper, value: dumper.represent_scalar("tag:yaml.org,2002:str", value, style="|"))
 _ItemDumper.add_representer(type(None), lambda dumper, value: dumper.represent_scalar("tag:yaml.org,2002:null", "~"))
 
 
 def dump_item(item):
-    data = {"header": item.header, "description": _BlockStr(item.description if item.description.endswith("\n") else item.description + "\n"), "parents": list(item.parents)}
+    data = {"parents": list(item.parents)}
     if item.order:
         data["order"] = item.order
+    if item.sources:
+        data["sources"] = list(item.sources)
     if item.tests is not None:
         data["test"] = item.tests[None] if set(item.tests) == {None} else dict(item.tests)
     elif not item.parents:
@@ -706,7 +762,9 @@ def dump_item(item):
         data["review"] = item.reviewed
     elif not item.parents:
         data["review"] = "enabled" if item.features["review"] else "disabled"
-    return yaml.dump(data, Dumper=_ItemDumper, sort_keys=False, default_flow_style=None, allow_unicode=True, width=120)
+    front = yaml.dump(data, Dumper=_ItemDumper, sort_keys=False, default_flow_style=None, allow_unicode=True, width=120)
+    body = item.description if item.description.endswith("\n") else item.description + "\n"
+    return f"---\n{front}---\n{body}"
 
 
 def clear_review(item):
@@ -724,10 +782,9 @@ def write_item(item):
 # the canonical writer. The command line is their genuine spelling; the editor
 # and the AI wrapper reach the very same functions.
 
-DEFAULT_HEADER = "TODO"
 DEFAULT_DESCRIPTION = "TODO: The component shall ...\n"
 # Fields under the review stamp: an edit of any of them clears the item's review.
-STAMPED_FIELDS = ("header", "description", "parents", "tests")
+STAMPED_FIELDS = ("description", "parents", "tests")
 
 
 class tree_error(ValueError):
@@ -804,6 +861,19 @@ def parse_order(value):
     return value
 
 
+def parse_sources(value):
+    """The `sources` list of a wire value: normalised root-relative paths, each once."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(s, str) for s in value):
+        raise tree_error("'sources' must be a list of root-relative file paths")
+    for rel in value:
+        path = Path(rel)
+        if not rel or path.is_absolute() or ".." in path.parts or rel != path.as_posix() or rel.startswith("-"):
+            raise tree_error(f"'{rel}' is not a normalised root-relative path")
+    return list(dict.fromkeys(value))
+
+
 def parse_bindings(items, item, names):
     """{name|None: kept sha} for a wire list of binding names, None for a branch."""
     if names is None:
@@ -825,11 +895,11 @@ def parse_bindings(items, item, names):
 
 def item_fields(item):
     """The editable fields in their wire form (bindings as a name list)."""
-    return {"header": item.header, "description": item.description, "parents": list(item.parents),
-            "order": item.order, "tests": None if item.tests is None else [name or "" for name in item.tests]}
+    return {"description": item.description, "parents": list(item.parents), "order": item.order, "sources": list(item.sources),
+            "tests": None if item.tests is None else [name or "" for name in item.tests]}
 
 
-def add_item(items, uid, parents, header=None, description=None, kind="leaf", folder=None, order=0, syngate_dir=None, clear=False):
+def add_item(items, uid, parents, description=None, kind="leaf", folder=None, order=0, sources=None, syngate_dir=None, clear=False):
     """Scaffold a new item under `parents`; `kind` "leaf" carries a test binding
     when the tree's test feature is on, "branch" never does. -> the written Item."""
     syngate_dir = Path(syngate_dir) if syngate_dir else SYNGATE_DIR
@@ -847,9 +917,9 @@ def add_item(items, uid, parents, header=None, description=None, kind="leaf", fo
         raise tree_error(f"directory '{folder}' is outside the syngate tree")
     description = str(description or DEFAULT_DESCRIPTION)
     directory.mkdir(parents=True, exist_ok=True)
-    item = Item(uid=uid, path=directory / f"{uid}.yml", header=str(header or DEFAULT_HEADER).strip(),
+    item = Item(uid=uid, path=directory / f"{uid}.yml",
                 description=description if description.endswith("\n") else description + "\n",
-                parents=parents, order=parse_order(order),
+                parents=parents, order=parse_order(order), sources=parse_sources(sources),
                 tests={None: None} if kind != "branch" and features(items)["test"] else None,
                 folder=str(directory.relative_to(syngate_dir.parent.resolve())))
     write_item(item)
@@ -865,8 +935,6 @@ def edit_item(items, uid, changes, base=None, clear=False):
     IDE) is never silently overwritten. -> the stored fields."""
     item = _addressed(items, uid)
     before = item_fields(item)
-    if "header" in changes:
-        item.header = str(changes["header"] or "").strip()
     if "description" in changes:
         text = str(changes["description"] or "")
         item.description = text if text.endswith("\n") else text + "\n"
@@ -876,6 +944,8 @@ def edit_item(items, uid, changes, base=None, clear=False):
         item.parents = parents
     if "order" in changes:
         item.order = parse_order(changes["order"])
+    if "sources" in changes:
+        item.sources = parse_sources(changes["sources"])
     if "tests" in changes:
         item.tests = parse_bindings(items, item, changes["tests"])
     after = item_fields(item)

@@ -1,0 +1,6 @@
+---
+parents: [CLAUDE_CODE]
+order: 100
+test: ~
+---
+The Claude Code connector shall request the model's reasoning whenever the chosen model and effort provide it and record it as a step only when it comes

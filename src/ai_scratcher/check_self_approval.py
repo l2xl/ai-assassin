@@ -20,9 +20,7 @@ routine edited in the same commit would otherwise pass the frozen check.
 import subprocess
 import sys
 
-import yaml
-
-from .syngatelib import SHA_RE
+from .syngatelib import SHA_RE, parse_item
 
 SYNGATE_GLOB = "syngate/"
 TEST_TREES = ("scripts/tests/", "test/")
@@ -32,11 +30,11 @@ def git(args, cwd):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
 
 
-def show_yaml(commit, path, cwd):
+def show_item(commit, path, cwd):
     result = git(["show", f"{commit}:{path}"], cwd)
     if result.returncode != 0:
         return None
-    return yaml.safe_load(result.stdout)
+    return parse_item(result.stdout)
 
 
 def _keyed(item, key, legacy):
@@ -73,8 +71,8 @@ def check_commit(commit, cwd):
     for path in changed:
         if not (path.startswith(SYNGATE_GLOB) and path.endswith(".yml")):
             continue
-        old = show_yaml(f"{commit}^", path, cwd)
-        new = show_yaml(commit, path, cwd)
+        old = show_item(f"{commit}^", path, cwd)
+        new = show_item(commit, path, cwd)
         if old is None or new is None or not isinstance(old, dict) or not isinstance(new, dict):
             continue
         stamp, shas = approval_of(new)

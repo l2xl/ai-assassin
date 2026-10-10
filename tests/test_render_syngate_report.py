@@ -18,14 +18,14 @@ def _write_status(path, entries):
 def _status_entries():
     return {
         "ROOT-001": {
-            "status": "test_passed", "header": "Root", "description": "Root",
+            "status": "test_passed", "title": "Root", "description": "Root",
             "parents": [], "children": ["INFRA-001"], "order": 0, "folder": "syngate",
-            "reviewed": False, "tests": [],
+            "reviewed": False, "tests": [], "sources": [],
         },
         "INFRA-001": {
-            "status": "test_passed", "header": "", "description": "Leaf",
+            "status": "test_passed", "title": "Leaf", "description": "Leaf",
             "parents": ["ROOT-001"], "children": [], "order": 0, "folder": "syngate/infra",
-            "reviewed": False, "tests": [],
+            "reviewed": False, "tests": [], "sources": ["src/infra.py"],
         },
     }
 
@@ -46,7 +46,7 @@ def test_render_produces_index_and_navigable_cards(tmp_path):
 
     leaf_card = (out_dir / "items" / "INFRA-001.html").read_text()
     assert 'href="ROOT-001.html"' in leaf_card  # parent link navigable from the leaf card
-    assert "status-green" in leaf_card
+    assert "status-green" in leaf_card and "src/infra.py" in leaf_card
 
 
 def test_item_card_shows_collapsible_test_logs(tmp_path):
@@ -84,7 +84,7 @@ def test_item_card_shows_folder_and_reviewed(tmp_path):
 def test_tree_page_renders_root_and_marks_dag_merge_duplicates(tmp_path):
     entries = _status_entries()
     entries["INFRA-002"] = {
-        "status": "test_passed", "header": "", "description": "Shared leaf",
+        "status": "test_passed", "title": "Shared leaf", "description": "Shared leaf",
         "parents": ["ROOT-001", "INFRA-001"], "children": [], "order": 0, "folder": "syngate/infra",
         "reviewed": False, "tests": [],
     }

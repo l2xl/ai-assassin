@@ -1,6 +1,8 @@
-header: AI-Scratcher
-description: |
-  General-purpose AI assistant built around iterative analysis of the user–AI dialog and its synthesis into the Synergy Context Gate DAG, which constructs the per-replica context: the item tree, its gate and local editor, and the dialog agent.
+---
 parents: []
 test: enabled
 review: enabled
+---
+AI Asassin
+
+General-purpose AI assistant built around iterative analysis of the user–AI dialog and its synthesis into the the direct acyclic graph of nodes, which constructs the per-replica context: the item graph, its management and test gate.

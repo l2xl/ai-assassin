@@ -16,11 +16,11 @@ import syngatelib
 
 
 def _leaf(uid, reviewed=None):
-    return syngatelib.Item(uid=uid, path=Path(f"{uid}.yml"), header=uid, description="x shall y\n", parents=["PAT"], tests={None: None}, reviewed=reviewed)
+    return syngatelib.Item(uid=uid, path=Path(f"{uid}.yml"), description="x shall y\n", parents=["PAT"], tests={None: None}, reviewed=reviewed)
 
 
 def _tree(test=True, review=True):
-    branch = syngatelib.Item(uid="PAT", path=Path("PAT.yml"), header="Pattern", description="branch\n", parents=[], features={"test": test, "review": review})
+    branch = syngatelib.Item(uid="PAT", path=Path("PAT.yml"), description="Pattern\n\nbranch\n", parents=[], features={"test": test, "review": review})
     items = {"PAT": branch}
     for n in range(1, 4):
         uid = f"PAT-00{n}"

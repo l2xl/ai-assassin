@@ -1,5 +1,7 @@
-header: Synergy Context Gate
-description: |
-  Common design tools library: item tree model, test binding, review freeze and status rollup. [DESIGN](README.md)
+---
 parents: [AI-SCRATCHER]
 order: 50
+---
+Synergy Context Gate
+
+Common design tools library: item tree model, test binding, review freeze and status rollup. [DESIGN](README.md)

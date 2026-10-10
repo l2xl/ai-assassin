@@ -1,0 +1,6 @@
+---
+parents: [CLAUDE_CODE]
+order: 110
+test: ~
+---
+The Claude Code connector shall attach to every subagent step the subagent's own turns, read from the session's transcript once the turn ends

@@ -1,9 +1,8 @@
-header: Item seed context
-description: "Recursive process of building seed AI-context per tree item, based on the item UID:\n0. The context seed text\
-  \ has default prompt\n1. Get selected item by UID.\n2. For item's every parent run whole algo and get its output and append\
-  \ to the context seed text\n3. Append the item description to the context seed text\n4. Return the item's context seed text\
-  \ as result \n"
+---
 parents: [SYNTHETIC]
 order: 10
-test: 8cf25e31138c7e54065bbb3b4d5508fd5538271c0a987ec68cc66a9636eb89b5
-review: 0346e39aa7ba12effb39581def56c2bace03f32e73eaf2e65e43f6424b672aad
+test: ~
+---
+The synthetic agent shall work above the seed context of the anchored item.
+
+The seed context is built as the *Seed context* section of SYNTHETIC.md specifies.

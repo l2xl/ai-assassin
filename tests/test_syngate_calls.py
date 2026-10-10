@@ -42,25 +42,26 @@ def _violated(items, uid):
 
 
 def _stored(syngate_dir, uid):
-    return yaml.safe_load((syngate_dir / f"{uid}.yml").read_text())
+    return syngatelib.parse_item((syngate_dir / f"{uid}.yml").read_text())
 
 
 @pytest.mark.syngate("SYNGATE-API-ADD")
 def test_add_scaffolds_an_item_where_it_is_placed_and_refuses_an_unplaceable_one(syngate_tree):
     syngate_dir, make_item = syngate_tree
     items = _tree(syngate_dir, make_item)
-    leaf = syngatelib.add_item(items, "LEAF-002", ["BRANCH"], header="Second", description="It shall follow.",
+    leaf = syngatelib.add_item(items, "LEAF-002", ["BRANCH"], description="Second\n\nIt shall follow.", sources=["src/leaf.py"],
                                folder="syngate/sub", syngate_dir=syngate_dir)
-    assert leaf.path == syngate_dir / "sub" / "LEAF-002.yml"
-    assert yaml.safe_load(leaf.path.read_text()) == {"header": "Second", "description": "It shall follow.\n",
-                                                     "parents": ["BRANCH"], "test": None}
+    assert leaf.path == syngate_dir / "sub" / "LEAF-002.yml" and leaf.title == "Second"
+    assert syngatelib.parse_item(leaf.path.read_text()) == {"description": "Second\n\nIt shall follow.\n", "parents": ["BRANCH"],
+                                                           "sources": ["src/leaf.py"], "test": None}
     assert items["LEAF-002"] is leaf  # a later call of the same batch sees it
     branch = syngatelib.add_item(items, "BRANCH-2", ["ROOT"], kind="branch", syngate_dir=syngate_dir)
     assert branch.tests is None and "test" not in _stored(syngate_dir, "BRANCH-2")
-    for uid, parents, folder in (("LEAF-002", ["ROOT"], None), ("not a uid", ["ROOT"], None), ("LEAF-003", [], None),
-                                 ("LEAF-003", ["NOPE"], None), ("LEAF-003", ["ROOT"], "src")):
+    for uid, parents, folder, sources in (("LEAF-002", ["ROOT"], None, None), ("not a uid", ["ROOT"], None, None), ("LEAF-003", [], None, None),
+                                          ("LEAF-003", ["NOPE"], None, None), ("LEAF-003", ["ROOT"], "src", None),
+                                          ("LEAF-003", ["ROOT"], None, ["../secret"]), ("LEAF-003", ["ROOT"], None, "src/leaf.py")):
         with pytest.raises(syngatelib.tree_error):
-            syngatelib.add_item(items, uid, parents, folder=folder, syngate_dir=syngate_dir)
+            syngatelib.add_item(items, uid, parents, folder=folder, sources=sources, syngate_dir=syngate_dir)
     assert sorted(p.stem for p in syngate_dir.rglob("*.yml")) == ["BRANCH", "BRANCH-2", "LEAF-001", "LEAF-002", "ROOT"]
     off = _tree(syngate_dir, make_item, features=("review",))  # the switch withholds the binding, not the item
     assert syngatelib.add_item(off, "LEAF-004", ["ROOT"], syngate_dir=syngate_dir).tests is None
@@ -73,17 +74,17 @@ def test_edit_moves_the_named_fields_only_drops_the_stamp_and_never_clobbers_a_d
     item = _stamped(items, "LEAF-001")
     assert syngatelib.edit_item(items, "LEAF-001", {"order": 30}, clear=True)["order"] == 30
     assert item.reviewed and item.description == "It shall leaf.\n"  # order sits outside the stamp
-    stored = syngatelib.edit_item(items, "LEAF-001", {"header": "Leafier", "description": "It shall leaf harder."}, clear=True)
-    assert stored["header"] == "Leafier" and stored["description"] == "It shall leaf harder.\n"
+    stored = syngatelib.edit_item(items, "LEAF-001", {"description": "Leafier\n\nIt shall leaf harder."}, clear=True)
+    assert stored["description"] == "Leafier\n\nIt shall leaf harder.\n" and item.title == "Leafier"
     assert item.reviewed is None and item.tests == {None: None}
-    assert _stored(syngate_dir, "LEAF-001") == {"header": "Leafier", "description": "It shall leaf harder.\n",
-                                                "parents": ["ROOT"], "order": 30, "test": None}
+    assert _stored(syngate_dir, "LEAF-001") == {"description": "Leafier\n\nIt shall leaf harder.\n", "parents": ["ROOT"], "order": 30, "test": None}
     with pytest.raises(syngatelib.unknown_uid):
-        syngatelib.edit_item(items, "NOPE-001", {"header": "x"})
+        syngatelib.edit_item(items, "NOPE-001", {"description": "x"})
 
-    base = {"description": "It shall leaf harder.\n"}
+    base = {"description": "Leafier\n\nIt shall leaf harder.\n"}
     items = syngatelib.load_tree(syngate_dir)[0]
-    syngatelib.edit_item(items, "LEAF-001", {"header": "Leafiest"}, base=base)  # another field moved: rebases silently
+    assert syngatelib.edit_item(items, "LEAF-001", {"sources": ["src/leaf.py", "src/leaf.py"]}, base=base)["sources"] == ["src/leaf.py"]  # another field moved: rebases silently
+    assert _stored(syngate_dir, "LEAF-001")["sources"] == ["src/leaf.py"]
     items = syngatelib.load_tree(syngate_dir)[0]
     syngatelib.edit_item(items, "LEAF-001", {"description": "It shall leaf twice."}, base=base)
     items = syngatelib.load_tree(syngate_dir)[0]
@@ -219,11 +220,12 @@ def cli(tmp_path, syngate_tree, monkeypatch):
 @pytest.mark.syngate("SYNGATE-API")
 def test_every_tree_call_is_reachable_from_the_command_line(cli, capsys):
     run, syngate_dir = cli
-    assert run("add", "LEAF-002", "--parent", "BRANCH", "--header", "Second", "--description", "It shall follow.") == 0
-    assert _stored(syngate_dir, "LEAF-002") == {"header": "Second", "description": "It shall follow.\n",
-                                                "parents": ["BRANCH"], "test": None}
-    assert run("edit", "LEAF-002", "--header", "Second thoughts") == 0
-    assert _stored(syngate_dir, "LEAF-002")["header"] == "Second thoughts"
+    assert run("add", "LEAF-002", "--parent", "BRANCH", "--description", "Second\n\nIt shall follow.", "--source", "src/leaf.py") == 0
+    assert _stored(syngate_dir, "LEAF-002") == {"description": "Second\n\nIt shall follow.\n", "parents": ["BRANCH"],
+                                                "sources": ["src/leaf.py"], "test": None}
+    assert run("edit", "LEAF-002", "--description", "Second thoughts\n\nIt shall follow.", "--source", "src/leaf.py", "--source", "docs/LEAF.md") == 0
+    assert _stored(syngate_dir, "LEAF-002")["description"] == "Second thoughts\n\nIt shall follow.\n"
+    assert _stored(syngate_dir, "LEAF-002")["sources"] == ["src/leaf.py", "docs/LEAF.md"]
     assert run("move", "LEAF-002", "--to", "ROOT", "--link") == 0
     assert _stored(syngate_dir, "LEAF-002")["parents"] == ["BRANCH", "ROOT"]
     assert run("move", "LEAF-002", "--to", "ROOT", "--from", "BRANCH") == 0
@@ -236,46 +238,13 @@ def test_every_tree_call_is_reachable_from_the_command_line(cli, capsys):
     assert "still has children" in err and "nothing to edit" in err
 
 
-@pytest.mark.syngate("SYNGATE-API-AI")
-def test_a_structured_answer_dispatches_into_the_calls_anchored_at_its_item(syngate_tree):
-    syngate_dir, make_item = syngate_tree
-    items = _tree(syngate_dir, make_item)
-    assert set(synthetic.TOOLS) == {"add", "edit", "remove", "move"}
-    kind, calls = synthetic.parse_reply(
-        '```syngate\n'
-        '[{"tool": "add", "uid": "LEAF-002", "parent": "@", "header": "Second", "description": "It shall follow."},\n'
-        ' {"tool": "edit", "uid": "@", "description": "It shall group tighter."},\n'
-        ' {"tool": "move", "uid": "LEAF-001", "to": "@", "link": true},\n'
-        ' {"tool": "remove", "uid": "LEAF-002"}]\n'
-        '```')
-    assert kind == "calls"
-    applied = [synthetic.apply_call(items, "BRANCH", call, syngate_dir=syngate_dir) for call in calls]
-    assert applied == ["- added LEAF-002 under BRANCH", "- edited BRANCH",
-                       "- moved LEAF-001 under BRANCH", "- removed LEAF-002"]
-    assert items["BRANCH"].description == "It shall group tighter.\n"
-    assert items["LEAF-001"].parents == ["ROOT", "BRANCH"]  # link reaches the multi-parent DAG from a call
-    assert not (syngate_dir / "LEAF-002.yml").exists()
-
-    stamped = _stamped(items, "LEAF-001")
-    synthetic.apply_call(items, "BRANCH", {"tool": "edit", "uid": "LEAF-001", "header": "Renamed"}, syngate_dir=syngate_dir)
-    assert stamped.reviewed and _violated(items, "LEAF-001")  # a proxied call never clears: it violates, for the user to settle
-    with pytest.raises(syngatelib.tree_error):
-        synthetic.apply_call(items, "BRANCH", {"tool": "remove", "uid": "@"}, syngate_dir=syngate_dir)
-    with pytest.raises(syngatelib.tree_error) as ambiguous:  # two parents, neither named
-        synthetic.apply_call(items, "BRANCH", {"tool": "move", "uid": "LEAF-001", "to": "ROOT"}, syngate_dir=syngate_dir)
-    assert "name the one to re-point" in str(ambiguous.value)
-    for malformed in ('[{"tool": "edit", "uid": "A-1"}]', '[{"tool": "edit", "uid": "A-1", "header": " "}]'):
-        with pytest.raises(synthetic.protocol_error):
-            synthetic.parse_reply(f"```syngate\n{malformed}\n```")
-
-
 @pytest.mark.syngate("SYNGATE-API-QUERY")
 def test_query_reads_an_item_with_its_children_in_sibling_order_and_its_kind(cli, capsys):
     run, syngate_dir = cli
     items, _ = syngatelib.load_tree(syngate_dir)
     root = synthetic.item_view(items, "ROOT")
     assert (root["uid"], root["description"], root["parents"], root["children"]) == ("ROOT", "Root branch\n", [], ["BRANCH", "LEAF-001"])
-    assert synthetic.item_view(items, "BRANCH") == {"uid": "BRANCH", "header": "", "description": "It shall group.\n", "parents": ["ROOT"], "children": [], "kind": "branch"}
+    assert synthetic.item_view(items, "BRANCH") == {"uid": "BRANCH", "description": "It shall group.\n", "parents": ["ROOT"], "sources": [], "children": [], "kind": "branch"}
     assert synthetic.item_view(items, "LEAF-001")["kind"] == "leaf"
     with pytest.raises(syngatelib.unknown_uid):
         synthetic.item_view(items, "LEAF-009")

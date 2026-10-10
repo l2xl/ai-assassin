@@ -1,7 +1,9 @@
-header: Models and settings query
-description: |
-  The Claude Code connector shall answer a query for its available models and settings — every model with its id and a display name that strips the `claude-` prefix, the effort levels and the call modes it supports, each with its label, hint and default switch state.
+---
 parents: [CLAUDE_CODE]
 order: 10
 test: d7d3aa5ce05b6790e79d27a3ddf4347d4d40883657077b42833be64179f0b782
 review: f65d76e4cfa596a0a2f501fbb16bfc538f0651c853c7e16dc70466d594019e85
+---
+The Claude Code connector shall answer a query for its available models and settings
+
+Every model with its id, a display name stripping the `claude-` prefix and the effort levels it supports — none for a model without reasoning — and the call modes with their label, hint and default state.

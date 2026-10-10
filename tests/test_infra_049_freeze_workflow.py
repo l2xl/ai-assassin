@@ -30,10 +30,11 @@ def test_routine_sha_is_the_sha256_of_the_discovered_span():
 
 
 def test_compute_stamp_is_a_transparent_sha_over_canonical_json():
-    """The reviewed stamp is a recomputable sha256 over the item's canonical payload."""
+    """The reviewed stamp is a recomputable sha256 over the item's canonical payload, the body split at its first line
+    into the header and description it once was, so the stamps of that time stand."""
     item = syngatelib.Item(
-        uid="INFRA-049", path=Path("INFRA-049.yml"), header="Freeze",
-        description=DESC, parents=["INFRA", "CORE"], tests={None: "a" * 64},
+        uid="INFRA-049", path=Path("INFRA-049.yml"),
+        description=f"Freeze\n\n{DESC}", parents=["INFRA", "CORE"], tests={None: "a" * 64},
     )
     payload = {"description": DESC, "header": "Freeze", "parents": ["INFRA", "CORE"], "tests": {"": "a" * 64}}
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -45,8 +46,8 @@ def test_compute_stamp_is_a_transparent_sha_over_canonical_json():
 
 def _reviewed_leaf(sha):
     item = syngatelib.Item(
-        uid="INFRA-049", path=Path("INFRA-049.yml"), header="Freeze",
-        description=DESC, parents=["INFRA"], tests={None: sha},
+        uid="INFRA-049", path=Path("INFRA-049.yml"),
+        description=f"Freeze\n\n{DESC}", parents=["INFRA"], tests={None: sha},
     )
     item.reviewed = syngatelib.compute_stamp(item)
     return {"INFRA-049": item}
@@ -87,8 +88,8 @@ def _commit(cwd, message):
 
 def _put_item(syngate_dir, make_item, sha, description=DESC):
     probe = syngatelib.Item(
-        uid="INFRA-049", path=syngate_dir / "INFRA-049.yml", header="Freeze",
-        description=description, parents=["INFRA"], tests={None: sha},
+        uid="INFRA-049", path=syngate_dir / "INFRA-049.yml",
+        description=f"Freeze\n\n{description}", parents=["INFRA"], tests={None: sha},
     )
     make_item(syngate_dir, "INFRA-049", description, parents=["INFRA"], header="Freeze", tests=sha, reviewed=syngatelib.compute_stamp(probe))
 

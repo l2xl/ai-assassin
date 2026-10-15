@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 70
-test: ~
+test: 6fd49e542b0a717538b586851acafb6324a582544de0bdd114fe2f9c6132afdd
+review: b8ef0d5d37b5fb785b9781ae4c1da79fbe19a3ad708f94d888185b21069d109c
 ---
 Turn completion
 of the Claude Code connector comes with the exit of the `claude` process, the output of its last answer being the turn's answer

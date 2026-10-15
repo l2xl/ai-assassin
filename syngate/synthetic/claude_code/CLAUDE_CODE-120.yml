@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 120
-test: ~
+test: eb98d7024a78f3ad731b155c36bf9aa34056e05284c9fd4106cc3beb5ab5cf33
+review: 71e50fe39e1c7baae7e0d5e8227c808da72298aa1f39c44aa123e0f2ad9125ab
 ---
 Project diff step
 of the Claude Code connector records the project files a turn changed, taken from snapshots before and after the turn.

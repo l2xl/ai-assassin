@@ -1,5 +1,6 @@
 ---
 parents: [AI-SCRATCHER]
 order: 50
+review: fc80cc3aed22aa2b652802450439a1fc3c7e5f2b1ef4a89a0e4fa476329f5ae2
 ---
 Synergy Context Gate (SynGate) is common project design tools library: project model (DAG structured thesises + common design document, referenced from the thesises), test binding, review freeze and status rollup. [DESIGN](README.md)

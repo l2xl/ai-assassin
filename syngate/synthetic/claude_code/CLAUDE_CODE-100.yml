@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 100
-test: ~
+test: d6a898f6ffe47a5c08fc27943d00cc5bbe5f19a5bc9593b6df6507a7a7b0d335
+review: 7f4241dc2b802f1c17e821dd754b8cb62e2d89662b5140bb2ea954871fe0ba69
 ---
 Reasoning exposure
 of the Claude Code connector requests the model's reasoning whenever the chosen model and effort provide it and records it as a step only when it comes.

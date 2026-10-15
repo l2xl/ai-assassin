@@ -207,7 +207,7 @@ def _expand_uids(items, uid_args, selectable, kind):
     return [uid for uid in selected if not (uid in seen or seen.add(uid))], errors
 
 
-def _review_one(items, structural, discovered, uid, build_dir, recording, stampable):
+def _review_one(items, structural, discovered, uid, build_dir, recording):
     own = [e for e in structural if e.startswith(f"{uid}:") and "reviewed stamp" not in e and "no stamped routine sha" not in e]
     if own:
         for line in own:
@@ -216,9 +216,6 @@ def _review_one(items, structural, discovered, uid, build_dir, recording, stampa
     item = items.get(uid)
     if item is None:
         print(f"unknown UID '{uid}'", file=sys.stderr)
-        return False
-    if not stampable(item):
-        print(f"{uid}: branch items are reviewed through their children; nothing to stamp", file=sys.stderr)
         return False
     resolved, unresolved = _resolve(item, discovered, item.tests) if item.is_leaf else ({}, {})
     passed, unrun = _run_bound({uid: resolved}, build_dir) if not unresolved else (False, {})
@@ -234,8 +231,8 @@ def _review_one(items, structural, discovered, uid, build_dir, recording, stampa
         item.tests = {name: syngatelib.routine_sha(loc) for name, loc in resolved.items()}
     item.reviewed = syngatelib.item_stamp(items, uid)
     syngatelib.write_item(item)
-    state = "passing" if passed else "FAILING -- red, pending implementation"
-    print(f"{uid}: reviewed ({item.reviewed}) -- bound test currently {state}")
+    state = "no bound test" if not resolved else "bound test currently passing" if passed else "bound test currently FAILING -- red, pending implementation"
+    print(f"{uid}: reviewed ({item.reviewed}) -- {state}")
     return True
 
 
@@ -243,8 +240,7 @@ def cmd_review(args):
     items = _load_or_die()
     if not _require(items, "review"):
         return 1
-    stampable = _addressable(items)
-    uids, errors = _expand_uids(items, args.uid, stampable, "leaf")
+    uids, errors = _expand_uids(items, args.uid, _addressable(items), "leaf")
     if errors:
         for line in errors:
             print(line, file=sys.stderr)
@@ -252,7 +248,7 @@ def cmd_review(args):
     structural = syngatelib.validate_structure(items)
     discovered = syngatelib.discover_bindings()
     with _Recording(args.coverage_out) as recording:
-        failed = [uid for uid in uids if not _review_one(items, structural, discovered, uid, args.build_dir, recording, stampable)]
+        failed = [uid for uid in uids if not _review_one(items, structural, discovered, uid, args.build_dir, recording)]
     if failed:
         print(f"review: {len(failed)}/{len(uids)} item(s) not stamped: {' '.join(failed)}", file=sys.stderr)
         return 1
@@ -432,7 +428,7 @@ def main():
         p.add_argument("uid")
         p.set_defaults(func=func)
 
-    p = sub.add_parser("review", help="user-only: run bound tests, stamp routine shas + reviewed (stamps even on a failing test -- TDD red state)")
+    p = sub.add_parser("review", help="user-only: stamp items reviewed, running and freezing the bound tests of those that carry any (stamps even on a failing test -- TDD red state)")
     p.add_argument("uid", nargs="+", help="UID(s) or glob pattern(s) like 'BUOY-00?' / 'BUOY-*' (quote patterns for the shell); patterns select leaves only")
     p.add_argument("--build-dir", default="cmake-build-debug-clang")
     p.add_argument("--coverage-out", help="coverage JSONL to fold the run's records into; a re-run binding supersedes its previous records")

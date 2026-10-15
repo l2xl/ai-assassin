@@ -1,9 +1,0 @@
----
-parents: [INFRA-042]
-order: 50
-test: 67f7b581d510f2352f969e4855d29403dbe3ee1c6936e5f73b2cee51921de716
-review: 5ad8c61c9f8b10989454678100de541652920d24220dbf91cd7c80d3aaf846b4
----
-Test and review status axes
-
-The status rollup shall report two independent axes per item -- test: unknown, test passed or test failed, where a failed test-bearing item fails every ancestor and otherwise one unknown item leaves them unknown; review: not reviewed, reviewed or review violated, where an item's own validation problem is a violated review, violated outranks not reviewed, not reviewed outranks reviewed, and a branch without own tests is reviewed only through its children. 

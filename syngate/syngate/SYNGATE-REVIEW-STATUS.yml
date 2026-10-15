@@ -1,0 +1,7 @@
+---
+parents: [INFRA-042]
+order: 60
+test: ~
+---
+Review status axis
+of an item is the superposition of its own review mark and its children's, recursively: not reviewed, reviewed or review violated, where an item's own validation problem is a violated review, violated outranks not reviewed and not reviewed outranks reviewed.

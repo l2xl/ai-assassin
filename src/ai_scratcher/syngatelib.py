@@ -720,8 +720,9 @@ def compute_axes(items, records, problems=None):
     alone: a failed item fails every ancestor, else one unknown item leaves them
     unknown. Review: an item's own validation problem -- a stale stamp, a
     stamped routine changed or gone -- is a violated review and never touches
-    the test axis; violated outranks not reviewed, which outranks reviewed; a
-    branch without tests is reviewed only through its children."""
+    the test axis; violated outranks not reviewed, which outranks reviewed;
+    every item's own stamp joins its rollup, so a branch is reviewed when it
+    and all its children are."""
     problems = problems or {}
     children = children_map(items)
     memo = {}
@@ -731,9 +732,8 @@ def compute_axes(items, records, problems=None):
             return memo[uid]
         memo[uid] = (UNKNOWN, NOT_REVIEWED)  # cycle guard
         item, states = items[uid], [axes(k) for k in children[uid]]
-        if item.is_leaf or not states:
-            own = leaf_test_status(item, records) if item.is_leaf else UNKNOWN
-            states.append((own, REVIEWED if item.reviewed else NOT_REVIEWED))
+        own = leaf_test_status(item, records) if item.is_leaf else TEST_PASSED if states else UNKNOWN
+        states.append((own, REVIEWED if item.reviewed else NOT_REVIEWED))
         test, review = _worst([t for t, _ in states], TEST_RANK), _worst([r for _, r in states], REVIEW_RANK)
         memo[uid] = (test, REVIEW_VIOLATED if problems.get(uid) else review)
         return memo[uid]
@@ -1052,3 +1052,22 @@ def leaves_under(items, uid):
             leaves.append(node)
         stack.extend(reversed(sorted_children(items, children, node)))
     return leaves
+
+
+def items_under(items, uid):
+    """The items a review run stamps for `uid`: every item below it, children
+    before their parent, then the item itself; an unknown UID passes through."""
+    if uid not in items:
+        return [uid]
+    children, order, seen = children_map(items), [], set()
+
+    def visit(node):
+        if node in seen:
+            return
+        seen.add(node)
+        for child in sorted_children(items, children, node):
+            visit(child)
+        order.append(node)
+
+    visit(uid)
+    return order

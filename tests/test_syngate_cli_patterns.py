@@ -160,8 +160,9 @@ def test_the_test_option_at_the_root_withholds_bindings_and_stamping_alone(monke
     assert [(item.uid, item.tests, item.reviewed == syngatelib.compute_stamp(item)) for item in written] == [("PAT-001", None, True)]
     assert "feature is off" not in capsys.readouterr().err
     items = _rooted(syngate_tree, features=("test", "review"))
-    assert syngate.cmd_review(review) == 1  # with the option on, an item without a binding of its own is reviewed through its children only
-    assert "nothing to stamp" in capsys.readouterr().err
+    written.clear()
+    assert syngate.cmd_review(review) == 0  # with the option on, an item without a binding of its own still stamps, nothing to run
+    assert [(item.uid, item.tests, item.reviewed == syngatelib.compute_stamp(item)) for item in written] == [("PAT-001", None, True)]
 
 
 @pytest.mark.syngate("SYNGATE-REVIEW-OPT")

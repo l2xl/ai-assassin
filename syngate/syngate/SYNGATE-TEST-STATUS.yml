@@ -1,0 +1,7 @@
+---
+parents: [INFRA-042]
+order: 50
+test: ~
+---
+Test status axis
+of an item is the superposition of its own bound tests' status and its children's, recursively: unknown, test passed or test failed, where a failed item fails every ancestor and otherwise one unknown item leaves them unknown.

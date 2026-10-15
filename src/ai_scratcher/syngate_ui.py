@@ -18,6 +18,7 @@ against CSRF and DNS rebinding for localhost tools that run subprocesses.
 """
 
 import argparse
+import copy
 import hashlib
 import hmac
 import http.server
@@ -27,6 +28,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -43,6 +45,7 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 DEFAULT_COVERAGE = ("pytest-coverage.jsonl", "syngate_coverage.jsonl", "build-ci/syngate_coverage.jsonl")
 # Test / review runs started from the page fold their records in here, so a run recolors the statuses.
 RUN_COVERAGE = "syngate_coverage.jsonl"
+TURN_ROUTE = r"/api/turn/([A-Za-z0-9_\-]+:\d+)"
 # Project files opened from a link: git-tracked files are readable, only markdown is written.
 FILE_LIMIT = 1 << 20
 
@@ -96,16 +99,46 @@ class Job:
                 return done
 
 
-class Turn:
-    """One chat exchange run on its own thread: the page awaits its outcome by polling, re-attaching after a reload, and may stop it."""
+def shifted(step, shift):
+    """A copy of the step, its `at` and those of the steps nested in it moved by `shift` seconds."""
+    moved = copy.deepcopy(step)
+    pending = [moved]
+    while pending:
+        each = pending.pop()
+        each["at"] = round(each.get("at", 0) + shift, 2)
+        pending += each.get("steps") or []
+    return moved
 
-    def __init__(self, turn_id, connector):
+
+class Turn:
+    """One chat exchange run on its own thread: the page awaits its outcome by polling, re-attaching after a reload, and may stop it.
+    Its steps are recorded as they happen, every change announced through `changed`."""
+
+    def __init__(self, turn_id, connector, changed=lambda: None):
         self.id = turn_id
         self.connector = connector
+        self.changed = changed
         self.thread = None
         self.outcome = None
         self.stopped = False
+        self.started = time.monotonic()
+        self.steps, self.origins = [], []
         self.cond = threading.Condition()
+
+    def elapsed(self):
+        return round(time.monotonic() - self.started, 2)
+
+    def add_step(self, step, shift=0.0):
+        """Record a copy of the step, `shift` seconds later; a step announced again, as the same object, replaces its record."""
+        stored = shifted(step, shift)
+        with self.cond:
+            index = next((index for index, origin in enumerate(self.origins) if origin is step), None)
+            if index is None:
+                self.origins.append(step)
+                self.steps.append(stored)
+            else:
+                self.steps[index] = stored
+        self.changed()
 
     def finish(self, outcome):
         with self.cond:
@@ -115,7 +148,42 @@ class Turn:
     def snapshot(self, wait=0):
         with self.cond:
             self.cond.wait_for(lambda: self.outcome is not None, timeout=wait)
-            return {"turn": self.id, "running": self.outcome is None, **(self.outcome or {})}
+            return {"turn": self.id, "running": self.outcome is None, **({"steps": list(self.steps)} if self.steps else {}), **(self.outcome or {})}
+
+
+SETUP_KEYS = ("connector", "model", "effort", "modes")
+
+
+class Chat:
+    """The one chat of an item, shared by every page showing the item: its exchange log, setup, connector session and the turn in flight.
+    Turns are numbered per item and addressed as `<UID>:<n>`."""
+
+    def __init__(self, uid):
+        self.uid = uid
+        self.turns = 0
+        self.erase()
+
+    def erase(self):
+        self.log = []
+        self.session = None
+        self.setup = {}
+        self.turn = None
+
+    @property
+    def running(self):
+        return self.turn is not None and self.turn.outcome is None
+
+    def next_turn(self, connector, changed):
+        self.turns += 1
+        self.turn = Turn(f"{self.uid}:{self.turns}", connector, changed)
+        return self.turn
+
+    def kept(self):
+        return [{"role": m["role"], "text": m["text"]} for m in self.log if not m.get("dropped") and m["role"] != "error"]
+
+    def snapshot(self):
+        return {"uid": self.uid, "log": [dict(m) for m in self.log], "session": self.session, **self.setup, "turn": self.turn.id if self.running else None,
+                **({"steps": list(self.turn.steps)} if self.running else {})}
 
 
 class JobRunner:
@@ -181,8 +249,9 @@ class SyngateUIApp:
         self.build_dir = build_dir
         self.token = secrets.token_urlsafe(24)
         self.jobs = JobRunner()
-        self.turns = {}
-        self._turn_lock = threading.Lock()
+        self.chats = {}
+        self.chats_version = 0
+        self._chat_lock = threading.Condition()
         self.connectors = {name: connector(cwd=self.root) for name, connector in synthetic.CONNECTORS.items()}
 
     # -- model ------------------------------------------------------------
@@ -283,9 +352,8 @@ class SyngateUIApp:
     def create_item(self, data):
         items = self._load()
         item = _call(lambda: syngatelib.add_item(items, str(data.get("uid") or ""), data.get("parents") or [],
-                                                 header=data.get("header"), description=data.get("description"),
-                                                 kind=data.get("kind"), folder=data.get("dir"),
-                                                 order=data.get("order", 0), syngate_dir=self.syngate_dir, clear=True))
+                                                 description=data.get("description"), kind=data.get("kind"), folder=data.get("dir"),
+                                                 order=data.get("order", 0), sources=data.get("sources"), syngate_dir=self.syngate_dir, clear=True))
         return {"ok": True, "path": str(item.path.relative_to(self.root))}
 
     def delete_item(self, uid):
@@ -352,38 +420,106 @@ class SyngateUIApp:
             path.write_text(text, encoding="utf-8")
         return {"ok": True, "stored": {"file": text}, "sha": hashlib.sha256(text.encode()).hexdigest()}
 
+    # -- chats --------------------------------------------------------------
+
+    def chats_snapshot(self, since=None, wait=0):
+        """Every chat as the server holds it; with `since`, awaited up to `wait` seconds for a change past that version -- one long poll
+        serves a page however many turns run."""
+        with self._chat_lock:
+            if since is not None:
+                self._chat_lock.wait_for(lambda: self.chats_version > since, timeout=wait)
+            return {"version": self.chats_version, "chats": {uid: chat.snapshot() for uid, chat in self.chats.items()}}
+
+    def _chat(self, uid):
+        chat = self.chats.get(uid)
+        if chat is None:
+            chat = self.chats[uid] = Chat(uid)
+        return chat
+
+    def _bump(self):
+        self.chats_version += 1
+        self._chat_lock.notify_all()
+
+    def _notify(self):
+        with self._chat_lock:
+            self._bump()
+
+    def _changed(self, chat):
+        self._bump()
+        return chat.snapshot()
+
+    def update_chat(self, uid, data):
+        """Change the item's chat in place: its setup, one message's fold or keep mark (dropping or keeping a message ends the connector
+        session, so the next turn carries the kept messages), or `erase` -- refused while a turn runs."""
+        with self._chat_lock:
+            chat = self._chat(uid)
+            if data.get("erase"):
+                if chat.running:
+                    raise ApiError(409, f"a turn of {uid} is running")
+                chat.erase()
+            chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
+            patch = data.get("message")
+            if isinstance(patch, dict) and 0 <= int(patch.get("index", -1)) < len(chat.log):
+                message = chat.log[int(patch["index"])]
+                if "folded" in patch:
+                    message["folded"] = bool(patch["folded"])
+                if "dropped" in patch and bool(patch["dropped"]) != message.get("dropped", False):
+                    message["dropped"] = bool(patch["dropped"])
+                    chat.session = None
+            return self._changed(chat)
+
     def start_turn(self, data):
-        """Start `chat(data)` as a turn the page polls through `turn_snapshot`; -> its id."""
-        with self._turn_lock:
-            turn = Turn(len(self.turns) + 1, data.get("connector"))
-            self.turns[turn.id] = turn
+        """Start one turn of the item's chat -- the typed text joins the log, marked as an `agent` message when a parent turn sent it,
+        a `statement` is the content itself and is not repeated, `fresh` erases the old chat first -- as a job the page polls through
+        `turn_snapshot`; -> `{"turn": "<UID>:<n>", "chat": …}`."""
+        uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
+        with self._chat_lock:
+            chat = self._chat(uid)
+            if chat.running:
+                raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
+            if data.get("fresh"):
+                chat.erase()
+            chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
+            history = [] if chat.session else chat.kept()
+            if not data.get("statement"):
+                chat.log.append({"role": "user", "text": text, **({"agent": data["agent"]} if data.get("agent") else {})})
+            turn = chat.next_turn(chat.setup.get("connector"), self._notify)
+            exchange = {"uid": uid, "text": text, "session": chat.session, "history": history, **chat.setup}
+            started = self._changed(chat)
 
         def run():
             try:
-                turn.finish(self.chat(data, turn))
+                outcome = self.chat(exchange, turn)
             except ApiError as err:
-                turn.finish({"error": str(err), "status": err.status, **err.extra})
+                outcome = {"error": str(err), "status": err.status, **err.extra}
+            with self._chat_lock:
+                if chat.turn is turn:
+                    if outcome.get("session"):
+                        chat.session = outcome["session"]
+                    message = {"role": "error", "text": outcome["error"]} if "error" in outcome else {"role": "ai", "text": outcome["reply"]}
+                    chat.log.append({**message, **({"steps": list(turn.steps)} if turn.steps else {})})
+                    self._bump()
+                turn.finish(outcome)
 
         turn.thread = threading.Thread(target=run, daemon=True)
         turn.thread.start()
-        return {"turn": turn.id}
+        return {"turn": turn.id, "chat": started}
 
-    def _turn(self, turn_id):
-        turn = self.turns.get(turn_id)
-        if turn is None:
-            raise ApiError(404, f"no such turn {turn_id}")
+    def _turn(self, key):
+        """The turn `<UID>:<n>` addresses: the latest of its item's chat, readable until the next one starts."""
+        chat = self.chats.get(key.rpartition(":")[0])
+        turn = chat.turn if chat else None
+        if turn is None or turn.id != key:
+            raise ApiError(404, f"no such turn {key}")
         return turn
 
-    def turn_snapshot(self, turn_id, wait=0):
-        """The turn's state, awaited up to `wait` seconds; a finished turn is handed over once."""
-        snapshot = self._turn(turn_id).snapshot(wait)
-        if not snapshot["running"]:
-            self.turns.pop(turn_id, None)
-        return snapshot
+    def turn_snapshot(self, key, wait=0):
+        """The turn's state, awaited up to `wait` seconds; its outcome is also the last message of its chat."""
+        return self._turn(key).snapshot(wait)
 
-    def stop_turn(self, turn_id):
+    def stop_turn(self, key):
         """End a running turn: its connector's live process is interrupted and the exchange reports as stopped."""
-        turn = self._turn(turn_id)
+        turn = self._turn(key)
         turn.stopped = True
         interrupt = getattr(self.connectors.get(turn.connector), "interrupt", None)
         if interrupt and turn.thread:
@@ -393,16 +529,25 @@ class SyngateUIApp:
     def chat(self, data, turn=None):
         """One exchange anchored at `uid`: the item's seed context plus the user's text go to the chosen connector.
         A plain answer comes back as the reply; an answer of tool calls is applied to the tree -- its test calls joined
-        into one awaited run through the page's runner after the rest -- and while it carries queries or runs their results go
-        back into the same session for the next answer. The reply lists everything applied.
+        into one awaited run through the page's runner after the rest, its agent calls then run as parallel turns of their items' chats
+        -- and while it carries queries, runs or delegations their results go back into the same session for the next answer.
+        The reply lists everything applied.
         `history` is the kept part of an exchange whose session was dropped: it travels with the text of the first round.
-        A `turn` stopped while a round is out ends the exchange there, what was applied so far staying applied."""
+        A `turn` stopped while a round is out ends the exchange there, what was applied so far staying applied.
+        The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
+
+        def batch_step(lines):
+            if turn and lines:
+                turn.add_step({"kind": "calls", "lines": list(lines), "at": turn.elapsed()})
+
         for _ in range(synthetic.QUERY_ROUNDS):
+            on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
-                                                 data.get("effort"), modes=data.get("modes") or (), session=session, history=history)
+                                                 data.get("effort"), modes=data.get("modes") or (), session=session, history=history, root=self.root,
+                                                 on_step=on_step)
             except synthetic.query_error as err:
                 raise ApiError(400, str(err)) from None
             except synthetic.connection_error as err:
@@ -419,10 +564,15 @@ class SyngateUIApp:
                 return {"ok": True, "reply": "\n".join([*applied, payload]), "session": session, **({"calls": calls} if calls else {})}
             items, results = self._load(), []
             named = lambda call: synthetic.call_target(uid, call)
-            refused = lambda err, line: ApiError(err.status, "\n".join([*applied, *results, f"{line} refused: {err}"]), session=session)
+
+            def refused(err, line):
+                batch_step(results)
+                return ApiError(err.status, "\n".join([*applied, *results, f"{line} refused: {err}"]), session=session)
+
             runs = [call for call in payload if synthetic.is_run(call)]
+            delegations = [call for call in payload if synthetic.is_delegation(call)]
             for call in payload:
-                if synthetic.is_run(call):
+                if synthetic.is_run(call) or synthetic.is_delegation(call):
                     continue
                 try:
                     results.append(_call(lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir)))
@@ -433,12 +583,51 @@ class SyngateUIApp:
                     results.append(self._run_calls(items, [(named(call), call.get("name") or None) for call in runs]))
                 except ApiError as err:
                     raise refused(err, f"test {' '.join(dict.fromkeys(named(call) for call in runs))}") from None
+            refusal = self._delegate(items, uid, data, delegations, turn, results) if delegations else None
+            if turn and turn.stopped:
+                batch_step(results)
+                raise ApiError(409, "\n".join([*applied, *results, "turn stopped"]), session=session)
+            if refusal:
+                raise refused(*refusal)
+            batch_step(results)
             applied += results
             calls += payload
-            if not any(synthetic.is_query(call) for call in payload) and not runs:
+            if not any(synthetic.is_query(call) for call in payload) and not runs and not delegations:
                 return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
             text = synthetic.RESULTS_PREAMBLE + "\n".join(results)
         raise ApiError(422, "\n".join([*applied, "answer refused: the exchange kept querying"]), session=session)
+
+    def _delegate(self, items, anchor, data, calls, turn, results):
+        """Every agent call of a batch as a turn of its item's chat with the call's prompt, in the setup of `data` the call may override,
+        all running in parallel and awaited -- a stop of the parent `turn` stops them too. Each child's report joins `results` and its
+        transcript the parent's steps as an agent step; -> (error, line) of the call refused, which starts none after it."""
+        started, refusal = [], None
+        for call in calls:
+            child = synthetic.call_target(anchor, call)
+            setup = {**{key: data[key] for key in SETUP_KEYS if key in data}, **{key: call[key] for key in ("model", "effort", "modes") if key in call}}
+            try:
+                if child not in items:
+                    raise ApiError(404, f"unknown UID '{child}'")
+                key = self.start_turn({**setup, "uid": child, "text": call["prompt"], "agent": turn.id if turn else anchor})["turn"]
+            except ApiError as err:
+                refusal = (err, f"agent {child}")
+                break
+            step, shift = {"kind": "agent", "uid": child, "prompt": call["prompt"], "report": None, "steps": [], "at": 0}, turn.elapsed() if turn else 0
+            if turn:
+                turn.add_step(step, shift)
+            started.append((self._turn(key), step, shift))
+        for child, step, shift in started:
+            while child.snapshot(0.2)["running"]:
+                if turn and turn.stopped:
+                    for each, _, _ in started:
+                        if each.outcome is None and not each.stopped:
+                            self.stop_turn(each.id)
+            outcome = child.snapshot()
+            step.update(report=outcome.get("reply", outcome.get("error")), steps=outcome.get("steps", []))
+            if turn:
+                turn.add_step(step, shift)
+            results.append(f"- agent {step['uid']}: {step['report']}")
+        return refusal
 
     def _run_calls(self, items, addressed):
         """Every test call of a batch -- `addressed` being (uid, binding|None) -- as one run of the page's runner, awaited;
@@ -463,10 +652,11 @@ class SyngateUIApp:
         if action == "clear":
             argv += uids
         else:
-            leaves = list(dict.fromkeys(leaf for uid in uids for leaf in syngatelib.leaves_under(items, uid)))
-            if not leaves:
+            under = syngatelib.items_under if action == "review" else syngatelib.leaves_under
+            targets = list(dict.fromkeys(target for uid in uids for target in under(items, uid)))
+            if not targets:
                 raise ApiError(400, f"no test-bearing leaf under {', '.join(uids)}")
-            argv += [*leaves, "--build-dir", str(data.get("build_dir") or self.build_dir), "--coverage-out", self.run_coverage]
+            argv += [*targets, "--build-dir", str(data.get("build_dir") or self.build_dir), "--coverage-out", self.run_coverage]
         job = self.jobs.start(argv, cwd=self.root)
         return {"job": job.id}
 
@@ -552,12 +742,17 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 job = self.app.jobs.current
                 self._json(200, {"fingerprint": self.app.fingerprint(),
                                  "job": job.id if job and job.returncode is None else None,
+                                 "chats": self.app.chats_version,
                                  "files": self.app.file_shas(parse_qs(urlsplit(self.path).query).get("file", []))})
             elif path == "/api/file":
                 self._json(200, self.app.read_file((parse_qs(urlsplit(self.path).query).get("path") or [""])[0]))
-            elif (match := re.fullmatch(r"/api/turn/(\d+)", path)):
+            elif path == "/api/chats":
+                query = parse_qs(urlsplit(self.path).query)
+                since = query.get("since")
+                self._json(200, self.app.chats_snapshot(int(since[0]) if since else None, min(float((query.get("wait") or ["0"])[0]), 30)))
+            elif (match := re.fullmatch(TURN_ROUTE, path)):
                 wait = (parse_qs(urlsplit(self.path).query).get("wait") or ["0"])[0]
-                self._json(200, self.app.turn_snapshot(int(match.group(1)), min(float(wait), 30)))
+                self._json(200, self.app.turn_snapshot(match.group(1), min(float(wait), 30)))
             elif (match := re.fullmatch(r"/api/job/(\d+)", path)):
                 self._job_snapshot(int(match.group(1)))
             elif (match := re.fullmatch(r"/api/job/(\d+)/events", path)):
@@ -589,10 +784,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._json(200, self.app.start_run(payload))
             elif path == "/api/chat":
                 self._json(200, self.app.chat(payload))
+            elif (match := re.fullmatch(r"/api/chat/([A-Za-z0-9_\-]+)", path)):
+                self._json(200, self.app.update_chat(match.group(1), payload))
             elif path == "/api/turn":
                 self._json(200, self.app.start_turn(payload))
-            elif (match := re.fullmatch(r"/api/turn/(\d+)/stop", path)):
-                self._json(200, self.app.stop_turn(int(match.group(1))))
+            elif (match := re.fullmatch(TURN_ROUTE + "/stop", path)):
+                self._json(200, self.app.stop_turn(match.group(1)))
             else:
                 self._json(404, {"error": f"no route for POST {path}"})
         except ApiError as exc:

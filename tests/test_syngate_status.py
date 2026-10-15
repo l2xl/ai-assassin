@@ -164,7 +164,6 @@ def test_report_entry_exposes_presentation_fields(syngate_tree, monkeypatch):
     assert report["STUB-1"]["status"] == syngatelib.NOT_IMPLEMENTED
 
 
-@pytest.mark.syngate("INFRA-070")
 def test_an_items_own_problem_reddens_that_item_and_only_its_parents(syngate_tree, monkeypatch):
     """A validation problem is a defect of the item it names: it reddens that
     item and rolls up through its own parents, leaving unrelated branches alone
@@ -213,32 +212,57 @@ def test_rerun_records_replace_the_previous_records_of_their_bindings(tmp_path):
     assert {binding: [r["passed"] for r in recs] for binding, recs in records.items()} == {("LEAF-1", None): [True], ("LEAF-2", "a"): [True], ("LEAF-2", "b"): [True]}
 
 
-@pytest.mark.syngate("INFRA-053")
-def test_test_and_review_axes_roll_up_independently(syngate_tree):
+def _axes_tree(syngate_tree):
     syngate_dir, make = syngate_tree
     make(syngate_dir, "ROOT-1", "root", tests="absent")
-    for branch in ("A-1", "B-1", "C-1", "D-1"):
+    for branch in ("A-1", "B-1", "C-1", "D-1", "E-1"):
         make(syngate_dir, branch, "groups", parents=["ROOT-1"], tests="absent")
     make(syngate_dir, "PASS-1", "shall pass", parents=["A-1"], tests=None)
     make(syngate_dir, "UNK-1", "shall run some day", parents=["A-1"], tests=None)
     make(syngate_dir, "FAIL-1", "shall fail", parents=["A-1"], tests=None)
     make(syngate_dir, "PASS-2", "shall pass", parents=["D-1"], tests=None)
     make(syngate_dir, "UNK-2", "shall run some day", parents=["D-1"], tests=None)
-    for uid, parent in (("STALE-1", "B-1"), ("OK-1", "C-1")):
+    for uid, parent in (("STALE-1", "B-1"), ("OK-1", "C-1"), ("OK-2", "E-1")):
         frozen = syngatelib.Item(uid=uid, path=syngate_dir / f"{uid}.yml", description="It shall hold.\n", parents=[parent], tests={None: "a" * 64})
         frozen.reviewed = syngatelib.compute_stamp(frozen)
         syngatelib.write_item(frozen)
     (syngate_dir / "STALE-1.yml").write_text((syngate_dir / "STALE-1.yml").read_text().replace("It shall hold.", "It shall have drifted."))
     items, errs = syngatelib.load_tree(syngate_dir)
     assert errs == []
-    records = {(uid, None): [_rec(uid != "FAIL-1")] for uid in ("PASS-1", "FAIL-1", "PASS-2", "STALE-1", "OK-1")}
-    axes = syngatelib.compute_axes(items, records, syngatelib.item_problems(items))
+    for uid in ("C-1", "D-1"):
+        items[uid].reviewed = syngatelib.item_stamp(items, uid)
+        syngatelib.write_item(items[uid])
+    items["E-1"].reviewed = syngatelib.item_stamp(items, "E-1")
+    items["E-1"].description = "regrouped\n"
+    syngatelib.write_item(items["E-1"])
+    items, errs = syngatelib.load_tree(syngate_dir)
+    assert errs == []
+    records = {(uid, None): [_rec(uid != "FAIL-1")] for uid in ("PASS-1", "FAIL-1", "PASS-2", "STALE-1", "OK-1", "OK-2")}
+    return syngatelib.compute_axes(items, records, syngatelib.item_problems(items))
+
+
+@pytest.mark.syngate("SYNGATE-TEST-STATUS")
+def test_test_axis_superposes_own_tests_and_children(syngate_tree):
+    axes = _axes_tree(syngate_tree)
     expected = {
-        "PASS-1": ("test_passed", "not_reviewed"), "UNK-1": ("unknown", "not_reviewed"), "FAIL-1": ("test_failed", "not_reviewed"), "A-1": ("test_failed", "not_reviewed"),
-        "PASS-2": ("test_passed", "not_reviewed"), "UNK-2": ("unknown", "not_reviewed"), "D-1": ("unknown", "not_reviewed"),
-        "STALE-1": ("test_passed", "review_violated"), "B-1": ("test_passed", "review_violated"),
-        "OK-1": ("test_passed", "reviewed"), "C-1": ("test_passed", "reviewed"),
-        "ROOT-1": ("test_failed", "review_violated"),
+        "PASS-1": "test_passed", "UNK-1": "unknown", "FAIL-1": "test_failed", "A-1": "test_failed",
+        "PASS-2": "test_passed", "UNK-2": "unknown", "D-1": "unknown",
+        "STALE-1": "test_passed", "B-1": "test_passed", "OK-1": "test_passed", "C-1": "test_passed", "E-1": "test_passed",
+        "ROOT-1": "test_failed",
     }
-    assert {uid: (axes[uid]["test"], axes[uid]["review"]) for uid in expected} == expected
+    assert {uid: axes[uid]["test"] for uid in expected} == expected  # a violated review never touches the test axis
+
+
+@pytest.mark.syngate("SYNGATE-REVIEW-STATUS")
+def test_review_axis_superposes_own_stamp_and_children(syngate_tree):
+    axes = _axes_tree(syngate_tree)
+    expected = {
+        "PASS-1": "not_reviewed", "A-1": "not_reviewed",
+        "D-1": "not_reviewed",  # the branch's own stamp over unreviewed children
+        "STALE-1": "review_violated", "B-1": "review_violated",  # the stale leaf violates every ancestor
+        "OK-1": "reviewed", "C-1": "reviewed",  # the branch's own stamp over reviewed children
+        "OK-2": "reviewed", "E-1": "review_violated",  # the branch's own stamp went stale
+        "ROOT-1": "review_violated",
+    }
+    assert {uid: axes[uid]["review"] for uid in expected} == expected  # a problem reaches its own ancestors only, never a sibling branch
 

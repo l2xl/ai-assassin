@@ -2,6 +2,4 @@
 parents: [AI-SCRATCHER]
 order: 50
 ---
-Synergy Context Gate
-
-Common design tools library: item tree model, test binding, review freeze and status rollup. [DESIGN](README.md)
+Synergy Context Gate (SynGate) is common project design tools library: project model (DAG structured thesises + common design document, referenced from the thesises), test binding, review freeze and status rollup. [DESIGN](README.md)

@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE]
+order: 55
+test: ~
+---
+Tree edit denial
+by the Claude Code connector disallows `Edit` and `Write` under syngate/ in every call mode.

@@ -261,19 +261,23 @@ def test_workflows_mode_allows_the_workflow_tool(tmp_path):
 
 
 @pytest.mark.syngate("CLAUDE_CODE-050")
-def test_the_seed_context_is_the_appended_system_prompt_and_tree_file_edits_are_denied_in_every_mode(tmp_path, syngate_tree):
+def test_the_seed_context_is_the_appended_system_prompt(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     items, _ = syngatelib.load_tree(syngate_dir)
     stub = tmp_path / "claude_stub.py"
     stub.write_text(STUB_CLAUDE)
     connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
-    for modes in ([], ["edit"], ["edit", "internet", "workflows"]):
-        echoed = json.loads(connector.dispatch(synthetic.seed_context(items, "ROOT"), "Go.", modes=modes)[0])
-        argv = echoed["argv"]
-        assert echoed["seed"] == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + "\nRoot.\n" and "--append-system-prompt" not in argv
-        assert argv[argv.index("--disallowedTools") + 1] == "Edit(syngate/**),Write(syngate/**)"
+    echoed = json.loads(connector.dispatch(synthetic.seed_context(items, "ROOT"), "Go.")[0])
+    assert echoed["seed"] == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + "\nRoot.\n" and "--append-system-prompt" not in echoed["argv"]
     assert synthetic.LIBRARY["syngate_api"].text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+
+
+@pytest.mark.syngate("CLAUDE_CODE-TREE-GUARD")
+def test_tree_file_edits_are_denied_in_every_mode(tmp_path):
+    for modes in ([], ["edit"], ["edit", "internet", "workflows"]):
+        argv = _mode_argv(tmp_path, modes)
+        assert argv[argv.index("--disallowedTools") + 1] == "Edit(syngate/**),Write(syngate/**)"
 
 
 @pytest.mark.syngate("SYNTHETIC-020")

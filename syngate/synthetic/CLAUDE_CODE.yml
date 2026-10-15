@@ -1,9 +1,7 @@
 ---
 parents: [AI_CONNECTION]
 order: 10
-test: d377fbec9bb00831be4b3873b9e01e3cb9cb0d26d0a1b868a5e30cf84b14e5fc
-review: a909e9a09b80b728af09d46c123e464af4b2192662a187d852e46b812a12d3c9
+test: ~
 ---
-The Claude Code connector shall dispatch the seed context, the local history and the user input through the local `claude` CLI in non-interactive mode, returning the reply text and session id read from its JSON output
-
-The context goes as the appended system prompt, the input as the prompt text.
+Claude Code connector
+is the AI connection running the local `claude` CLI non-interactively: a turn is one `claude -p` call with the chosen model, effort and resumed session, its reply and session id read from the CLI's JSON output.

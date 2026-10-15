@@ -16,7 +16,7 @@ The item files under syngate/ are read-only for you: the tree is read and change
 "@" stands for the anchored item; any other item is addressed by its UID, the stem of its file under syngate/.
 - query: read an item back — description, parents, sources, children in sibling order, kind. Query the parent before adding under it, to pick a free UID and the place among its children.
 - context: read the seed context of an item, as an exchange anchored at it is seeded.
-- add: a new item under `parent` (default "@") with its `description` — the statement, whose first line is the requirement condensed and whose further lines add only what it cannot hold — and optionally its `sources`, the root-relative paths of the key source files that enter the seed context of every exchange anchored at the item, above or below it; `kind` "leaf" (default) carries a test binding, "branch" does not.
+- add: a new item under `parent` (default "@") with its `description` — the statement, whose first line is the statement condensed and whose further lines add only what it cannot hold — and optionally its `sources`, the root-relative paths of the key source files that enter the seed context of every exchange anchored at the item, above or below it; `kind` "leaf" (default) carries a test binding, "branch" does not.
 - edit: the `description` and/or `sources` of an item; a given `sources` list replaces the item's.
 - remove: a childless item.
 - move: under parent `to`, in front of sibling `before` (default last). `from` names the parent link to re-point when the item has several; `link` true adds `to` as one more parent instead of re-pointing, and a `from` that is a parent while `to` already is another drops the `from` link.

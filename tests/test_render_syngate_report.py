@@ -2,7 +2,7 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""Tests for scripts/render_syngate_report.py -- [INFRA-045]."""
+"""Tests for the static HTML site of `syngate report`."""
 
 import json
 
@@ -30,7 +30,6 @@ def _status_entries():
     }
 
 
-@pytest.mark.syngate("INFRA-045")
 def test_render_produces_index_and_navigable_cards(tmp_path):
     status_path = tmp_path / "syngate_status.json"
     _write_status(status_path, _status_entries())

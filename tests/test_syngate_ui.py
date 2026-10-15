@@ -23,7 +23,6 @@ import urllib.error
 import urllib.request
 
 import pytest
-import yaml
 
 import syngate_ui
 import syngatelib
@@ -39,7 +38,7 @@ STUB = [sys.executable, "-c",
 def app(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root branch\n", parents=())
-    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), header="First leaf", tests=None)
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
     return syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir, cli_prefix=STUB)
 
 
@@ -100,16 +99,19 @@ class Cdp:
 class Page:
     def __init__(self, cdp, url):
         self.cdp = cdp
-        target = cdp.call("Target.createTarget", {"url": url})["targetId"]
-        self.session = cdp.call("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
+        self.target = cdp.call("Target.createTarget", {"url": url})["targetId"]
+        self.session = cdp.call("Target.attachToTarget", {"targetId": self.target, "flatten": True})["sessionId"]
+
+    def activate(self):
+        self.cdp.call("Target.activateTarget", {"targetId": self.target})
 
     def eval(self, script):
         result = self.cdp.call("Runtime.evaluate", {"expression": script, "awaitPromise": True, "returnByValue": True}, self.session)
         assert "exceptionDetails" not in result, result["exceptionDetails"]
         return result["result"].get("value")
 
-    def mouse(self, kind, x, y, clicks=1):
-        self.cdp.call("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y, "button": "left", "buttons": 1, "clickCount": clicks}, self.session)
+    def mouse(self, kind, x, y, clicks=1, buttons=1):
+        self.cdp.call("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y, "button": "left", "buttons": buttons, "clickCount": clicks}, self.session)
 
     def wait(self, predicate, timeout=10):
         deadline = time.monotonic() + timeout
@@ -149,23 +151,6 @@ def call(base, app, path, payload=None, token=True, raw=False):
         return response.status, body if raw else json.loads(body)
 
 
-@pytest.mark.syngate("SYNGATE_UI-031", "model")
-def test_tree_endpoint_serves_statuses_and_stamp_freshness(server, syngate_tree):
-    base, app = server
-    syngate_dir, make_item = syngate_tree
-    stale = syngatelib.Item(uid="STALE-001", path=syngate_dir / "STALE-001.yml", header="h", description="It shall drift.\n", parents=["ROOT"], tests={None: "b" * 64})
-    make_item(syngate_dir, "STALE-001", "It shall drift.\n", parents=("ROOT",), header="h", tests="b" * 64, reviewed=syngatelib.compute_stamp(stale))
-    (syngate_dir / "STALE-001.yml").write_text((syngate_dir / "STALE-001.yml").read_text().replace("It shall drift.", "It shall have drifted."))
-    status, tree = call(base, app, "/api/tree")
-    assert status == 200
-    assert tree["roots"] == ["ROOT"]
-    assert tree["items"]["ROOT"]["children"] == ["LEAF-001", "STALE-001"]
-    leaf = tree["items"]["LEAF-001"]
-    assert leaf["is_leaf"] and leaf["status"] == "not_implemented" and leaf["stamp_fresh"] is None
-    assert tree["items"]["STALE-001"]["stamp_fresh"] is False
-    assert any("re-review" in p for p in tree["items"]["STALE-001"]["problems"])
-
-
 @pytest.mark.syngate("SYNGATE_UI-010")
 def test_requests_without_token_or_loopback_host_are_refused(server):
     base, app = server
@@ -188,20 +173,20 @@ def test_requests_without_token_or_loopback_host_are_refused(server):
 def test_edit_of_a_stamped_field_clears_the_review(server, syngate_tree):
     base, app = server
     syngate_dir, make_item = syngate_tree
-    frozen = syngatelib.Item(uid="LEAF-002", path=syngate_dir / "LEAF-002.yml", header="Frozen", description="It shall freeze.\n", parents=["ROOT"], tests={None: "a" * 64})
+    frozen = syngatelib.Item(uid="LEAF-002", path=syngate_dir / "LEAF-002.yml", description="Frozen\n\nIt shall freeze.\n", parents=["ROOT"], tests={None: "a" * 64})
     frozen.reviewed = syngatelib.compute_stamp(frozen)
     syngatelib.write_item(frozen)
-    status, result = call(base, app, "/api/item/LEAF-002", {"order": 30})
-    assert status == 200 and result["stamp_fresh"] is True  # order sits outside the stamp
-    status, result = call(base, app, "/api/item/LEAF-002", {"header": "Frozen v2", "description": "It shall freeze harder."})
+    status, result = call(base, app, "/api/item/LEAF-002", {"order": 30, "sources": ["src/leaf.py"]})
+    assert status == 200 and result["stamp_fresh"] is True  # order and sources sit outside the stamp
+    status, result = call(base, app, "/api/item/LEAF-002", {"description": "Frozen v2\n\nIt shall freeze harder."})
     assert status == 200 and result["stamp_fresh"] is None
-    expected = syngatelib.Item(uid="LEAF-002", path=frozen.path, header="Frozen v2", description="It shall freeze harder.\n",
-                           parents=["ROOT"], order=30, tests={None: None})
+    expected = syngatelib.Item(uid="LEAF-002", path=frozen.path, description="Frozen v2\n\nIt shall freeze harder.\n",
+                           parents=["ROOT"], order=30, sources=["src/leaf.py"], tests={None: None})
     assert (syngate_dir / "LEAF-002.yml").read_text() == syngatelib.dump_item(expected)  # canonical writer, stamp and sha dropped
     make_item(syngate_dir, "BRANCH-A", "Groups.\n", parents=("ROOT",))
     syngatelib.write_item(frozen)
     call(base, app, "/api/move/LEAF-002", {"from": "ROOT", "to": "BRANCH-A", "before": None})
-    moved = yaml.safe_load((syngate_dir / "LEAF-002.yml").read_text())
+    moved = syngatelib.parse_item((syngate_dir / "LEAF-002.yml").read_text())
     assert moved["parents"] == ["BRANCH-A"] and "review" not in moved and moved["test"] is None
 
 
@@ -212,7 +197,7 @@ def test_save_rejects_unknown_parent_and_cycle(server, syngate_tree):
     before = (syngate_dir / "ROOT.yml").read_text()
     for parents in (["NOPE"], ["LEAF-001"]):  # unknown parent; child-of-own-child cycle
         with pytest.raises(urllib.error.HTTPError) as denied:
-            call(base, app, "/api/item/ROOT", {"header": "", "description": "Root branch\n", "parents": parents, "order": 0, "tests": None})
+            call(base, app, "/api/item/ROOT", {"description": "Root branch\n", "parents": parents, "order": 0, "tests": None})
         assert denied.value.code == 400
     assert (syngate_dir / "ROOT.yml").read_text() == before
 
@@ -222,23 +207,23 @@ def test_partial_save_touches_only_named_fields_and_refuses_to_clobber_disk_edit
     base, app = server
     syngate_dir, _ = syngate_tree
     path = syngate_dir / "LEAF-001.yml"
-    status, result = call(base, app, "/api/item/LEAF-001", {"header": "Typed", "base": {"header": "First leaf"}})
-    assert status == 200 and result["stored"]["header"] == "Typed"
-    on_disk = yaml.safe_load(path.read_text())
-    assert on_disk == {"header": "Typed", "description": "It shall leaf.\n", "parents": ["ROOT"], "test": None}
+    status, result = call(base, app, "/api/item/LEAF-001", {"sources": ["src/leaf.py"], "base": {"sources": []}})
+    assert status == 200 and result["stored"]["sources"] == ["src/leaf.py"]
+    on_disk = syngatelib.parse_item(path.read_text())
+    assert on_disk == {"description": "It shall leaf.\n", "parents": ["ROOT"], "sources": ["src/leaf.py"], "test": None}
     path.write_text(path.read_text().replace("It shall leaf.", "It shall leaf, said the agent."))
-    status, _ = call(base, app, "/api/item/LEAF-001", {"header": "Typed more", "base": {"header": "Typed"}})
+    status, _ = call(base, app, "/api/item/LEAF-001", {"sources": ["src/leaf.py", "docs/LEAF.md"], "base": {"sources": ["src/leaf.py"]}})
     assert status == 200  # an on-disk edit of another field rebases silently
-    assert yaml.safe_load(path.read_text())["description"] == "It shall leaf, said the agent.\n"
+    assert syngatelib.parse_item(path.read_text())["description"] == "It shall leaf, said the agent.\n"
     with pytest.raises(urllib.error.HTTPError) as clash:
         call(base, app, "/api/item/LEAF-001", {"description": "It shall leaf, said the user.", "base": {"description": "It shall leaf.\n"}})
     assert clash.value.code == 409
     assert json.loads(clash.value.read())["current"] == {"description": "It shall leaf, said the agent.\n"}
-    assert yaml.safe_load(path.read_text())["description"] == "It shall leaf, said the agent.\n"
+    assert syngatelib.parse_item(path.read_text())["description"] == "It shall leaf, said the agent.\n"
 
 
 def _orders(syngate_dir, *uids):
-    return [yaml.safe_load((syngate_dir / f"{uid}.yml").read_text()).get("order", 0) for uid in uids]
+    return [syngatelib.parse_item((syngate_dir / f"{uid}.yml").read_text()).get("order", 0) for uid in uids]
 
 
 @pytest.mark.syngate("SYNGATE_UI-033", "reorder")
@@ -285,7 +270,7 @@ def test_new_and_delete_manage_item_files(server, syngate_tree):
     syngate_dir, _ = syngate_tree
     status, _ = call(base, app, "/api/new", {"uid": "LEAF-003", "parents": ["ROOT"], "dir": "syngate/sub", "kind": "leaf"})
     assert status == 200
-    created = yaml.safe_load((syngate_dir / "sub" / "LEAF-003.yml").read_text())
+    created = syngatelib.parse_item((syngate_dir / "sub" / "LEAF-003.yml").read_text())
     assert created["parents"] == ["ROOT"] and created["test"] is None
     with pytest.raises(urllib.error.HTTPError) as duplicate:
         call(base, app, "/api/new", {"uid": "LEAF-003", "parents": ["ROOT"]})
@@ -336,8 +321,11 @@ def test_a_branch_run_addresses_every_leaf_below_it(server, syngate_tree):
     _, job = call(base, app, "/api/run", {"action": "test", "uids": ["ROOT"]})
     _, body = call(base, app, f"/api/job/{job['job']}/events?token={app.token}", token=False, raw=True)
     assert f"stub: test LEAF-002 LEAF-001 --build-dir {app.build_dir} --coverage-out {app.run_coverage}" in body.decode()
+    _, job = call(base, app, "/api/run", {"action": "review", "uids": ["BRANCH-A"]})
+    _, body = call(base, app, f"/api/job/{job['job']}/events?token={app.token}", token=False, raw=True)
+    assert "stub: review LEAF-002 BRANCH-A --build-dir" in body.decode()  # the branch stamps after its children
     with pytest.raises(urllib.error.HTTPError) as barren:
-        call(base, app, "/api/run", {"action": "review", "uids": ["BRANCH-B"]})
+        call(base, app, "/api/run", {"action": "test", "uids": ["BRANCH-B"]})
     assert barren.value.code == 400
 
 
@@ -397,26 +385,27 @@ def test_the_page_renders_every_tree_item_from_the_served_model(page):
     assert page.eval(PATHS % "#doc") == ["ROOT", "ROOT/LEAF-001"]
 
 
-@pytest.mark.syngate("SYNGATE_UI-031", "rows")
-def test_a_row_carries_uid_editable_header_and_the_review_mark(page, syngate_tree):
-    syngate_dir, _ = syngate_tree
-    frozen = syngatelib.Item(uid="LEAF-002", path=syngate_dir / "LEAF-002.yml", header="Frozen", description="It shall freeze.\n", parents=["ROOT"], tests={None: "a" * 64})
-    frozen.reviewed = syngatelib.compute_stamp(frozen)
-    syngatelib.write_item(frozen)
-    page.wait("document.querySelector('#tree [data-uid=\"LEAF-002\"]')")  # picked up by the fingerprint poll
-    row = "(() => { const row = document.querySelector('#tree [data-uid=\"%s\"]'), title = row.querySelector('.title');" \
-          " return [row.querySelector('.node-uid').textContent, title.value, title.readOnly, row.querySelector('.status').className]; })()"
-    assert page.eval(row % "LEAF-001") == ["LEAF-001", "First leaf", False, "status gray not_reviewed"]
-    assert page.eval(row % "LEAF-002") == ["LEAF-002", "Frozen", False, "status gray review_violated"]  # reviewed, but its stamped routine is gone
-    page.eval("(() => { select('LEAF-002', 'ROOT/LEAF-002'); startEditing('ROOT/LEAF-002'); })()")
-    assert page.eval("(() => { const block = document.querySelector('#doc .block.editing'); return [block.querySelector('textarea').readOnly, Boolean(block.querySelector('.block-problems'))]; })()") == [False, False]
+@pytest.mark.syngate("SYNGATE_UI-TREE-015")
+def test_a_row_title_is_cut_with_an_ellipsis_exactly_where_the_row_runs_out_of_room(page, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    first = "A title that runs past the edge of a narrow outline"
+    make_item(syngate_dir, "LEAF-002", f"{first}\n\nIt shall fit where there is room.\n", parents=("ROOT",), tests=None)
+    page.wait("document.querySelector('#tree [data-uid=\"LEAF-002\"] .title')")
+    look = "(() => { const el = document.querySelector('#tree [data-uid=\"LEAF-002\"] .title');" \
+           " return [el.textContent, el.title, getComputedStyle(el).textOverflow, el.scrollWidth > el.clientWidth]; })()"
+    page.eval("setTreeWidth(600)")
+    assert page.eval(look) == [first, first, "ellipsis", False]  # room enough: the whole line
+    page.eval("setTreeWidth(300)")
+    assert page.eval(look) == [first, first, "ellipsis", True]  # no room: cut, the whole line in the tooltip
+    page.eval("setTreeWidth(600)")
+    assert page.eval(look)[3] is False
 
 
 @pytest.fixture
 def violated_page(page, syngate_tree):
     """The page with LEAF-002 selected: reviewed, but its stamped routine is gone -- test unknown, review violated."""
     syngate_dir, _ = syngate_tree
-    frozen = syngatelib.Item(uid="LEAF-002", path=syngate_dir / "LEAF-002.yml", header="Frozen", description="It shall freeze.\n", parents=["ROOT"], tests={None: "a" * 64})
+    frozen = syngatelib.Item(uid="LEAF-002", path=syngate_dir / "LEAF-002.yml", description="Frozen\n\nIt shall freeze.\n", parents=["ROOT"], tests={None: "a" * 64})
     frozen.reviewed = syngatelib.compute_stamp(frozen)
     syngatelib.write_item(frozen)
     page.wait("document.querySelector('#tree [data-uid=\"LEAF-002\"]')")
@@ -435,7 +424,7 @@ def test_row_and_panel_label_an_item_by_one_status_icon_and_id(violated_page, se
     routines.mkdir(parents=True)
     (routines / "test_leaf.py").write_text('import pytest\n\n\n@pytest.mark.syngate("LEAF-003")\ndef test_leaf():\n    pass\n')
     sha = syngatelib.routine_sha(syngatelib.discover_bindings(app.root)[("LEAF-003", None)][0])
-    approved = syngatelib.Item(uid="LEAF-003", path=syngate_dir / "LEAF-003.yml", header="Approved", description="It shall pass.\n", parents=["ROOT"], tests={None: sha})
+    approved = syngatelib.Item(uid="LEAF-003", path=syngate_dir / "LEAF-003.yml", description="Approved\n\nIt shall pass.\n", parents=["ROOT"], tests={None: sha})
     approved.reviewed = syngatelib.compute_stamp(approved)
     syngatelib.write_item(approved)
     for uid in ("LEAF-001", "LEAF-003"):
@@ -449,21 +438,43 @@ def test_row_and_panel_label_an_item_by_one_status_icon_and_id(violated_page, se
     assert page.eval("document.querySelector('#tree [data-uid=\"LEAF-001\"] .status').title") == "test passed · not reviewed"
 
 
-@pytest.mark.syngate("SYNGATE_UI-042")
-def test_a_tree_row_shows_collapse_mark_label_title_and_menu_only_and_activates_its_panel_on_double_click(violated_page):
-    page = violated_page
-    parts = "[...document.querySelector('#tree [data-uid=\"LEAF-002\"]').querySelectorAll('.twist, .status, .node-uid, .dupmark, .title, .tools button:not([hidden])')]" \
+ROW_PARTS = "[...document.querySelector('#tree [data-uid=\"LEAF-002\"]').querySelectorAll('.twist, .status, .node-uid, .dupmark, .title, .tools button:not([hidden])')]" \
             ".map((el) => el.dataset.act || el.className.split(' ')[0])"
-    assert page.eval(parts) == ["twist", "status", "node-uid", "title", "tests", "menu"]
+MENU_ENTRIES = "[document.getElementById('status-menu').matches(':popover-open'), [...document.querySelectorAll('#status-menu [data-row-act]')].map((el) => el.dataset.rowAct)]"
+
+
+def open_row_menu(page, uid):
+    page.eval(f"document.querySelector('#tree [data-uid=\"{uid}\"] [data-act=\"menu\"]').click()")
+
+
+@pytest.mark.syngate("SYNGATE-UI-TREE-010")
+def test_a_tree_row_shows_collapse_mark_label_title_tests_button_and_menu_button_only(violated_page):
+    page = violated_page
+    assert page.eval(ROW_PARTS) == ["twist", "status", "node-uid", "title", "tests", "menu"]
     assert page.eval("Boolean(document.querySelector('#tree .row-problems'))") is False
-    page.eval("document.querySelector('#tree [data-uid=\"LEAF-002\"] [data-act=\"menu\"]').click()")
-    entries = "[document.getElementById('status-menu').matches(':popover-open'), [...document.querySelectorAll('#status-menu [data-row-act]')].map((el) => el.dataset.rowAct)]"
-    assert page.eval(entries) == [True, ["add-parent", "add", "remove"]]  # structure edits only behind the explicit menu
-    page.eval("document.querySelector('#tree [data-uid=\"ROOT\"] [data-act=\"menu\"]').click()")
-    assert page.eval(entries) == [True, ["add"]]  # the root has no parent to add and an item with children cannot be removed
+
+
+@pytest.mark.syngate("SYNGATE_UI-TREE-020")
+def test_the_row_menu_button_opens_a_drop_down_of_the_item_actions_fit_for_the_row(violated_page):
+    page = violated_page
+    open_row_menu(page, "LEAF-002")
+    assert page.eval(MENU_ENTRIES) == [True, ["add-parent", "add", "remove"]]  # structure edits only behind the explicit menu
+    open_row_menu(page, "ROOT")
+    assert page.eval(MENU_ENTRIES) == [True, ["add"]]  # the root has no parent to add and an item with children cannot be removed
+
+
+@pytest.mark.syngate("SYNGATE_UI-TREE-022")
+def test_add_child_opens_the_new_uid_row_under_the_item(violated_page):
+    page = violated_page
+    open_row_menu(page, "ROOT")
     page.eval("document.querySelector('#status-menu [data-row-act=\"add\"]').click()")
     assert page.eval("Boolean(document.querySelector('#tree .row.adding .new-uid'))")
-    page.eval("document.querySelector('#tree [data-uid=\"LEAF-001\"] [data-act=\"menu\"]').click()")
+
+
+@pytest.mark.syngate("SYNGATE_UI-TREE-021")
+def test_add_parent_links_one_more_parent_keeping_the_old_one(violated_page):
+    page = violated_page
+    open_row_menu(page, "LEAF-001")
     page.eval("document.querySelector('#status-menu [data-row-act=\"add-parent\"]').click()")
     search = "(() => { const rows = [...document.querySelectorAll('#tree .row')], i = rows.findIndex((r) => r.dataset.uid === 'LEAF-001');" \
              " return [rows[i + 1].classList.contains('adding'), [...rows[i + 1].querySelectorAll('datalist option')].map((o) => o.value)]; })()"
@@ -471,13 +482,24 @@ def test_a_tree_row_shows_collapse_mark_label_title_and_menu_only_and_activates_
     page.eval("(() => { const input = document.querySelector('#tree .row.adding .new-uid'); input.value = 'LEAF-002'; input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()")
     page.wait("state.model.items['LEAF-001'].parents.length === 2")
     assert page.eval("[state.model.items['LEAF-001'].parents, state.model.items['LEAF-002'].children]") == [["ROOT", "LEAF-002"], ["LEAF-001"]]  # linked, the old parent kept
-    page.eval("document.querySelector('#tree [data-uid=\"LEAF-001\"] [data-act=\"menu\"]').click()")
-    assert page.eval("document.querySelector('#status-menu [data-row-act=\"remove\"]').textContent") == "⊖ Remove from ROOT"
-    page.eval("document.getElementById('status-menu').hidePopover()")
-    page.eval("window.scrolled = []; Element.prototype.scrollIntoView = function () { window.scrolled.push(this.className.split(' ')[0]); }")
+
+
+SCROLL_SPY = "window.scrolled = []; Element.prototype.scrollIntoView = function () { window.scrolled.push(this.className.split(' ')[0]); }"
+
+
+@pytest.mark.syngate("SYNGATE_UI-TREE-030")
+def test_a_single_click_selects_the_row_without_activating_or_scrolling_to_its_panel(violated_page):
+    page = violated_page
+    page.eval(SCROLL_SPY)
     page.eval("document.querySelector('#tree [data-uid=\"LEAF-001\"] .cell-title').click()")
     selection = "[state.selected, document.querySelector('#tree .row.selected').dataset.uid, [...document.querySelectorAll('#doc .block.selected')].map((b) => b.dataset.uid), window.scrolled.includes('block')]"
-    assert page.eval(selection) == ["LEAF-001", "LEAF-001", [], False]  # a click selects the row only: no panel activated, none scrolled to
+    assert page.eval(selection) == ["LEAF-001", "LEAF-001", [], False]
+
+
+@pytest.mark.syngate("SYNGATE_UI-TREE-035")
+def test_a_double_click_activates_the_panel_and_scrolls_to_it_only_when_out_of_view(violated_page):
+    page = violated_page
+    page.eval(SCROLL_SPY)
     dblclick = "document.querySelector('#tree [data-uid=\"%s\"] .cell-title').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))"
     page.eval(dblclick % "LEAF-001")
     assert page.eval("[state.selected, document.querySelector('#doc .block.selected').dataset.uid, window.scrolled.includes('block')]") == ["LEAF-001", "LEAF-001", False]  # the panel is in view: activated, not scrolled
@@ -486,14 +508,20 @@ def test_a_tree_row_shows_collapse_mark_label_title_and_menu_only_and_activates_
     assert page.eval("[state.selected, window.scrolled.includes('block')]") == ["LEAF-002", True]  # the panel is out of view: scrolled to
 
 
-@pytest.mark.syngate("SYNGATE_UI-043")
-def test_a_content_panel_shows_label_without_title_and_status_button_with_popup(violated_page):
+@pytest.mark.syngate("SYNGATE_UI-CONTENT-010")
+def test_a_block_carries_the_status_label_without_title_or_menu_on_its_top_border(violated_page):
     page = violated_page
-    label = "(() => { const tag = document.querySelector('#doc .block[data-uid=\"LEAF-002\"] legend .tag'); return [[...tag.children].filter((e) => !e.classList.contains('status')).map((e) => e.textContent).join(''), tag.querySelectorAll('button').length]; })()"
-    assert page.eval(label) == ["LEAF-002", 0]
-    foot = "(() => { const foot = document.querySelector('#doc .block[data-uid=\"LEAF-002\"] .block-foot'), box = foot.getBoundingClientRect()," \
-           " pill = foot.querySelector('.block-status .pill').getBoundingClientRect(); return box.right - pill.right < 2; })()"
-    assert page.eval(foot) is True
+    label = "(() => { const block = document.querySelector('#doc .block[data-uid=\"LEAF-002\"]'), tag = block.querySelector('legend .tag'), at = tag.getBoundingClientRect(), box = block.getBoundingClientRect();" \
+            " return [[...tag.children].filter((e) => !e.classList.contains('status')).map((e) => e.textContent).join(''), tag.querySelectorAll('button').length, Math.abs(at.top + at.height / 2 - box.top) < at.height]; })()"
+    assert page.eval(label) == ["LEAF-002", 0, True]
+
+
+@pytest.mark.syngate("SYNGATE_UI-CONTENT-020")
+def test_the_status_button_sits_at_the_bottom_right_corner_and_its_popup_lists_tests_and_problems_by_status(violated_page):
+    page = violated_page
+    foot = "(() => { const block = document.querySelector('#doc .block[data-uid=\"LEAF-002\"]'), box = block.getBoundingClientRect()," \
+           " pill = block.querySelector('.block-status .pill').getBoundingClientRect(); return [box.right - pill.right < 16, Math.abs(pill.top + pill.height / 2 - box.bottom) < pill.height]; })()"
+    assert page.eval(foot) == [True, True]
     tip = "[...document.querySelectorAll('#doc .block[data-uid=\"LEAF-002\"] .block-status .tip > div')].map((el) => [el.className, el.textContent])"
     lines = page.eval(tip)
     assert lines[0] == ["tip-unknown", "unknown"] and lines[1][0] == "tip-unknown" and "no tagged routine yet" in lines[1][1]
@@ -511,7 +539,7 @@ class EchoConnector:
         return {"label": self.label, "models": [{"id": model, "name": model.removeprefix("model-")} for model in self.models], "efforts": list(self.efforts),
                 "modes": [{"id": mode, "label": mode.capitalize(), "hint": mode + " hint", "default": default} for mode, default in self.modes.items()]}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
         return {"kind": "text", "text": f"{context}|{text}|{model}|{effort}|{','.join(modes)}|{session}"}, "session-1"
 
 
@@ -523,13 +551,17 @@ def item_page(server, chrome, **connectors):
     app.connectors = connectors or {"echo": EchoConnector()}
     page = Page(chrome, f"{base}/?token={app.token}")
     page.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"]')")
-    page.wait("document.querySelector('#doc .block[data-uid=\"LEAF-001\"] .chat-open')")
+    page.wait("document.querySelector('#doc .block[data-uid=\"LEAF-001\"] .chat-input')")
     return page
+
+
+def enter_reply(page, uid):
+    page.eval(f"document.querySelector('#doc .block[data-uid=\"{uid}\"] .chat-input').click()")
 
 
 def open_chat(server, chrome, **connectors):
     page = item_page(server, chrome, **connectors)
-    page.eval("document.querySelector('#doc .block[data-uid=\"LEAF-001\"] .chat-open').click()")
+    enter_reply(page, "LEAF-001")
     return page
 
 
@@ -546,6 +578,32 @@ def tree_item(server, uid):
     return call(base, app, "/api/tree")[1]["items"][uid]
 
 
+@pytest.mark.syngate("SYNGATE_UI-056")
+def test_a_single_click_on_a_block_opens_its_editor_but_a_click_ending_a_text_selection_does_not(server, chrome):
+    page = item_page(server, chrome)
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-body .md').click()")
+    editing = f"[state.editing, {LEAF_BLOCK}.classList.contains('editing'), document.activeElement === {LEAF_BLOCK}.querySelector('.block-body textarea')]"
+    assert page.eval(editing) == ["ROOT/LEAF-001", True, True]
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-body textarea').dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Escape', bubbles: true }}))")
+    assert page.eval(editing) == [None, False, False]
+    page.eval(f"(() => {{ const text = {LEAF_BLOCK}.querySelector('.block-body .md'), range = document.createRange(); range.selectNodeContents(text);"
+              " getSelection().removeAllRanges(); getSelection().addRange(range); text.click(); })()")
+    assert page.eval(editing) == [None, False, False]
+
+
+@pytest.mark.syngate("AI_CHAT-070")
+def test_the_reply_field_waits_under_every_item_without_hint_or_button_until_entered(server, chrome):
+    page = item_page(server, chrome)
+    rest = "[...document.querySelectorAll('#doc .block')].map((el) => [Boolean(el.querySelector('.block-body ~ .block-chat > textarea.chat-input')), el.querySelector('.chat-input').placeholder, el.querySelector('.block-ai').children.length])"
+    assert page.eval(rest) == [[True, "", 0], [True, "", 0]]
+    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
+    assert page.eval(rest) == [[True, "", 0], [True, "Ask about LEAF-001 … (Ctrl+Enter sends)", 5]]  # send with setup, three modes, close
+    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-close').click()")
+    assert page.eval(rest) == [[True, "", 0], [True, "", 0]]
+    edit_leaf(page, "It shall leaf, edited.")
+    assert page.eval(rest)[1] == [True, "Ask about LEAF-001 … (Ctrl+Enter sends)", 5]
+
+
 @pytest.mark.syngate("AI_CHAT-022")
 def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_statement(server, chrome):
     page = item_page(server, chrome)
@@ -558,37 +616,11 @@ def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_stat
     assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf better."
     assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("It shall leaf better.|It shall leaf better.|model-b|low|edit,internet|None")
     assert page.eval(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg.user').length") == 0  # the first message is the content itself
-
-
-@pytest.mark.syngate("AI_CHAT-022", "ctrl_enter")
-def test_ctrl_enter_in_the_editor_sends_the_edited_description(server, chrome):
-    page = item_page(server, chrome)
     edit_leaf(page, "It shall leaf by keyboard.")
     page.eval("document.querySelector('#doc .block.editing textarea').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }))")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
-    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|It shall leaf by keyboard.|model-a|low|edit,internet|None")
-
-
-@pytest.mark.syngate("AI_CHAT-023")
-def test_the_tool_button_on_a_selected_item_starts_the_chat_without_changing_the_item(server, chrome):
-    page = open_chat(server, chrome)
-    assert page.eval(f"[Boolean({LEAF_BLOCK}.querySelector('.chat-input')), {LEAF_BLOCK}.classList.contains('editing')]") == [True, False]
-    send(page, "LEAF-001", "Just asking")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
-    assert tree_item(server, "LEAF-001")["description_raw"] == "It shall leaf.\n"
-
-
-@pytest.mark.syngate("AI_CHAT-024")
-def test_clicking_the_reply_field_after_an_edit_saves_the_item_and_waits_for_a_message(server, chrome):
-    page = item_page(server, chrome)
-    edit_leaf(page, "It shall leaf, saved by the reply field.")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').click()")
-    page.wait(f"!{LEAF_BLOCK}.classList.contains('editing')")
-    assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf, saved by the reply field."
-    assert page.eval(f"[document.activeElement === {LEAF_BLOCK}.querySelector('.chat-input'), {LEAF_BLOCK}.querySelectorAll('.chat-msg').length]") == [True, 0]
-    send(page, "LEAF-001", "Now ask")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
-    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|Now ask|model-a|low|edit,internet|None")
+    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')?.textContent.includes('|It shall leaf by keyboard.|')")
+    assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf by keyboard."
+    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|None")  # Ctrl+Enter sends as the button does: a new chat
 
 
 @pytest.mark.syngate("AI_CHAT-025")
@@ -601,7 +633,7 @@ def test_user_messages_look_like_the_description_and_ai_replies_sit_right_highli
     assert page.eval(look) == [True, "flex-start", "flex-end", True]
 
 
-@pytest.mark.syngate("AI_CHAT-026")
+@pytest.mark.syngate("AI-CHAT-CONTROLS-010")
 def test_every_reply_carries_fold_and_keep_tools_at_its_left_edge(server, chrome):
     page = open_chat(server, chrome)
     send(page, "LEAF-001", "First")
@@ -619,7 +651,7 @@ def test_every_reply_carries_fold_and_keep_tools_at_its_left_edge(server, chrome
     assert page.eval(f"(() => {{ const msg = {LEAF_BLOCK}.querySelector('.chat-msg.ai'); return [msg.classList.contains('dropped'), getComputedStyle(msg).color]; }})()") == [True, gray]
 
 
-@pytest.mark.syngate("AI_CHAT-027")
+@pytest.mark.syngate("AI-CHAT-CONTROLS-020")
 def test_a_message_turns_into_a_child_or_next_sibling_item_while_the_chat_stays(server, chrome):
     page = open_chat(server, chrome, echo=CallsConnector("Leaf sentence\n\nIt shall be extracted."))
     send(page, "LEAF-001", "Say something")
@@ -633,7 +665,7 @@ def test_a_message_turns_into_a_child_or_next_sibling_item_while_the_chat_stays(
     assert paths[2].startswith("ROOT/LEAF-001/") and paths[3] == f"ROOT/{sibling}" and sibling != "LEAF-001"
     for uid in (child, sibling):
         extracted = tree_item(server, uid)
-        assert (extracted["header"], extracted["description_raw"]) == ("Leaf sentence", "It shall be extracted.\n")
+        assert (extracted["title"], extracted["description_raw"]) == ("Leaf sentence", "Leaf sentence\n\nIt shall be extracted.\n")
     assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg')].map((el) => el.className)") == ["chat-msg user", "chat-msg ai"]
 
 
@@ -655,11 +687,21 @@ def pick(page, attribute, value):
 
 @pytest.mark.syngate("AI_CHAT-010")
 def test_the_connector_menu_selects_the_setup(server, chrome):
-    page = open_chat(server, chrome, echo=EchoConnector(), other=EchoConnector("Other"))
+    page = open_chat(server, chrome, echo=EchoConnector(), other=EchoConnector("Other"), claude=synthetic.claude_code_connector())
     pick(page, "model", "model-b")
     assert page.eval(SETUP) == "Echo · b · low ▾"
     pick(page, "connector", "other")
     assert page.eval(SETUP) == "Other · a · low ▾"  # a new connector starts from its own defaults
+    menu = "(() => { document.querySelector('.chat-setup').click(); const menu = document.getElementById('status-menu'), entries = (key) => [...menu.querySelectorAll(`[data-chat-${key}]`)];" \
+           " const offered = [entries('model').map((b) => b.textContent.slice(2)), entries('effort').map((b) => b.textContent.slice(2))]; menu.hidePopover(); return offered; })()"
+    rich, bare = (next(model for model, efforts in synthetic.CLAUDE_MODEL_EFFORTS.items() if bool(efforts) == has) for has in (True, False))
+    names = [model.removeprefix("claude-") for model in synthetic.CLAUDE_MODELS]
+    pick(page, "connector", "claude")
+    pick(page, "model", bare)
+    assert page.eval(menu) == [names, []] and page.eval(SETUP) == f"Claude Code · {bare.removeprefix('claude-')} ▾"  # no effort levels, no effort
+    page.wait("state.chats.get('LEAF-001').effort === null")
+    pick(page, "model", rich)
+    assert page.eval(menu) == [names, list(synthetic.CLAUDE_MODEL_EFFORTS[rich])] and page.eval(SETUP) == f"Claude Code · {rich.removeprefix('claude-')} · medium ▾"
 
 
 def css_color(page, var):
@@ -679,61 +721,34 @@ def test_the_permission_switches_show_their_labels_defaults_and_state_colors(ser
     page.eval("document.querySelector('.chat-mode[data-chat-mode=\"edit\"]').click()")
     page.eval("document.querySelector('.chat-mode[data-chat-mode=\"workflows\"]').click()")
     assert page.eval(modes) == [["Edit", "false"], ["Internet", "true"], ["Workflows", "true"]]
-    page.eval("(() => { document.querySelector('.chat-input').value = 'Go.'; document.querySelector('.chat-send').click(); })()")
+    send(page, "LEAF-001", "Go.")
     page.wait("document.querySelector('.chat-msg.ai')")
     assert page.eval("document.querySelector('.chat-msg.ai').textContent").endswith("|Go.|model-a|low|internet,workflows|None")
 
 
-@pytest.mark.syngate("AI_CHAT-020")
-def test_the_input_field_takes_the_text_of_the_exchange(server, chrome):
-    page = open_chat(server, chrome)
-    assert page.eval("(() => { const input = document.querySelector('.block-chat textarea.chat-input'); return [document.activeElement === input, input.value]; })()") == [True, ""]
-    page.eval("(() => { const input = document.querySelector('.chat-input'); input.value = 'Typed by the user';"
-              " input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); })()")
-    page.wait("document.querySelector('.chat-msg.ai')")
-    assert page.eval("[document.querySelector('.chat-msg.user').textContent, document.querySelector('.chat-input').value]") == ["Typed by the user", ""]
-    page.eval("document.querySelector('.chat-send').click()")  # an empty field sends nothing
-    assert page.eval("document.querySelectorAll('.chat-msg').length") == 2
-
-
-@pytest.mark.syngate("AI_CHAT-021")
-def test_the_history_shows_above_the_input_field_once_there_is_any(server, chrome):
-    page = open_chat(server, chrome)
-    log = "document.querySelector('.block-chat .chat-log')"
-    assert page.eval(f"[{log}.children.length, getComputedStyle({log}).display]") == [0, "none"]
-    page.eval("(() => { document.querySelector('.chat-input').value = 'First'; document.querySelector('.chat-send').click(); })()")
-    page.wait("document.querySelector('.chat-msg.ai')")
-    assert page.eval(f"getComputedStyle({log}).display") != "none"
-    assert page.eval(f"{log}.getBoundingClientRect().bottom <= document.querySelector('.chat-input').getBoundingClientRect().top")
-    assert page.eval(f"[...{log}.querySelectorAll('.chat-msg')].map((el) => el.classList.contains('user') ? 'user' : 'ai')") == ["user", "ai"]
-
-
 @pytest.mark.syngate("AI_CHAT-030")
 def test_the_green_check_mark_hides_the_chat_and_becomes_the_drop_down_reopening_it(server, chrome):
+    base, app = server
     page = open_chat(server, chrome)
     send(page, "LEAF-001", "Kept")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     closer = f"{LEAF_BLOCK}.querySelector('.block-ai .chat-close')"
     assert page.eval(f"[{closer}.textContent, getComputedStyle({closer}).color]") == ["✓", css_color(page, "--green")]
     page.eval(f"{closer}.click()")
-    hidden = f"[Boolean({LEAF_BLOCK}.querySelector('.chat-input')), Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-open')), Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-close')), {LEAF_BLOCK}.querySelector('.block-ai .chat-reopen')?.textContent]"
-    assert page.eval(hidden) == [False, True, False, "▾"]
+    hidden = f"[{LEAF_BLOCK}.querySelectorAll('.chat-msg').length, {LEAF_BLOCK}.querySelector('.chat-input').placeholder, Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-close')), {LEAF_BLOCK}.querySelector('.block-ai .chat-reopen')?.textContent]"
+    assert page.eval(hidden) == [0, "", False, "▾"]  # the reply field stays, at rest
     page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-reopen').click()")
     assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg')].map((el) => el.className)") == ["chat-msg user", "chat-msg ai"]
-
-
-@pytest.mark.syngate("AI_CHAT-030", "replaced")
-def test_a_new_chat_replaces_the_hidden_one_only_when_its_first_message_is_sent(server, chrome):
-    page = open_chat(server, chrome)
-    send(page, "LEAF-001", "Old")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-close').click()")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-open').click()")
-    assert page.eval(f"[{LEAF_BLOCK}.querySelectorAll('.chat-msg').length, Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-reopen'))]") == [0, True]  # fresh field, the old history still reachable
-    send(page, "LEAF-001", "New")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
-    assert page.eval(f"[[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent), Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-reopen'))]") == [["New"], False]
-    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|New|model-a|low|edit,internet|None")  # a new session, not the old one
+    page.eval(f"{closer}.click()")
+    enter_reply(page, "LEAF-001")
+    users = f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent)"
+    assert page.eval(users) == ["Kept"]  # the item has one chat: the reply field shows it again
+    edit_leaf(page, "It shall leaf anew.")
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-send').click()")
+    page.wait(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg:not(.note)').length === 1 && {LEAF_BLOCK}.querySelector('.chat-msg.ai')")
+    assert page.eval(users) == []  # the old chat is erased, the statement being the new chat's first message
+    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|It shall leaf anew.|model-a|low|edit,internet|None")  # a new session, not the old one
+    assert [m["role"] for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"]] == ["ai"]
 
 
 @pytest.mark.syngate("AI_CHAT")
@@ -759,13 +774,13 @@ def send(page, uid, text):
     page.eval(f"(() => {{ const box = document.querySelector('.block[data-uid=\"{uid}\"]'); box.querySelector('.chat-input').value = '{text}'; box.querySelector('.chat-send').click(); }})()")
 
 
-CHATTING = "[...document.querySelectorAll('#doc .block.chatting')].map((el) => [el.dataset.uid, Boolean(el.querySelector('.block-chat .chat-input')), Boolean(el.querySelector('.block-ai .chat-close'))])"
+CHATTING = "[...document.querySelectorAll('#doc .block.chatting')].map((el) => [el.dataset.uid, Boolean(el.querySelector('.block-chat .chat-input').placeholder), Boolean(el.querySelector('.block-ai .chat-close'))])"
 
 
 @pytest.mark.syngate("AI_CHAT-001")
 def test_several_chat_windows_are_open_at_once_each_under_its_own_item(server, chrome):
     page = open_chat(server, chrome)
-    page.eval("document.querySelector('#doc .block[data-uid=\"ROOT\"] .chat-open').click()")
+    enter_reply(page, "ROOT")
     assert page.eval(CHATTING) == [["ROOT", True, True], ["LEAF-001", True, True]]
     send(page, "ROOT", "Root?")
     page.wait("document.querySelector('.block[data-uid=\"ROOT\"] .chat-msg.ai')")
@@ -807,29 +822,198 @@ def test_a_chat_keeps_its_history_while_closed_and_reopens_with_it_on_its_item(s
     assert page.eval(CHATTING) == [["LEAF-001", True, True]]
 
 
-class ParallelConnector(EchoConnector):
-    """Answers only once two exchanges are in flight at the same time."""
+class ReleasedConnector(EchoConnector):
+    """Answers each message only once the test releases it, so exchanges overlap in the order the test dictates."""
 
     def __init__(self):
         super().__init__()
-        self.gate = threading.Barrier(2, timeout=10)
+        self.gates = {}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None):
-        self.gate.wait()
+    def release(self, text):
+        self.gates.setdefault(text, threading.Event()).set()
+
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+        assert self.gates.setdefault(text, threading.Event()).wait(10), f"{text} was never released"
         return f"reply to {text} in {session}", f"session-{text}"
 
 
 @pytest.mark.syngate("AI_CHAT-MULTI-020")
 def test_chats_of_different_items_run_their_exchanges_in_parallel(server, chrome):
-    page = open_chat(server, chrome, echo=ParallelConnector())
-    page.eval("document.querySelector('#doc .block[data-uid=\"ROOT\"] .chat-open').click()")
-    reply = "[...document.querySelectorAll('.block[data-uid=\"%s\"] .chat-msg.ai')].map((el) => el.textContent.trim())"
-    for turn in ("one", "two"):
-        send(page, "ROOT", f"root-{turn}")
-        send(page, "LEAF-001", f"leaf-{turn}")
-        page.wait(f"document.querySelectorAll('.chat-msg.ai').length === {2 if turn == 'one' else 4}")
-    assert page.eval(reply % "ROOT") == ["reply to root-one in None", "reply to root-two in session-root-one"]
-    assert page.eval(reply % "LEAF-001") == ["reply to leaf-one in None", "reply to leaf-two in session-leaf-one"]
+    echo = ReleasedConnector()
+    page = open_chat(server, chrome, echo=echo)
+    enter_reply(page, "ROOT")
+    log = "[...document.querySelectorAll('.block[data-uid=\"%s\"] .chat-msg:not(.note)')].map((el) => el.className.replace('chat-msg ', '') + ':' + el.textContent.trim())"
+    replies = "document.querySelectorAll('.block[data-uid=\"%s\"] .chat-msg.ai').length === %d"
+    waiting = "Boolean(document.querySelector('.block[data-uid=\"%s\"] .chat-msg.note'))"
+    send(page, "ROOT", "root-one")
+    send(page, "LEAF-001", "leaf-one")
+    echo.release("root-one")
+    page.wait(replies % ("ROOT", 1))
+    send(page, "ROOT", "root-two")
+    echo.release("root-two")
+    page.wait(replies % ("ROOT", 2))
+    assert page.eval(log % "LEAF-001") == ["user:leaf-one"] and page.eval(waiting % "LEAF-001")
+    echo.release("leaf-one")
+    page.wait(replies % ("LEAF-001", 1))
+    send(page, "LEAF-001", "leaf-two")
+    echo.release("leaf-two")
+    page.wait(replies % ("LEAF-001", 2))
+    assert page.eval(log % "ROOT") == ["user:root-one", "ai:reply to root-one in None", "user:root-two", "ai:reply to root-two in session-root-one"]
+    assert page.eval(log % "LEAF-001") == ["user:leaf-one", "ai:reply to leaf-one in None", "user:leaf-two", "ai:reply to leaf-two in session-leaf-one"]
+    assert not page.eval(waiting % "ROOT") and not page.eval(waiting % "LEAF-001")
+
+
+BLOCK_LOG = "[...document.querySelectorAll('.block[data-path=\"%s\"] .chat-msg:not(.note)')].map((el) => el.className.replace('chat-msg ', '') + ':' + el.textContent.trim())"
+
+
+@pytest.mark.syngate("AI_CHAT-MULTI-010", "singleton")
+def test_an_item_has_one_chat_shown_the_same_at_every_occurrence_and_in_every_tab(server, chrome, syngate_tree):
+    base, app = server
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "BR-001", "Branch\n", parents=("ROOT",), header="Branch")
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT", "BR-001"), header="First leaf", tests=None)
+    page = item_page(server, chrome)
+    first, second = "ROOT/LEAF-001", "ROOT/BR-001/LEAF-001"
+    block = "document.querySelector('.block[data-path=\"%s\"]')"
+    page.wait(block % second)
+    page.eval(f"{block % first}.querySelector('.chat-input').click()")
+    page.eval(f"(() => {{ const box = {block % first}; box.querySelector('.chat-input').value = 'Hello'; box.querySelector('.chat-send').click(); }})()")
+    page.wait(f"{block % first}.querySelector('.chat-msg.ai')")
+    assert page.eval(f"[{block % second}.classList.contains('chatting'), {block % second}.querySelector('.block-ai .chat-reopen')?.textContent]") == [False, "▾"]
+    page.eval(f"{block % second}.querySelector('.chat-input').click()")
+    assert page.eval(BLOCK_LOG % second) == page.eval(BLOCK_LOG % first) and page.eval(BLOCK_LOG % first)[0] == "user:Hello"
+    page.eval(f"(() => {{ const box = {block % second}; box.querySelector('.chat-input').value = 'Again'; box.querySelector('.chat-send').click(); }})()")
+    page.wait(f"{block % second}.querySelectorAll('.chat-msg.ai').length === 2")
+    assert page.eval(BLOCK_LOG % first) == page.eval(BLOCK_LOG % second) and page.eval(BLOCK_LOG % first)[3].endswith("|Again|model-a|low|edit,internet|session-1")
+    other = Page(chrome, f"{base}/?token={app.token}")
+    other.wait(f"{block % first} && {block % first}.querySelector('.block-ai .chat-reopen')")
+    other.eval(f"{block % first}.querySelector('.block-ai .chat-reopen').click()")
+    assert other.eval(BLOCK_LOG % first) == page.eval(BLOCK_LOG % first)
+    other.eval(f"(() => {{ const box = {block % first}; box.querySelector('.chat-input').value = 'From the other tab'; box.querySelector('.chat-send').click(); }})()")
+    other.wait(f"{block % first}.querySelectorAll('.chat-msg.ai').length === 3")
+    page.activate()  # a tab brought back to the front catches up with the chat
+    page.wait(f"{block % first}.querySelectorAll('.chat-msg.ai').length === 3")
+    assert page.eval(BLOCK_LOG % first)[4] == "user:From the other tab" and page.eval(BLOCK_LOG % first) == other.eval(BLOCK_LOG % first)
+
+
+@pytest.mark.syngate("AI_CHAT-MULTI-010", "turn_keys")
+def test_turns_are_addressed_by_item_and_number_and_an_item_runs_one_turn_at_a_time(server):
+    base, app = server
+    gated = SteppingConnector()
+    app.connectors = {"echo": gated}
+    setup = {"connector": "echo", "model": "model-a", "effort": "low", "modes": []}
+    status, started = call(base, app, "/api/turn", {"uid": "LEAF-001", "text": "Slow one", **setup})
+    assert (status, started["turn"], started["chat"]["turn"], started["chat"]["log"]) == (200, "LEAF-001:1", "LEAF-001:1", [{"role": "user", "text": "Slow one"}])
+    with pytest.raises(urllib.error.HTTPError) as refused:
+        call(base, app, "/api/turn", {"uid": "LEAF-001", "text": "Meanwhile", **setup})
+    assert refused.value.code == 409
+    assert call(base, app, "/api/turn", {"uid": "ROOT", "text": "Other item", **setup})[1]["turn"] == "ROOT:1"
+    with pytest.raises(urllib.error.HTTPError) as bare:
+        call(base, app, "/api/turn/1")
+    assert bare.value.code == 404
+    deadline = time.monotonic() + 5
+    while not all(call(base, app, f"/api/turn/{key}")[1].get("steps") for key in ("LEAF-001:1", "ROOT:1")) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    running = call(base, app, "/api/turn/LEAF-001:1")[1]
+    assert running["running"] and [(step["kind"], step["input"], step["result"]) for step in running["steps"]] == [("tool", {"file_path": "Slow one"}, "read")]
+    assert running["steps"][0]["at"] >= 0.5 and call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["steps"] == running["steps"]
+    version = call(base, app, "/api/chats")[1]["version"]
+    assert call(base, app, f"/api/chats?since={version}&wait=0.3")[1]["version"] == version  # nothing changed: the wait runs out
+    gated.release.set()
+    assert call(base, app, f"/api/chats?since={version}&wait=5")[1]["version"] > version  # one long poll awaits the turns' end, however many run
+    assert call(base, app, "/api/turn/LEAF-001:1?wait=5")[1]["running"] is False
+    assert call(base, app, "/api/turn/ROOT:1?wait=5")[1]["running"] is False
+    chats = call(base, app, "/api/chats")[1]["chats"]
+    assert [m["role"] for m in chats["LEAF-001"]["log"]] == ["user", "ai"] and chats["LEAF-001"]["turn"] is None
+    assert chats["LEAF-001"]["log"][-1]["steps"] == running["steps"] and "steps" not in chats["LEAF-001"]
+    assert call(base, app, "/api/turn", {"uid": "LEAF-001", "text": "Next", **setup})[1]["turn"] == "LEAF-001:2"
+
+
+def linked_page(server, chrome):
+    """The page with LEAF-001 linking docs/GUIDE.md, which links NOTES.md next to it."""
+    base, app = server
+    docs = app.root / "docs"
+    docs.mkdir()
+    (docs / "GUIDE.md").write_text("# Guide\n\nSee [the notes](NOTES.md).\n")
+    (docs / "NOTES.md").write_text("# Notes\n")
+    (app.syngate_dir / "LEAF-001.yml").write_text("---\nparents: [ROOT]\ntest: ~\n---\nIt shall leaf, see [the guide](docs/GUIDE.md).\n")
+    page = item_page(server, chrome)
+    page.wait(f"{LEAF_BLOCK}.querySelector('a.filelink')")
+    return page
+
+
+GUIDE = f"{LEAF_BLOCK}.querySelector('.file-view[data-file=\"docs/GUIDE.md\"]')"
+NOTES = f"{LEAF_BLOCK}.querySelector('.file-view[data-file=\"docs/NOTES.md\"]')"
+
+
+@pytest.mark.syngate("SYNGATE_UI-051")
+def test_the_panes_carry_no_inline_styles_and_border_mounted_controls_share_one_look(server, chrome):
+    page = linked_page(server, chrome)
+    enter_reply(page, "LEAF-001")
+    send(page, "LEAF-001", "Hi")
+    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
+    page.eval(f"{LEAF_BLOCK}.querySelector('a.filelink').click()")
+    page.wait(f"{GUIDE} && {GUIDE}.querySelector('.md')")
+    assert page.eval("document.querySelectorAll('#tree [style], #doc [style]').length") == 0
+    looks = "(() => { const seen = new Set(); for (const el of document.querySelectorAll('%s')) { const s = getComputedStyle(el);" \
+            " seen.add([s.borderTopStyle, s.borderTopWidth, s.borderTopLeftRadius, s.paddingLeft, s.paddingRight, s.fontSize, s.fontFamily].join()); } return [...seen]; })()"
+    assert page.eval("document.querySelectorAll('#doc .block-foot .pill, #doc .sub-foot .pill').length") >= 7  # status, send, three modes, close, file name
+    assert len(page.eval(looks % "#doc .block-foot .pill, #doc .sub-foot .pill")) == 1  # one pill shape, whatever the pill is for
+    assert page.eval("document.querySelectorAll('#tree .tools button, #doc .msg-tools button, #doc .file-view > .tools button').length") >= 7
+    assert len(page.eval(looks % "#tree .tools button, #doc .msg-tools button, #doc .file-view > .tools button")) == 1  # one icon-button shape
+
+
+@pytest.mark.syngate("SYNGATE_UI-052")
+def test_a_block_at_rest_shows_no_border_or_controls_and_reveals_a_dim_line_on_hover_or_focus(page):
+    at = f"(() => {{ const s = getComputedStyle({LEAF_BLOCK}); return [s.borderTopColor, getComputedStyle({LEAF_BLOCK}.querySelector('.block-foot')).visibility]; }})()"
+    line, selection, none = css_color(page, "--line"), css_color(page, "--sel"), "rgba(0, 0, 0, 0)"
+    settled = lambda color, visibility: page.wait(f"JSON.stringify({at}) === {json.dumps(json.dumps([color, visibility], separators=(',', ':')))}")  # past the line's transition
+    settled(none, "hidden")
+    x, y = page.eval(f"(() => {{ const r = {LEAF_BLOCK}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }})()")
+    page.mouse("mouseMoved", x, y, buttons=0)
+    settled(line, "visible")
+    page.mouse("mouseMoved", 1, 1, buttons=0)
+    settled(none, "hidden")
+    page.eval("select('LEAF-001', 'ROOT/LEAF-001', { focus: 'block' })")
+    settled(line, "visible")  # selected and focused: the dim line, never the selection color
+    assert line != selection and page.eval(f"{LEAF_BLOCK}.classList.contains('selected')")
+    page.eval("startEditing('ROOT/LEAF-001')")
+    settled(line, "visible")
+
+
+@pytest.mark.syngate("SYNGATE_UI-053")
+def test_a_referenced_file_opens_inside_the_block_of_the_item_that_references_it(server, chrome):
+    page = linked_page(server, chrome)
+    page.eval(f"{LEAF_BLOCK}.querySelector('a.filelink').click()")
+    page.wait(f"{GUIDE} && {GUIDE}.querySelector('.md')")
+    assert page.eval("[...document.querySelectorAll('#doc .block')].map((el) => el.dataset.path)") == ["ROOT", "ROOT/LEAF-001"]  # no block of its own
+    assert page.eval(f"[{GUIDE}.dataset.path, {GUIDE}.parentElement.className, Boolean({LEAF_BLOCK}.contains({GUIDE}))]") == ["ROOT/LEAF-001#docs/GUIDE.md", "block-files", True]
+    page.eval(f"{GUIDE}.querySelector('a.filelink').click()")
+    page.wait(f"{NOTES} && {NOTES}.querySelector('.md')")
+    assert page.eval(f"[{NOTES}.dataset.path, {GUIDE}.contains({NOTES})]") == ["ROOT/LEAF-001#docs/GUIDE.md#docs/NOTES.md", True]  # nested below its link's view
+    page.eval(f"{GUIDE}.querySelector(':scope > .sub-body .md').dispatchEvent(new MouseEvent('dblclick', {{ bubbles: true }}))")
+    assert page.eval(f"[state.editing, Boolean({GUIDE}.querySelector(':scope > .sub-body textarea')), {LEAF_BLOCK}.classList.contains('editing')]") == ["ROOT/LEAF-001#docs/GUIDE.md", True, False]
+    page.eval(f"{NOTES}.querySelector('[data-act=\"close\"]').click()")
+    assert page.eval(f"[Boolean({NOTES}), Boolean({GUIDE})]") == [False, True]
+    page.eval(f"{GUIDE}.querySelector('[data-act=\"close\"]').click()")
+    assert page.eval(f"[Boolean({GUIDE}), state.editing]") == [False, None]
+
+
+@pytest.mark.syngate("SYNGATE_UI-054")
+def test_sub_elements_are_delimited_by_rules_and_shifts_with_their_tools_on_their_edge(server, chrome):
+    page = linked_page(server, chrome)
+    enter_reply(page, "LEAF-001")
+    send(page, "LEAF-001", "Hi")
+    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
+    page.eval(f"{LEAF_BLOCK}.querySelector('a.filelink').click()")
+    page.wait(f"{GUIDE} && {GUIDE}.querySelector('.md')")
+    edges = "(() => { const s = getComputedStyle(%s); return [s.borderTopStyle, s.borderBottomStyle, s.borderLeftStyle, s.borderRightStyle, parseFloat(s.marginLeft) > 0]; })()"
+    assert page.eval(edges % GUIDE) == ["solid", "solid", "none", "none", True]
+    assert page.eval(edges % f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")[:4] == ["none", "none", "none", "none"]
+    place = f"(() => {{ const view = {GUIDE}, tools = view.querySelector(':scope > .tools').getBoundingClientRect(), box = view.getBoundingClientRect()," \
+            f" name = view.querySelector('.sub-foot .pill').getBoundingClientRect();" \
+            " return [tools.left - box.left < 4, Math.abs(tools.top - box.top) < parseFloat(getComputedStyle(view).lineHeight), Math.abs(name.top + name.height / 2 - box.bottom) < name.height]; })()"
+    assert page.eval(place) == [True, True, True]  # tools at the left edge level with the first line, the file name on the bottom rule
 
 
 @pytest.mark.syngate("SYNGATE_UI-038")
@@ -855,7 +1039,7 @@ class CallsConnector(EchoConnector):
         super().__init__()
         self.reply = reply
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
         return self.reply, "session-2"
 
 
@@ -868,8 +1052,8 @@ def _chat(server, reply, uid="ROOT"):
 @pytest.mark.syngate("AI_CHAT-040")
 def test_a_tree_call_answer_is_applied_to_the_tree_and_a_mixed_one_refused(server, syngate_tree):
     syngate_dir, _ = syngate_tree
-    calls = [{"tool": "add", "uid": "NEW-001", "header": "New branch", "description": "It groups.", "kind": "branch"},
-             {"tool": "add", "uid": "NEW-002", "parent": "NEW-001", "header": "New leaf", "description": "It shall be new.\n"},
+    calls = [{"tool": "add", "uid": "NEW-001", "description": "New branch\n\nIt groups.", "kind": "branch"},
+             {"tool": "add", "uid": "NEW-002", "parent": "NEW-001", "description": "New leaf\n\nIt shall be new.\n"},
              {"tool": "move", "uid": "LEAF-001", "to": "NEW-001", "before": "NEW-002"},
              {"tool": "remove", "uid": "NEW-002"}]
     status, result = _chat(server, "```syngate\n" + json.dumps(calls) + "\n```")
@@ -877,7 +1061,7 @@ def test_a_tree_call_answer_is_applied_to_the_tree_and_a_mixed_one_refused(serve
     assert result["reply"] == "- added NEW-001 under ROOT\n- added NEW-002 under NEW-001\n- moved LEAF-001 under NEW-001\n- removed NEW-002"
     items, errors = syngatelib.load_tree(syngate_dir)
     assert errors == [] and sorted(items) == ["LEAF-001", "NEW-001", "ROOT"]
-    assert (items["NEW-001"].header, items["NEW-001"].description, items["NEW-001"].parents, items["NEW-001"].tests) == ("New branch", "It groups.\n", ["ROOT"], None)
+    assert (items["NEW-001"].title, items["NEW-001"].description, items["NEW-001"].parents, items["NEW-001"].tests) == ("New branch", "New branch\n\nIt groups.\n", ["ROOT"], None)
     assert items["LEAF-001"].parents == ["NEW-001"] and items["LEAF-001"].tests == {None: None}
     status, result = _chat(server, "Just talking.")
     assert (status, result["reply"]) == (200, "Just talking.")
@@ -886,7 +1070,7 @@ def test_a_tree_call_answer_is_applied_to_the_tree_and_a_mixed_one_refused(serve
     body = json.loads(refused.value.read())
     assert refused.value.code == 422 and body["session"] == "session-2" and "never both" in body["error"]
     with pytest.raises(urllib.error.HTTPError) as refused:
-        _chat(server, "```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-003", "header": "H", "description": "D"}, {"tool": "remove", "uid": "@"}]) + "\n```")
+        _chat(server, "```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-003", "description": "D"}, {"tool": "remove", "uid": "@"}]) + "\n```")
     body = json.loads(refused.value.read())
     assert refused.value.code == 400 and body["error"].startswith("- added NEW-003 under ROOT\nremove ROOT refused: ROOT still has children")
     assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "NEW-001", "NEW-003", "ROOT"]
@@ -924,7 +1108,7 @@ class GatedConnector(EchoConnector):
         self.release = threading.Event()
         self.interrupted = False
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
         if self.first:
             return self.first.pop(0), "session-early"
         self.release.wait(10)
@@ -937,35 +1121,74 @@ class GatedConnector(EchoConnector):
         self.release.set()
 
 
+class SteppingConnector(GatedConnector):
+    """Announces a tool step, then its result as the same step announced again, before the gated answer."""
+
+    def dispatch(self, context, text, on_step=None, **kwargs):
+        step = {"kind": "tool", "name": "Read", "input": {"file_path": text}, "result": None, "seconds": None, "at": 0.5}
+        on_step(step)
+        step.update(result="read", seconds=0.1)
+        on_step(step)
+        return super().dispatch(context, text, **kwargs)
+
+
+class NarratingConnector(GatedConnector):
+    """Narrates a reasoning and a pending tool call, then -- once `more` is set -- the call's result, a subagent and a diff, before the gated answer."""
+
+    def __init__(self, *first):
+        super().__init__(*first)
+        self.more = threading.Event()
+
+    def dispatch(self, context, text, on_step=None, **kwargs):
+        tool = {"kind": "tool", "name": "Read", "input": {"file_path": "docs/GUIDE.md"}, "result": None, "seconds": None, "at": 0.2}
+        on_step({"kind": "reasoning", "text": f"Thinking about {text}", "at": 0.1})
+        on_step(tool)
+        self.more.wait(10)
+        tool.update(result="read", seconds=0.1)
+        on_step(tool)
+        on_step({"kind": "agent", "uid": "ROOT", "prompt": "Check the root", "report": "Root checked", "at": 0.4,
+                 "steps": [{"kind": "tool", "name": "Grep", "input": {"pattern": "leaf"}, "result": "1 match", "seconds": 0.3, "at": 0.5}]})
+        on_step({"kind": "diff", "files": [{"path": "docs/GUIDE.md", "status": "M", "hunks": "@@ -1 +1 @@\n-old\n+new"}], "at": 1.0})
+        return super().dispatch(context, text, **kwargs)
+
+
 LEAF = "document.querySelector('.block[data-uid=\"LEAF-001\"]')"
-WAITING = f"Boolean({LEAF}.querySelector('.chat-msg.note .spinner'))"
+HEAD = f"{LEAF}.querySelector('.turn-activity .turn-head')"
+STEPS = f"[...{LEAF}.querySelectorAll('.turn-activity > .turn-steps > .turn-step > .step-line')].map((line) => line.textContent)"
 
 
 @pytest.mark.syngate("AI_CHAT-060")
 def test_a_turn_is_awaited_on_the_server_and_a_reloaded_page_re_attaches_to_it(server, chrome):
     base, app = server
-    gated = GatedConnector()
+    gated = NarratingConnector()
     page = open_chat(server, chrome, echo=gated)
     send(page, "LEAF-001", "Slow one")
-    page.wait(WAITING)
-    page.wait("state.chats.get('LEAF-001').turn")
+    page.wait(f"{HEAD} && {HEAD}.querySelector('.spinner') && {HEAD}.textContent.trim().startsWith('1 tool call')")
+    assert page.eval(f"Boolean({LEAF}.querySelector('.chat-msg.note'))") is False  # the activity stands for the spinner note
+    page.eval(f"{HEAD}.click()")
+    assert page.eval(STEPS) == ["reasoningThinking about Slow one", "Readdocs/GUIDE.md …"]
+    gated.more.set()
+    page.wait(f"{HEAD}.textContent.trim().startsWith('1 tool call · 1 subagent · 1 file changed · ')")  # grows live
+    assert page.eval(STEPS) == ["reasoningThinking about Slow one", "Readdocs/GUIDE.md · 0.1 s", "agent @ROOTCheck the root", "diff1 file changed"]
     turn = page.eval("state.chats.get('LEAF-001').turn")
-    assert call(base, app, f"/api/turn/{turn}")[1] == {"turn": turn, "running": True}
+    snapshot = call(base, app, f"/api/turn/{turn}")[1]
+    assert turn == "LEAF-001:1" and snapshot["running"] and len(snapshot["steps"]) == 4
     reload(page)
-    page.wait(WAITING)
-    assert page.eval(f"{LEAF}.querySelectorAll('.chat-msg.ai').length") == 0
+    page.wait(f"{HEAD} && {HEAD}.querySelector('.spinner')")
+    page.eval(f"{HEAD}.click()")
+    assert page.eval(f"{LEAF}.querySelectorAll('.chat-msg.ai').length") == 0 and len(page.eval(STEPS)) == 4  # the steps so far
     gated.release.set()
     page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
     assert page.eval(f"{LEAF}.querySelector('.chat-msg.ai').textContent").strip() == "late reply to Slow one"
+    assert page.eval(f"[{HEAD}.querySelector('.spinner'), {LEAF}.querySelector('.chat-msg.ai + .turn-activity') !== null, {STEPS}.length]") == [None, True, 4]
     assert page.eval("[state.chats.get('LEAF-001').turn, state.chats.get('LEAF-001').session]") == [None, "session-late"]
-    with pytest.raises(urllib.error.HTTPError) as handed_over:
-        call(base, app, f"/api/turn/{turn}")
-    assert handed_over.value.code == 404
+    assert call(base, app, f"/api/turn/{turn}")[1]["running"] is False  # the turn's outcome stays readable: it is also the chat's last message
 
 
 @pytest.mark.syngate("AI_CHAT-061")
 def test_while_a_turn_runs_the_close_mark_is_a_stop_button_that_interrupts_it(server, chrome):
-    gated = GatedConnector({"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]})
+    gated = NarratingConnector({"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]})
+    gated.more.set()
     page = open_chat(server, chrome, echo=gated)
     pills = f"[Boolean({LEAF}.querySelector('.block-ai .chat-close')), Boolean({LEAF}.querySelector('.block-ai .chat-stop')), Boolean({LEAF}.querySelector('.chat-pill.busy'))]"
     assert page.eval(pills) == [True, False, False]
@@ -978,3 +1201,4 @@ def test_while_a_turn_runs_the_close_mark_is_a_stop_button_that_interrupts_it(se
     stopped = page.eval(f"{LEAF}.querySelector('.chat-msg.error').textContent").strip()
     assert stopped.startswith("- LEAF-001: {") and stopped.endswith("\nturn stopped")
     assert page.eval(pills) == [True, False, False]
+    assert page.eval(f"{LEAF}.querySelector('.chat-msg.error + .turn-activity .turn-head').textContent").startswith("2 tool calls · 2 subagents · 1 file changed · ")

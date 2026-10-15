@@ -62,8 +62,9 @@ discovery scans `scripts/tests/` and `tests/` for pytest bindings and `test/` fo
   file between folders changes nothing. Other extensions (`.md`, …) are ignored by tooling.
 - **The tree shape lives inside the items** via `parents`. Multi-parent items form a DAG; exactly
   one item has empty `parents` (the root, `OPEN-TRADER`). No settings files anywhere.
-  Use consideration to name items, which represents a whole feature, without a number (like top OPEN_TRADER),
-  then its subbranches may be groupped by subfolder and have same name and numbered suffix (unless it again represent large feature)
+  A UID is short and semantic (`SYNGATE-REVIEW-STATUS`), composed from its feature's name and
+  what the item adds; a numbered suffix (`INFRA-043`) is used only where many semantically alike
+  items would make their names long.
 - **A branch earns its place by a statement of its own.** An intermediate branch that only groups
   its children under a heading, adding no independent statement to their seed context, is noise:
   its children belong directly under its parent. A sure sign of such a branch is a description
@@ -96,20 +97,28 @@ review: <sha256 hex, present only after user review>
 ---
 CI build on push
 
-The CI pipeline shall build the project on every push to the repository.
+The CI pipeline builds the project on every push to the repository.
 ```
 
 - The body is the item's **statement** (`description`), in markdown. The content panel renders the
   DAG as one document, every statement read under its ancestors and detailed by its children, so
   the statement is written as a section of that document, never as a heading over a restatement.
-  There is no separate header: the body's **first line is the statement condensed** — the whole
-  requirement where one sentence holds it, which on a test-bearing leaf is its one "shall", or a
-  feature's bare name where its children carry the content — and is what the outline shows as the
-  item's **title**, cut with an ellipsis where the row runs out of room. The lines past one blank
-  line hold only what the first cannot: enumerated cases, limits, exceptions, a link to a design
-  file. They never paraphrase the first line, and no statement repeats its parent's or its
+  There is no separate header: the body's **first line is the statement's subject** — a short
+  noun phrase without articles naming the facility the item defines (`Project edit mode`,
+  `Immediate interruption facility`), or a feature's bare name where its children carry the
+  content — and is what the outline shows as the item's **title**, cut with an ellipsis where the
+  row runs out of room. The sentence goes on from the next line, after a single line break, with
+  the behaviour the subject has (`instructs the Claude Code connector to call …`); the content panel
+  joins the two lines into one sentence while the outline shows the subject alone. The subject is
+  what the item introduces, never an object of its behaviour (`Interrupted turn` names what is
+  acted on, `Immediate interruption facility` what acts). The paragraphs past one blank line hold
+  only what the sentence cannot: enumerated cases, limits, exceptions, a link to a design file.
+  They never paraphrase the first sentence, and no statement repeats its parent's or its
   children's. Whoever adds or rewords an item rereads the whole branch — the parent and every
   descendant — and strips what the change made redundant, so the compiled text reads seamlessly.
+  No wording is prescribed: the style is the author's, and a new or reworded statement follows the
+  style the tree already uses, so the compiled DAG reads as one concrete document — an article a
+  human reads top to bottom, printable as is.
 - `sources` — optional list of root-relative paths of the item's **key source files**. They enter
   the seed context of every exchange anchored at the item, above or below it (see [SYNTHETIC.md](SYNTHETIC.md)), each
   once, so a file listed by an ancestor is not listed again. Outside the reviewed stamp.
@@ -228,8 +237,9 @@ is their genuine spelling rather than a second implementation.
     — a leaf's own, a branch's rolled up from below. Hovering a leaf's label shows each binding's
     result and where its routine lives; a branch's, the tally of its leaves.
   - **Clicking the label opens the run menu**: *run test* (`syngate test`), *mark reviewed*
-    (`syngate review`) and, on a reviewed leaf, *clear review*; on a branch the first two address
-    every leaf below it (review asks for confirmation). Runs stream into the console and fold their
+    (`syngate review`) and, on a reviewed item, *clear review*; on a branch the test run addresses
+    every leaf below it and the review stamps the branch and every item below it, children first
+    (review asks for confirmation). Runs stream into the console and fold their
     records into `syngate_coverage.jsonl` next to the tree, which the page always reads, so a run
     recolors the statuses without a CI round trip.
   - **One selection drives both panes.** Picking a tree row scrolls the document to that block and
@@ -282,13 +292,18 @@ Two independent axes per item (`compute_axes`; what the UI shows):
   if it carries any — a failed item fails every ancestor, else one unknown item leaves them
   unknown. The axis reflects the run records alone — a violated review never reddens it. A run that cannot execute a binding (no or several tagged
   routines, test binary not built) records it as failed — a test that cannot be found is red.
-- **Review**: `not_reviewed` | `reviewed` | `review_violated`. An item's own validation problem
-  (stale stamp, drifted frozen routine, malformed item) is a violated review; a branch without
-  own tests is reviewed only through its children; violated outranks not reviewed, which outranks reviewed.
+- **Review**: `not_reviewed` | `reviewed` | `review_violated`. The worst of an item's own stamp and
+  its children's axes: a branch is reviewed when it and everything below it is. An item's own
+  validation problem (stale stamp, drifted frozen routine, malformed item) is a violated review;
+  violated outranks not reviewed, which outranks reviewed. A branch's stamp covers its statement,
+  parents and the list of its children, so editing a branch or adding a child under it clears it.
+  A problem is attributed to the item it names and reaches only that item's ancestors — never the
+  item whose tooling detected it, and never the whole tree: a coverage gap is not an item problem,
+  since one missing coverage file would otherwise redden every reviewed leaf at once.
 
 The single-status rollup below (`compute_status`) is what `syngate report`, the CI summary and the
-check run still publish; its frozen tests (INFRA-043/044/070) define it, so retiring it in favour of
-the axes is a user decision.
+check run still publish; INFRA-043/044 define it, so retiring it in favour of the axes is a
+user decision.
 
 Leaf: no executed records → `not_implemented`; any failed record → `test_failed`; all bindings
 covered and passing → `test_passed`; some covered → `partially_implemented`. A childless item

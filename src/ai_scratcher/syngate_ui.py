@@ -123,6 +123,7 @@ class Turn:
         self.stopped = False
         self.started = time.monotonic()
         self.steps, self.origins = [], []
+        self.children, self.job = [], None
         self.cond = threading.Condition()
 
     def elapsed(self):
@@ -492,6 +493,8 @@ class SyngateUIApp:
                 outcome = self.chat(exchange, turn)
             except ApiError as err:
                 outcome = {"error": str(err), "status": err.status, **err.extra}
+            except Exception as err:
+                outcome = {"error": f"{type(err).__name__}: {err}", "status": 500}
             with self._chat_lock:
                 if chat.turn is turn:
                     if outcome.get("session"):
@@ -518,9 +521,16 @@ class SyngateUIApp:
         return self._turn(key).snapshot(wait)
 
     def stop_turn(self, key):
-        """End a running turn: its connector's live process is interrupted and the exchange reports as stopped."""
+        """End a running turn the instant the stop lands: its gate closes, so nothing of it is applied past this mark; the turns it
+        delegated are stopped the same way, the test run it awaits is cancelled and its connector's live process is interrupted;
+        the exchange then reports as stopped."""
         turn = self._turn(key)
         turn.stopped = True
+        for child in turn.children:
+            if child.outcome is None and not child.stopped:
+                self.stop_turn(child.id)
+        if turn.job is not None and turn.job is self.jobs.current and turn.job.returncode is None:
+            threading.Thread(target=self.jobs.cancel, daemon=True).start()
         interrupt = getattr(self.connectors.get(turn.connector), "interrupt", None)
         if interrupt and turn.thread:
             interrupt(turn.thread.ident)
@@ -537,25 +547,30 @@ class SyngateUIApp:
         The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
+        halted = lambda: turn is not None and turn.stopped
 
         def batch_step(lines):
             if turn and lines:
                 turn.add_step({"kind": "calls", "lines": list(lines), "at": turn.elapsed()})
+
+        def stopped(lines=()):
+            batch_step(lines)
+            return ApiError(409, "\n".join([*applied, *lines, "turn stopped"]), session=session)
 
         for _ in range(synthetic.QUERY_ROUNDS):
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
                                                  data.get("effort"), modes=data.get("modes") or (), session=session, history=history, root=self.root,
-                                                 on_step=on_step)
+                                                 on_step=on_step, stopped=halted if turn else None)
             except synthetic.query_error as err:
                 raise ApiError(400, str(err)) from None
             except synthetic.connection_error as err:
-                if turn and turn.stopped:
-                    raise ApiError(409, "\n".join([*applied, "turn stopped"]), session=session) from None
+                if halted():
+                    raise stopped() from None
                 raise ApiError(502, str(err)) from None
-            if turn and turn.stopped:
-                raise ApiError(409, "\n".join([*applied, "turn stopped"]), session=session)
+            if halted():
+                raise stopped()
             try:
                 kind, payload = synthetic.parse_reply(reply)
             except synthetic.protocol_error as err:
@@ -574,19 +589,22 @@ class SyngateUIApp:
             for call in payload:
                 if synthetic.is_run(call) or synthetic.is_delegation(call):
                     continue
+                if halted():
+                    raise stopped(results)
                 try:
                     results.append(_call(lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir)))
                 except ApiError as err:
                     raise refused(err, f"{call['tool']} {named(call)}") from None
             if runs:
+                if halted():
+                    raise stopped(results)
                 try:
-                    results.append(self._run_calls(items, [(named(call), call.get("name") or None) for call in runs]))
+                    results.append(self._run_calls(items, [(named(call), call.get("name") or None) for call in runs], turn))
                 except ApiError as err:
                     raise refused(err, f"test {' '.join(dict.fromkeys(named(call) for call in runs))}") from None
             refusal = self._delegate(items, uid, data, delegations, turn, results) if delegations else None
-            if turn and turn.stopped:
-                batch_step(results)
-                raise ApiError(409, "\n".join([*applied, *results, "turn stopped"]), session=session)
+            if halted():
+                raise stopped(results)
             if refusal:
                 raise refused(*refusal)
             batch_step(results)
@@ -599,13 +617,16 @@ class SyngateUIApp:
 
     def _delegate(self, items, anchor, data, calls, turn, results):
         """Every agent call of a batch as a turn of its item's chat with the call's prompt, in the setup of `data` the call may override,
-        all running in parallel and awaited -- a stop of the parent `turn` stops them too. Each child's report joins `results` and its
-        transcript the parent's steps as an agent step; -> (error, line) of the call refused, which starts none after it."""
+        all running in parallel and awaited -- a stop of the parent `turn` starts none more and stops the running ones. Each child's
+        report joins `results` and its transcript the parent's steps as an agent step; -> (error, line) of the call refused, which starts
+        none after it."""
         started, refusal = [], None
         for call in calls:
             child = synthetic.call_target(anchor, call)
             setup = {**{key: data[key] for key in SETUP_KEYS if key in data}, **{key: call[key] for key in ("model", "effort", "modes") if key in call}}
             try:
+                if turn and turn.stopped:
+                    raise ApiError(409, "turn stopped")
                 if child not in items:
                     raise ApiError(404, f"unknown UID '{child}'")
                 key = self.start_turn({**setup, "uid": child, "text": call["prompt"], "agent": turn.id if turn else anchor})["turn"]
@@ -613,15 +634,15 @@ class SyngateUIApp:
                 refusal = (err, f"agent {child}")
                 break
             step, shift = {"kind": "agent", "uid": child, "prompt": call["prompt"], "report": None, "steps": [], "at": 0}, turn.elapsed() if turn else 0
+            started.append((self._turn(key), step, shift))
             if turn:
                 turn.add_step(step, shift)
-            started.append((self._turn(key), step, shift))
+                turn.children.append(started[-1][0])
+                if turn.stopped:
+                    self.stop_turn(key)
         for child, step, shift in started:
-            while child.snapshot(0.2)["running"]:
-                if turn and turn.stopped:
-                    for each, _, _ in started:
-                        if each.outcome is None and not each.stopped:
-                            self.stop_turn(each.id)
+            while child.snapshot(0.5)["running"]:
+                pass
             outcome = child.snapshot()
             step.update(report=outcome.get("reply", outcome.get("error")), steps=outcome.get("steps", []))
             if turn:
@@ -629,11 +650,15 @@ class SyngateUIApp:
             results.append(f"- agent {step['uid']}: {step['report']}")
         return refusal
 
-    def _run_calls(self, items, addressed):
-        """Every test call of a batch -- `addressed` being (uid, binding|None) -- as one run of the page's runner, awaited;
-        -> its outcome as the AI reads it back."""
+    def _run_calls(self, items, addressed, turn=None):
+        """Every test call of a batch -- `addressed` being (uid, binding|None) -- as one run of the page's runner, awaited and held
+        by the `turn` so its stop cancels it; -> its outcome as the AI reads it back."""
         targets = list(dict.fromkeys((leaf, name) for uid, name in addressed for leaf in syngatelib.leaves_under(items, uid)))
         job = self.jobs.get(self.start_run({"action": "test", "uids": [f"{leaf}:{name}" if name else leaf for leaf, name in targets]})["job"])
+        if turn:
+            turn.job = job
+            if turn.stopped:
+                self.jobs.cancel()
         for _ in job.stream():
             pass
         return synthetic.run_report(items, targets, syngatelib.load_coverage([self.run_coverage])[0])

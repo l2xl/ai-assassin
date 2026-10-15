@@ -8,6 +8,7 @@ import difflib
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 import threading
@@ -289,9 +290,9 @@ def apply_call(items, anchor, call, syngate_dir=None):
     return f"- moved {uid} under {target}"
 
 
-def query(connectors, items, uid, text, connector, model, effort, modes=(), session=None, history=(), root=None, on_step=None):
+def query(connectors, items, uid, text, connector, model, effort, modes=(), session=None, history=(), root=None, on_step=None, stopped=None):
     """(reply text, session id) of one exchange anchored at `uid`, sent through the named connection with the exact model, effort and call modes,
-    every step of the turn reaching `on_step` as it happens.
+    every step of the turn reaching `on_step` as it happens; `stopped` tells the connection whether the turn was stopped meanwhile.
     The seed context -- its key sources read from `root` -- grows by the statements the text references; without a session to resume,
     the kept `history` heads the text."""
     connection = connectors.get(connector)
@@ -307,7 +308,7 @@ def query(connectors, items, uid, text, connector, model, effort, modes=(), sess
         raise query_error("empty input")
     context = seed_context(items, uid, root=root) + referenced(items, text)
     return connection.dispatch(context, text if session else transcript(history, text), model=model, effort=effort, modes=modes, session=session,
-                              on_step=on_step)
+                              on_step=on_step, **({"stopped": stopped} if stopped else {}))
 
 
 def result_text(content):
@@ -506,6 +507,21 @@ def claude_transcripts_dir(root):
     return config / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(Path(root).resolve()))
 
 
+def send(proc, message):
+    try:
+        proc.stdin.write(json.dumps(message) + "\n")
+        proc.stdin.flush()
+    except (BrokenPipeError, OSError, ValueError):
+        pass
+
+
+def close(proc):
+    try:
+        proc.stdin.close()
+    except (BrokenPipeError, OSError):
+        pass
+
+
 class claude_code_connector:
     label = "Claude Code"
     models = CLAUDE_MODELS
@@ -521,6 +537,9 @@ class claude_code_connector:
         "workflows": ("Workflows", "run subagents", False, None, ("Workflow",)),
     }
 
+    # Seconds a `claude` process asked to interrupt its turn may take to end before it is killed with its process group.
+    grace = 5.0
+
     def __init__(self, cli=("claude",), cwd=None, transcripts_dir=None):
         self.cli = list(cli)
         self.cwd = cwd
@@ -528,10 +547,22 @@ class claude_code_connector:
         self.live = {}
 
     def interrupt(self, ident):
-        """Kill the `claude` process of the turn the thread `ident` is running, if one is live."""
+        """End the turn the thread `ident` is running: its `claude` process is asked to interrupt -- the model stops and the session records
+        it -- and killed with its process group if it is still there after `grace` seconds."""
         proc = self.live.get(ident)
-        if proc:
-            proc.kill()
+        if proc is None:
+            return
+        send(proc, {"type": "control_request", "request_id": f"stop-{proc.pid}", "request": {"subtype": "interrupt"}})
+
+        def kill():
+            try:
+                proc.wait(self.grace)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        threading.Thread(target=kill, daemon=True).start()
 
     def settings(self):
         return {"label": self.label,
@@ -539,15 +570,19 @@ class claude_code_connector:
                 "efforts": list(self.efforts),
                 "modes": [{"id": mode, "label": label, "hint": hint, "default": default} for mode, (label, hint, default, _, _) in self.modes.items()]}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False):
         """(answer, session id) of one non-interactive `claude -p` turn, the answer being the structured output shaped by
         `ANSWER_SCHEMA`, else the reply text; the seed context, headed by the default prompt, is the appended system prompt
-        and `session` continues an earlier one. The turn lasts until the process exits: a subagent or workflow launched in
+        and `session` continues an earlier one. The text goes in on stdin as the user message of a stream-json input, which
+        keeps the stdin open for an `interrupt`. The turn lasts until the process exits: a subagent or workflow launched in
         it is awaited by the CLI, which answers again on its report, and the answer of the turn is that last one.
         Its events stream into `on_step` as steps while it runs; once it exits, the subagents' own turns are read from the
         session's transcript and the project files it changed, from snapshots taken before and after, close it as a diff step.
-        The effort, which is what asks the model for its reasoning, goes only with a model that has effort levels."""
+        The effort, which is what asks the model for its reasoning, goes only with a model that has effort levels.
+        A turn `stopped` before its process is spawned spawns none."""
         root = Path(self.cwd or os.getcwd())
+        if stopped():
+            raise connection_error("turn stopped")
         before, steps = project_snapshot(root), turn_steps(on_step)
         permission = next((self.modes[mode][3] for mode in modes if self.modes[mode][3]), None)
         tools = list(dict.fromkeys([*self.always_allowed, *(tool for mode in modes for tool in self.modes[mode][4])]))
@@ -555,7 +590,7 @@ class claude_code_connector:
         with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as seed, tempfile.TemporaryFile("w+", encoding="utf-8") as errors:
             seed.write(context)
             seed.flush()
-            argv = [*self.cli, "-p", text, "--output-format", "stream-json", "--verbose", "--forward-subagent-text",
+            argv = [*self.cli, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--forward-subagent-text",
                     "--json-schema", json.dumps(ANSWER_SCHEMA),
                     "--append-system-prompt-file", seed.name, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']
             for flag, value in (("--model", model), ("--effort", effort), ("--resume", session), ("--permission-mode", permission),
@@ -563,11 +598,17 @@ class claude_code_connector:
                 if value:
                     argv += [flag, value]
             ident = threading.get_ident()
-            with subprocess.Popen(argv, cwd=self.cwd, stdout=subprocess.PIPE, stderr=errors, text=True) as done:
+            with subprocess.Popen(argv, cwd=self.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors, text=True,
+                                  start_new_session=True) as done:
                 self.live[ident] = done
                 try:
+                    send(done, {"type": "user", "message": {"role": "user", "content": text}})
+                    if stopped():
+                        self.interrupt(ident)
                     for line in done.stdout:
                         steps.feed(line)
+                        if steps.result is not None:
+                            close(done)
                     done.wait()
                 finally:
                     self.live.pop(ident, None)

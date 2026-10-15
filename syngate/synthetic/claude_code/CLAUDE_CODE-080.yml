@@ -1,8 +1,7 @@
 ---
 parents: [CLAUDE_CODE]
 order: 80
-test: 3f0b9587930e5955c02c503375957bf9b394ab62b72b48007fdbc150e645f4b1
-review: 6e5dc11f4f26203a3b59b0b7a639e7e8fbc7c3da7d87451dcc65457c752ed343
+test: {interrupt: ~, gate: ~}
 ---
 Immediate interruption facility
-of the Claude Code connector ends a turn on request by killing the `claude` process of the thread running it, the dispatch then failing as a connection error.
+of the Claude Code connector ends a turn the instant the stop is received: the gate of the turn closes, so no tree call, test run or delegation of it is applied past the stop, the turns it delegated are stopped with it and the test run it awaits is cancelled; the `claude` process is asked to interrupt its turn, so the model stops at once and the session records the interruption, and is killed with its process group when it has not ended within the grace period; the dispatch then fails as a connection error, and a stop received before the process is spawned spawns none.

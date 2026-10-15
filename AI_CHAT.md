@@ -47,9 +47,11 @@ the description, the controls on the panel's bottom-left border, `.block-ai`).
 
 While a turn runs — a single answer, or one with tool calls, subagents or a workflow — the log ends
 with the turn's **activity header** (`.turn-activity`) growing live, and the green check mark is a
-`■ stop` button (`.chat-stop`): the chat can be neither closed nor collapsed until the turn ends.
-Stop interrupts the connector's process; the steps collected and the calls applied so far stay, and
-the log shows the turn as stopped. The turn itself runs on the server as `<UID>:<n>` of the item's
+`■ stop` button (`.chat-stop`, `AI-CHAT-CONTROLS-030`): the chat can be neither closed nor collapsed until the turn ends.
+Stop is an emergency halt: nothing of the turn reaches the tree, the project or the model past it,
+the connector being interrupted and the delegated turns stopped with it ([SYNTHETIC.md](SYNTHETIC.md),
+*Turn*); the steps collected and the calls applied before the stop stay, and the log shows the turn
+as stopped. The turn itself runs on the server as `<UID>:<n>` of the item's
 chat ([SYNTHETIC.md](SYNTHETIC.md), *Turn*), so a reload of the page, or any other page showing
 the item, re-attaches to it and shows its progress and reply when they come.
 

@@ -119,9 +119,22 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   `Edit` / `Write` events its order.
 - **Workflows are monolithic.** A `Workflow` tool call is one `workflow` step holding its input and
   result; the disk diff covers what it wrote; nothing is mirrored to children.
-- **Stop keeps the steps.** The chat's close mark is a `■ stop` button while the turn runs
-  (`POST /api/turn/<UID>:<n>/stop`), killing the connector's process: the steps collected and the
-  calls applied stay, and the turn ends marked as stopped.
+- **Stop is an emergency halt.** The chat's close mark is a `■ stop` button while the turn runs
+  (`POST /api/turn/<UID>:<n>/stop`); the user means "nothing more happens, from now", so the server
+  acts in this order, the instant the request lands: the turn is marked stopped, which closes its
+  gate — no tree call, test run or delegation of the turn is applied past that mark, a batch
+  half-applied stays half-applied; the turns it delegated are stopped the same way; the test run it
+  awaits is cancelled; and the connector is told to interrupt. Interrupting is cooperative first,
+  so that the model's engine stops spending tokens on an answer nobody will read and the session
+  stays resumable: the Claude Code connector runs `claude` with `--input-format stream-json`, the
+  prompt going in as a user message, and sends the `{"type": "control_request", "request":
+  {"subtype": "interrupt"}}` message on its stdin — the CLI aborts the API stream at once, records
+  `[Request interrupted by user]` in the session and answers with an error `result`. A process that
+  has not ended within a grace period (`claude_code_connector.grace` seconds) is killed with its
+  whole process group, so the shell commands and subagents it started die with it. Either way the
+  dispatch fails as a connection error; the steps collected and the calls applied before the stop
+  stay, and the turn ends marked as stopped. A stop that lands before the connector spawned its
+  process spawns none.
 
 The chat's place in the item panel, its ways of starting, the message tools and the history are
 specified in [AI_CHAT.md](AI_CHAT.md).

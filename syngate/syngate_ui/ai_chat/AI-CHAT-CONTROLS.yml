@@ -1,0 +1,12 @@
+---
+parents: [AI_CHAT]
+order: 95
+test: ~
+---
+Granular per chat paragraph toolbar must appear for every chat block.
+
+It works in two modes:
+
+1. for whole item and chat turns text (per turn). It allows to apply the actions linked to exact control on the per whole related text basis
+
+2. for text selection. As the text inside the chat selected the per item/turn toolbars are hidden and per selection toolbar shown aligned to the top edge of the selection.

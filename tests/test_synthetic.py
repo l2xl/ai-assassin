@@ -5,6 +5,7 @@
 """Synthetic agent library: item seed context and AI connectors."""
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -16,14 +17,15 @@ import synthetic
 import syngate_ui
 import syngatelib
 
-# Stub `claude`: answers the result event a non-interactive stream-json turn closes with, echoing its argv and the seed file it was handed.
+# Stub `claude`: answers the result event a non-interactive stream-json turn closes with, echoing its argv, the prompt read from its
+# stdin and the seed file it was handed.
 STUB_CLAUDE = """
 import json, sys
-argv = sys.argv[1:]
-if "rc-1" in argv[1]:
+argv, prompt = sys.argv[1:], json.loads(sys.stdin.readline())["message"]["content"]
+if "rc-1" in prompt:
     print(json.dumps({"type": "result", "is_error": True, "result": "model overloaded"})); sys.exit(1)
 seed = open(argv[argv.index("--append-system-prompt-file") + 1], encoding="utf-8").read()
-print(json.dumps({"type": "result", "result": json.dumps({"argv": argv, "seed": seed}), "session_id": "session-7", "is_error": False}))
+print(json.dumps({"type": "result", "result": json.dumps({"argv": argv, "prompt": prompt, "seed": seed}), "session_id": "session-7", "is_error": False}))
 """
 
 
@@ -208,7 +210,7 @@ def test_claude_code_connector_dispatches_a_non_interactive_turn(tmp_path):
     echoed = json.loads(reply)
     assert session == "session-7" and echoed["seed"] == "Root.\nIt shall leaf.\n"
     argv = echoed["argv"]
-    assert argv[:4] == ["-p", "What is missing?", "--output-format", "stream-json"]
+    assert argv[:5] == ["-p", "--input-format", "stream-json", "--output-format", "stream-json"] and echoed["prompt"] == "What is missing?"
     for flag, value in (("--model", "claude-sonnet-5"), ("--effort", "low"), ("--resume", "session-6")):
         assert argv[argv.index(flag) + 1] == value
     assert "--model" not in json.loads(connector.dispatch("", "Defaults?")[0])["argv"]
@@ -335,7 +337,7 @@ class ScriptedConnection:
     def __init__(self, *answers):
         self.answers, self.prompts = list(answers), []
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
         self.prompts.append((text, session))
         return self.answers[min(len(self.prompts), len(self.answers)) - 1], f"session-{len(self.prompts)}"
 
@@ -432,7 +434,7 @@ class DelegatedConnection(ScriptedConnection):
         super().__init__(*answers)
         self.gate, self.release = threading.Barrier(2, timeout=5), threading.Event()
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
         if text == "Hold":
             self.release.wait(5)
             return {"kind": "text", "text": "Held."}, None
@@ -451,6 +453,50 @@ def _awaited(predicate):
     while not predicate() and time.monotonic() < deadline:
         time.sleep(0.02)
     return predicate()
+
+
+class HaltedConnection(ScriptedConnection):
+    """Answers the `held` prompt once released, telling whether the turn was stopped by then."""
+
+    def __init__(self, held, *answers):
+        super().__init__(*answers)
+        self.held, self.release, self.halted = held, threading.Event(), None
+
+    def dispatch(self, context, text, stopped=lambda: False, **kwargs):
+        if text == self.held:
+            self.release.wait(5)
+            self.halted = stopped()
+        return super().dispatch(context, text, **kwargs)
+
+
+@pytest.mark.syngate("CLAUDE_CODE-080", "gate")
+def test_a_stop_closes_the_turns_gate_so_no_call_run_or_delegation_is_applied_past_it(tmp_path, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=())
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
+    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    setup = {"connector": "scripted", "model": "model-a", "effort": "low"}
+    batch = {"kind": "calls", "calls": [{"tool": "add", "uid": "LEAF-002", "description": "Late.\n"}, {"tool": "test", "uid": "LEAF-001"},
+                                        {"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf"}]}
+
+    app.connectors = {"scripted": (connection := HaltedConnection("Go.", batch, {"kind": "text", "text": "Never."}))}
+    turn = app.start_turn({**setup, "uid": "ROOT", "text": "Go."})["turn"]
+    app.stop_turn(turn)
+    connection.release.set()
+    outcome = app.turn_snapshot(turn, wait=5)
+    assert connection.halted is True and (outcome["status"], outcome["error"]) == (409, "turn stopped")
+    assert "LEAF-002" not in app._load() and app.jobs.current is None and "LEAF-001" not in app.chats
+    assert len(connection.prompts) == 1 and app.chats_snapshot()["chats"]["ROOT"]["log"][-1] == {"role": "error", "text": "turn stopped"}
+
+    connection = HaltedConnection("Hold", {"kind": "calls", "calls": [{"tool": "agent", "uid": "LEAF-001", "prompt": "Hold"}]}, {"kind": "text", "text": "Never."})
+    app.connectors = {"scripted": connection}
+    parent = app.start_turn({**setup, "uid": "ROOT", "text": "Delegate."})["turn"]
+    assert _awaited(lambda: "LEAF-001" in app.chats and app.chats["LEAF-001"].running)
+    app.stop_turn(parent)
+    assert app.chats["LEAF-001"].turn.stopped
+    connection.release.set()
+    stopped = app.turn_snapshot(parent, wait=5)
+    assert (stopped["status"], stopped["error"]) == (409, "- agent LEAF-001: turn stopped\nturn stopped")
 
 
 @pytest.mark.syngate("AI_CHAT-TOOL-AGENT")
@@ -520,30 +566,74 @@ def test_a_turn_lasts_until_the_process_exits_and_its_answer_is_the_last_one(tmp
     assert (answer, session) == ({"kind": "text", "text": "the agent reported"}, "session-9") and connector.live == {}
 
 
-STUB_STUCK = "import time; time.sleep(30)"
+# Stub `claude` that honours the interrupt control request the way the CLI does: it records the request, answers it, closes the turn
+# with an error result and exits once its stdin is closed. The deaf one ignores its stdin and sleeps with a child of its own.
+STUB_COOPERATIVE = """
+import json, os, sys
+here = os.path.dirname(os.path.abspath(sys.argv[0]))
+for line in sys.stdin:
+    event = json.loads(line)
+    if event["type"] == "control_request" and event["request"]["subtype"] == "interrupt":
+        open(os.path.join(here, "interrupted"), "w").write(event["request_id"])
+        print(json.dumps({"type": "control_response", "response": {"subtype": "success", "request_id": event["request_id"]}}), flush=True)
+        print(json.dumps({"type": "result", "subtype": "error_during_execution", "is_error": True, "result": None, "session_id": "session-cut"}), flush=True)
+sys.exit(1)
+"""
+STUB_DEAF = """
+import os, subprocess, sys, time
+here = os.path.dirname(os.path.abspath(sys.argv[0]))
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+open(os.path.join(here, "child"), "w").write(str(child.pid))
+time.sleep(30)
+"""
 
 
-@pytest.mark.syngate("CLAUDE_CODE-080")
-def test_an_interrupted_turn_kills_its_process_and_fails_as_a_connection_error(tmp_path):
-    stub = tmp_path / "stuck_stub.py"
-    stub.write_text(STUB_STUCK)
-    connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
+def _stopped_dispatch(connector, **kwargs):
+    """The failure of a dispatch of `connector` run on its own thread and interrupted once its process is live."""
     failures = []
 
     def turn():
         try:
-            connector.dispatch("", "Never answers.")
+            connector.dispatch("", "Never answers.", **kwargs)
         except synthetic.connection_error as err:
             failures.append(str(err))
 
     thread = threading.Thread(target=turn)
     thread.start()
-    deadline = time.monotonic() + 5
-    while thread.ident not in connector.live and time.monotonic() < deadline:
-        time.sleep(0.02)
+    assert _awaited(lambda: thread.ident in connector.live)
     connector.interrupt(thread.ident)
     thread.join(5)
-    assert not thread.is_alive() and failures == ["claude exited with -9"] and connector.live == {}
+    assert not thread.is_alive() and connector.live == {}
+    return failures
+
+
+@pytest.mark.syngate("CLAUDE_CODE-080", "interrupt")
+def test_an_interrupted_turn_asks_its_process_to_interrupt_kills_a_deaf_one_with_its_group_and_fails_as_a_connection_error(tmp_path):
+    cooperative = tmp_path / "cooperative_stub.py"
+    cooperative.write_text(STUB_COOPERATIVE)
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(cooperative)), cwd=tmp_path)
+    assert _stopped_dispatch(connector) == ["claude exited with 1"]
+    assert (tmp_path / "interrupted").read_text().startswith("stop-")
+
+    deaf = tmp_path / "deaf_stub.py"
+    deaf.write_text(STUB_DEAF)
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(deaf)), cwd=tmp_path)
+    connector.grace = 0.3
+    started = time.monotonic()
+    assert _stopped_dispatch(connector) == ["claude exited with -9"] and time.monotonic() - started >= 0.3
+    child = int((tmp_path / "child").read_text())
+
+    def gone():
+        try:
+            os.kill(child, 0)
+            return False
+        except ProcessLookupError:
+            return True
+    assert _awaited(gone)
+
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(tmp_path / "no_such_stub.py")), cwd=tmp_path)
+    with pytest.raises(synthetic.connection_error, match="turn stopped"):
+        connector.dispatch("", "Stopped before I start.", stopped=lambda: True)
 
 
 # Stub `claude` streaming the events of `events.json` next to it, one NDJSON line each: "await" holds the stream until a `go` file

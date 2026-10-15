@@ -539,7 +539,7 @@ class EchoConnector:
         return {"label": self.label, "models": [{"id": model, "name": model.removeprefix("model-")} for model in self.models], "efforts": list(self.efforts),
                 "modes": [{"id": mode, "label": mode.capitalize(), "hint": mode + " hint", "default": default} for mode, default in self.modes.items()]}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
         return {"kind": "text", "text": f"{context}|{text}|{model}|{effort}|{','.join(modes)}|{session}"}, "session-1"
 
 
@@ -832,7 +832,7 @@ class ReleasedConnector(EchoConnector):
     def release(self, text):
         self.gates.setdefault(text, threading.Event()).set()
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
         assert self.gates.setdefault(text, threading.Event()).wait(10), f"{text} was never released"
         return f"reply to {text} in {session}", f"session-{text}"
 
@@ -1039,7 +1039,7 @@ class CallsConnector(EchoConnector):
         super().__init__()
         self.reply = reply
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
         return self.reply, "session-2"
 
 
@@ -1108,7 +1108,7 @@ class GatedConnector(EchoConnector):
         self.release = threading.Event()
         self.interrupted = False
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
         if self.first:
             return self.first.pop(0), "session-early"
         self.release.wait(10)
@@ -1185,8 +1185,9 @@ def test_a_turn_is_awaited_on_the_server_and_a_reloaded_page_re_attaches_to_it(s
     assert call(base, app, f"/api/turn/{turn}")[1]["running"] is False  # the turn's outcome stays readable: it is also the chat's last message
 
 
-@pytest.mark.syngate("AI_CHAT-061")
-def test_while_a_turn_runs_the_close_mark_is_a_stop_button_that_interrupts_it(server, chrome):
+@pytest.mark.syngate("AI-CHAT-CONTROLS-030")
+def test_while_a_turn_runs_the_close_mark_is_a_stop_button_that_stops_the_turn(server, chrome):
+    _, app = server
     gated = NarratingConnector({"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]})
     gated.more.set()
     page = open_chat(server, chrome, echo=gated)
@@ -1195,9 +1196,10 @@ def test_while_a_turn_runs_the_close_mark_is_a_stop_button_that_interrupts_it(se
     send(page, "LEAF-001", "Stuck one")
     page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
     assert page.eval(pills) == [False, True, True]
+    turn = app.chats["LEAF-001"].turn
     page.eval(f"{LEAF}.querySelector('.block-ai .chat-stop').click()")
     page.wait(f"{LEAF}.querySelector('.chat-msg.error')")
-    assert gated.interrupted
+    assert turn.stopped and gated.interrupted and turn.outcome["status"] == 409
     stopped = page.eval(f"{LEAF}.querySelector('.chat-msg.error').textContent").strip()
     assert stopped.startswith("- LEAF-001: {") and stopped.endswith("\nturn stopped")
     assert page.eval(pills) == [True, False, False]

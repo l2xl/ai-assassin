@@ -1,5 +1,6 @@
-header: Skills library
-description: |
-  Skills of the prompt library. A skill is a named description the harness adds to the context: a default skill is part of the default prompt, any other is on request — listed in the default prompt by name and description and loaded through the skill tool.
+---
 parents: [AI_CHAT-PROMPTS]
 order: 30
+review: 2389671422f4398ae52f97f5706ea5dcadc8295d56b265d14e2a956f8b883022
+---
+A skill shall be a named description the harness adds to the context, a default skill as part of the default prompt and any other on request through the skill tool

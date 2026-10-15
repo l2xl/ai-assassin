@@ -1,7 +1,8 @@
 ---
 parents: [AI-CHAT-CONTROLS, CLAUDE_CODE-080]
 order: 20
-test: ~
+test: c61c607f60892f957118a4d98ba974694c97037c13d2bdfc91558083d6b4e7c8
+review: 9527eb31b8fd6b9afa00b41c0e1c7f89937ff1960bdf06cf0b4925edb736a400
 ---
 Stop tool button
 shall stand in place of the chat's close mark while a turn runs, close and collapse unavailable until the turn ends; pressing it stops the turn the way @CLAUDE_CODE-080 defines, the chat then showing the turn as stopped with the steps collected and the calls applied before the stop.

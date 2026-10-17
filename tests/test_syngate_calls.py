@@ -245,7 +245,9 @@ def test_query_reads_an_item_with_its_children_in_sibling_order_and_its_kind(cli
     root = synthetic.item_view(items, "ROOT")
     assert (root["uid"], root["description"], root["parents"], root["children"]) == ("ROOT", "Root branch\n", [], ["BRANCH", "LEAF-001"])
     assert synthetic.item_view(items, "BRANCH") == {"uid": "BRANCH", "description": "It shall group.\n", "parents": ["ROOT"], "sources": [], "children": [], "kind": "branch"}
-    assert synthetic.item_view(items, "LEAF-001")["kind"] == "leaf"
+    assert (synthetic.item_view(items, "LEAF-001")["kind"], synthetic.item_view(items, "LEAF-001")["tests"]) == ("leaf", [""])  # the default binding
+    items["LEAF-001"].tests = {"api": None, "page": None}
+    assert synthetic.item_view(items, "LEAF-001")["tests"] == ["api", "page"]
     with pytest.raises(syngatelib.unknown_uid):
         synthetic.item_view(items, "LEAF-009")
     line = synthetic.apply_call(items, "ROOT", {"tool": "query", "uid": "@"})

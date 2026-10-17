@@ -3,6 +3,6 @@ parents: []
 test: enabled
 review: enabled
 ---
-AI Asassin
+AI Assassin
 
-General-purpose AI assistant built around iterative analysis of the user–AI dialog and its synthesis into the the direct acyclic graph of nodes, which constructs the per-replica context: the item graph, its management and test gate.
+General-purpose AI assistant built around iterative analysis of the user–AI dialog and its synthesis into the directed acyclic graph of nodes, which constructs the per-replica context: the item graph, its management and test gate.

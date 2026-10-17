@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI-TREE-020]
+order: 10
+test: ~
+---
+Add parent action
+links one more parent to the item, never replacing one: a search row under the item takes the UID of an item that is not yet its parent and would not close a cycle; a root is not offered the action.

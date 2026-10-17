@@ -222,66 +222,28 @@ is their genuine spelling rather than a second implementation.
 - `syngate ui [--port N] [--coverage FILE …] [--build-dir DIR] [--no-browser]` — serve the local tree
   editor (`syngate_ui.py` + `syngate_ui.html`, stdlib-only) at `http://127.0.0.1:8712`; `--port 0`
   picks an ephemeral port and the URL line is flushed for hosts reading it from a pipe.
-  - **The outline tree carries every structured field of an item**: the status icon (a square
-    filled by the test status wrapping the review eyes), UID, the first line of the body as the
-    title — cut with an ellipsis exactly where the row runs out of room, the whole line in its
-    tooltip — and, by the row's position, `parents` and `order`. It doubles as the TOC of the
-    document on the right. A childless row's `T` opens
-    the bindings popover (the `test` key, its binding names, the recorded runs). A feature the root
-    item keeps off has no affordances on the page: no test axis or `T` without test, no review
-    mark, review or clear run without review; a test run stays offered whichever way the switches
-    sit, since the test switch only says the tree awaits no tests.
-  - **The document shows the whole tree as one structured text**: every item is a titled frame —
-    the UID sits on the top border, the description inside, validation problems inline. The label on
-    the bottom border carries both status axes of *Status Rollup* — `test passed │ ⚠ review violated`
-    — a leaf's own, a branch's rolled up from below. Hovering a leaf's label shows each binding's
-    result and where its routine lives; a branch's, the tally of its leaves.
-  - **Clicking the label opens the run menu**: *run test* (`syngate test`), *mark reviewed*
-    (`syngate review`) and, on a reviewed item, *clear review*; on a branch the test run addresses
-    every leaf below it and the review stamps the branch and every item below it, children first
-    (review asks for confirmation). Runs stream into the console and fold their
-    records into `syngate_coverage.jsonl` next to the tree, which the page always reads, so a run
-    recolors the statuses without a CI round trip.
-  - **One selection drives both panes.** Picking a tree row scrolls the document to that block and
-    tints the block's whole subtree blue; clicking a block unfolds the tree down to its row. The
-    selected block itself is filled. Up / Down / PageUp / PageDown / Home / End move the selection
-    in the pane that holds the focus: the tree walks the folded outline, the document every item.
-  - **A click or Enter turns the block into its description editor** (Esc leaves); a click that
-    ends a text selection does not. The empty reply line under every description waits for a
-    question to the AI.
-  - **Descriptions are markdown** — paragraphs, lists, headings, tables, code, emphasis, links;
-    never raw HTML (the text is escaped first, so `data_model<Entity>` stays literal). `[UID]` of a
-    known item jumps to its block. The item's `sources` follow the text as one line of file links
-    (`📎`), each opening like any linked file. **A link to a project file** — root-relative in items,
-    `[datahub guide](src/datahub/README.md#pipeline)`, since item files move freely between folders —
-    opens that file as a view inside the block holding the link, the block growing to hold it as it
-    does for the chat: rendered between two rules, shifted right, `✕` at its left edge and its name
-    on its bottom rule; double click edits it with the same autosave / keep-mine-take-theirs as item
-    fields. Links inside a view resolve against that file's folder (as on GitHub) and nest below it
-    inside the same block. Only git-tracked files and markdown are served, and only markdown is
-    written: keys and databases sit untracked next to the tree.
-  - **The pane reads as one document** ([SYNGATE-UI.md](SYNGATE-UI.md)): a block at rest shows only
-    its text, UID label and status icon; its border — a dim line, never the selection color — and
-    the controls mounted on it appear while the pointer is over the block or the focus is inside
-    it. Every visual definition lives in the page's one stylesheet, and all border-mounted controls
-    are one family: the pills (status, send, modes, close, a file's name) share one shape, the icon
-    buttons (row tools, message marks, a file's `✕`) another.
-  - **Row tools**: `+` scaffolds a child inline (UID suggested from the siblings), `✕` deletes a
-    childless item, `⊖` drops one parent link of a multi-parent item.
-  - **Drag a row by its UID** (keyboard twin: Alt+Shift+arrows): drop on a row's edge to reorder, on
-    its middle to re-parent, Ctrl+drop to add one more parent. `order` is set automatically — a free
-    integer between the neighbours' keys (one file written), else the family is renumbered in steps
-    of 10. `order` is one key per item, so a multi-parent item carries the same key under each parent.
-  - **Autosave**: typing is stored per field after ~1 s idle and on leaving the field or the tab.
-    Every write is a compare-and-swap against the value the page loaded, so an edit made on disk
-    meanwhile (agent, git, IDE) is never silently overwritten — the page offers keep mine / take
-    theirs. Reviewed items stay read-only until unlocked through their `✓` badge, since any substance
-    edit makes the stamp stale (typing the text back restores it).
-  - Test / review / clear shell out to the `syngate.py` code path, so stamping semantics (user-only,
-    test-gated) are identical to the terminal. Loopback-bound; every request needs the per-session
-    token from the printed URL (Jupyter-style defense for localhost tools that execute commands);
-    the page runs under a nonce-only `Content-Security-Policy`, the second fence behind the
-    escape-first markdown renderer.
+  - **The page is specified by the `SYNGATE_UI` subtree** and its design files
+    [SYNGATE-UI.md](SYNGATE-UI.md) and [AI_CHAT.md](AI_CHAT.md): the outline on the left — one row
+    per item occurrence, the common label (a circle filled by the test status with the review eyes
+    over it, then the UID), the chat state mark, the first line of the body as the title, the `⋯`
+    menu for structure edits (add parent, add child, unlink, delete), drag or Alt+Shift+arrows to
+    place — and the document on the right — every item a block edited in place by a click or
+    Enter, its linked files and its AI chat inside the block (one pill on the bottom-left border:
+    `✓ done` while editing, `▴ hide` / `▾` for the chat, `■ stop` while a turn runs), `@UID` (and
+    the older `[UID]`) of a known item linking to its block, the status popup from the label's
+    icon in either pane holding the test and review detail, the validation problems, the run
+    actions and the binding editor. Keyboard navigation moves the selection in the pane holding
+    the focus; below 60rem the panes stack; the page re-reads the tree within seconds of any
+    change on disk and saves every field as a compare-and-swap, offering keep mine / take theirs
+    on a conflict.
+  - **Runs** (test / review / clear) shell out to the `syngate.py` code path, so stamping
+    semantics (user-only, test-gated) are the terminal's, and fold their records into
+    `syngate_coverage.jsonl` next to the tree, which the page always reads, so a run recolors the
+    statuses without a CI round trip. Chats are kept in `syngate_chats.json` beside it; both stay
+    untracked.
+  - Loopback-bound; every request needs the per-session token from the printed URL (Jupyter-style
+    defense for localhost tools that execute commands); the page runs under a nonce-only
+    `Content-Security-Policy`, the second fence behind the escape-first markdown renderer.
 
 # Status Rollup
 
@@ -290,7 +252,7 @@ Two independent axes per item (`compute_axes`; what the UI shows):
 - **Test**: `unknown` | `test_passed` | `test_failed`. Leaf: any failed record → failed; any binding
   without a record → unknown; else passed. Branch: the worst of its children and its own bindings,
   if it carries any — a failed item fails every ancestor, else one unknown item leaves them
-  unknown. The axis reflects the run records alone — a violated review never reddens it. A run that cannot execute a binding (no or several tagged
+  unknown (the page shows `unknown` as `not run`). The axis reflects the run records alone — a violated review never reddens it. A run that cannot execute a binding (no or several tagged
   routines, test binary not built) records it as failed — a test that cannot be found is red.
 - **Review**: `not_reviewed` | `reviewed` | `review_violated`. The worst of an item's own stamp and
   its children's axes: a branch is reviewed when it and everything below it is. An item's own

@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI-TREE]
+order: 40
+test: ~
+---
+Row single click
+selects the row without activating or scrolling to its content block, an editor open elsewhere staying open.

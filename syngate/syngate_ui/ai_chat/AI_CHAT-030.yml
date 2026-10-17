@@ -1,7 +1,9 @@
-header: Hide and reopen
-description: |
-  The chat shall carry a green check mark that hides the chat and becomes a drop-down icon reopening the saved history; while hidden the panel behaves as if no chat existed, and a new chat started there replaces the hidden one at the moment its first message is sent to the AI.
+---
 parents: [AI_CHAT]
 order: 100
-test: a648218d8ee5ec623de41d27eaf8bcdac15226cb3f1a695ea522c0fb366aa90e
-review: 56f7c4ad06def13a08277164d68dcc439cf9485f6f563f622a1d109f870dfee8
+test: {hide: ~, history: ~, esc: ~}
+---
+Chat hide mark
+is the `▴ hide` pill on the block's bottom-left border that hides the chat in that block and becomes `▾` there, which always opens the drop down list of the item's conversations — even a single one — the live one marked first unless it is empty, and shows none until one is picked; hiding is refused while the reply line holds text.
+
+A hidden chat keeps its history and session.

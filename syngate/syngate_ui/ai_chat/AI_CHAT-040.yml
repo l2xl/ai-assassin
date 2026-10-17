@@ -1,7 +1,9 @@
-header: Tree calls applied
-description: |
-  A tree call answer shall be applied to the tree through the item scaffold, delete and placement capabilities — `@` standing for the anchored item — with the history showing the applied calls and stopping at the first refused one.
+---
 parents: [AI_CHAT]
-order: 110
-test: d2ca3a97f73253e25690fafd0f9cbfb55f0e44e1d8e245774e98bd002722ff9b
-review: 83d46d11a2ab9e5f28bc231554728a2f32c3a477d3e8236aadd83d897cb024d5
+order: 80
+test: ~
+---
+Tree call application
+of an answer goes through the item scaffold, delete and placement capabilities, `@` standing for the anchored item.
+
+The application stops at the first refused call, whose refusal goes back to the AI as its next prompt with the results of the calls applied before it; the history shows what every batch applied, read or had refused, the reply what was applied, ran or was reported.

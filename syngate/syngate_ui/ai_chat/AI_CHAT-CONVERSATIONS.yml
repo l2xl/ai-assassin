@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 35
+test: {api: ~, list: ~}
+---
+Conversation list
+of an item keeps every earlier conversation — log, connector session and setup — filed behind the live one in start order, each read by the page as its start, first line and message count: beginning a new conversation files the live one when it holds messages, nothing erased, and resuming a filed one makes it the live chat again with its session and setup, the live one filed in its place; both are refused while a turn runs.

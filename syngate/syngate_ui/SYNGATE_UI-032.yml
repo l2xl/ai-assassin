@@ -1,7 +1,9 @@
-header: Item field autosave
-description: |
-  An edited item field shall be saved on its own as canonical YAML, leaving the other fields untouched and refusing an unknown parent, a parent cycle or a value changed on disk since it was loaded.
-parents: [SYNGATE_UI-030]
-order: 20
-test: {guard: 6cfc2ad8f0fccba27cd640b148e16ceaf49f1c886593331a546096f3bd33b510, cas: 8968f0bc4aa98980902ee864b003d0aa48428600f95485a3fa8b49bc08ee71d7}
-review: bd1561499f1898b16d706934c508c479fadc8d3f0b8646d375cf99577933ca3a
+---
+parents: [SYNGATE_UI]
+order: 70
+test: {guard: ~, cas: ~}
+---
+Field save
+writes an edited field on its own as canonical YAML, the other fields untouched.
+
+An unknown parent, a parent cycle or a value changed on disk since it was loaded is refused.

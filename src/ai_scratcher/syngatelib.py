@@ -49,6 +49,7 @@ listener against the items' `tests` bindings.
 """
 
 import ast
+import fnmatch
 import hashlib
 import json
 import math
@@ -846,7 +847,7 @@ def check_parents(items, uid, parents):
     while stack:
         node = stack.pop()
         if node == uid:
-            raise tree_error(f"parents {parents} would create a cycle through '{uid}'")
+            raise tree_error(f"parents {', '.join(parents)} would create a cycle through {uid}")
         if node in seen:
             continue
         seen.add(node)
@@ -888,7 +889,7 @@ def parse_bindings(items, item, names):
         raise tree_error("the default binding '' cannot be combined with named bindings")
     for name in names:
         if name and not BINDING_NAME_RE.match(name):
-            raise tree_error(f"invalid binding name '{name}' (want [a-z0-9_]+)")
+            raise tree_error(f"invalid binding name '{name}': lowercase letters, digits and underscores only")
     old = item.tests or {}
     return {(name or None): old.get(name or None) for name in names}
 
@@ -1037,18 +1038,23 @@ def delete_item(items, uid, clear=False):
 def leaves_under(items, uid):
     """The items a test or review run addresses for `uid`: the item itself when
     it carries tests -- with the test feature off, when it is childless -- and
-    every such item below it, in sibling order. An unknown UID passes through
-    untouched, for the addressed command to judge."""
+    every such item below it, in sibling order; a glob pattern addresses those
+    of the items it matches, as the test command selects them. An unknown UID and
+    a pattern matching nothing pass through untouched, for the addressed command
+    to judge."""
+    children, tests_on = children_map(items), features(items)["test"]
+    addressable = lambda node: items[node].is_leaf if tests_on else not children[node]
+    if any(ch in uid for ch in "*?["):
+        return [node for node in sorted(items) if fnmatch.fnmatchcase(node, uid) and addressable(node)] or [uid]
     if uid not in items:
         return [uid]
-    children, leaves, seen, stack = children_map(items), [], set(), [uid]
-    tests_on = features(items)["test"]
+    leaves, seen, stack = [], set(), [uid]
     while stack:
         node = stack.pop()
         if node in seen:
             continue
         seen.add(node)
-        if items[node].is_leaf if tests_on else not children[node]:
+        if addressable(node):
             leaves.append(node)
         stack.extend(reversed(sorted_children(items, children, node)))
     return leaves

@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-011]
+order: 20
+test: ~
+---
+Internet permission
+switch of the chat is on by default and lets the connector search and fetch the web.

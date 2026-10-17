@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-CONTROLS]
+order: 10
+test: {marks: ~, drop_travels: ~, cuts: ~}
+---
+Fold mark
+of a part of a message is one switch of that text's place in the exchange: unfolded text travels with the next turn, folded text is shown as its first line in grey and does not travel, either switch ending the connector session so the next turn starts anew headed by the unfolded text; the fold marks are frozen while a turn runs.

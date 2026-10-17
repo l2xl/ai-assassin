@@ -32,7 +32,7 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
     coverage_file = os.environ.get("SYNGATE_COVERAGE_FILE")
-    if not coverage_file or report.when != "call":
+    if not coverage_file or not (report.when == "call" or report.failed):
         return
     for marker in item.iter_markers("syngate"):
         tags = [str(arg) for arg in marker.args]

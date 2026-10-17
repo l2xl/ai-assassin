@@ -1,7 +1,0 @@
-header: User input field
-description: |
-  The chat shall show a reply field taking the user's input for the exchange.
-parents: [AI_CHAT]
-order: 40
-test: 996ba257e2e5366ee90f7240fe9c2eaa700b90f30c8d82da8bb29e6cde9cf43a
-review: 1b124bb8e68beb656ed33f1e30c63e87d6654e16a5acc207076de9d024496705

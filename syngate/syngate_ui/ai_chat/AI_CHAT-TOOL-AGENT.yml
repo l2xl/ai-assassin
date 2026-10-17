@@ -1,0 +1,10 @@
+---
+parents: [AI_CHAT-PROMPTS-TOOLS]
+order: 20
+sources: [src/ai_scratcher/prompts/agent.md]
+test: ce04f4fd27c26e5fb0646e4e00e420efb0b3785acc127e5f9a2f70ebd8cdd49d
+review: 43aaefe02e0e3c859becd88b8329126cdc79b4b1daef2f158c3a0ed7f8886e34
+---
+The agent tool shall run a turn of the named item's chat with the given prompt, every agent call of a batch running in parallel after the batch's other calls and the reports coming back as the next prompt
+
+Fields: `uid` (`@` for the anchored item), `prompt`, optional `model`, `effort` and `modes`. An item already running a turn refuses the call.

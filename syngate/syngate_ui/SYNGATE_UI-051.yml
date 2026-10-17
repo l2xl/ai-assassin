@@ -1,0 +1,9 @@
+---
+parents: [SYNGATE_UI]
+order: 30
+test: {styles: ~, buttons: ~}
+---
+Single style source
+of the page is its one stylesheet: the tree and the content panel take every visual definition — colors, borders, backgrounds, buttons, pills, indicators — from it as custom properties and shared classes, with no inline style attribute inside the panes and no purpose-specific rule (send, test, review, hide, stop) redefining the shape a control's kind already has, so all border-mounted controls share one class and one look.
+
+The stylesheet defines a light and a dark scheme over the same tokens, chosen by the system preference.

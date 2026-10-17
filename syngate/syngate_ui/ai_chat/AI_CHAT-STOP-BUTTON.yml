@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 110
+test: ~
+---
+Stop button
+stands in place of the chat's hide mark while a turn runs, hiding unavailable and the keep marks frozen until the turn ends; pressing it once stops the turn the way @CLAUDE_CODE-080 defines, the pill reading as stopping until the outcome lands and the chat then showing the turn as stopped with the steps collected and the calls applied before the stop.

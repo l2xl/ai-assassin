@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 30
+test: {singleton: ~, turn_keys: ~, several: ~, parallel: ~}
+---
+Item chat
+is one per item — its live conversation — addressed by the item's UID and anchored there: the same chat at every occurrence of the item in the outline and in every browser tab, its turns identified everywhere as `<UID>:<n>`, one turn per item at a time — a send meanwhile refused with a notice, the typed text kept — while any number of items chat in parallel.

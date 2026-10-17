@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI]
+order: 108
+test: ~
+---
+Narrow layout
+below 60rem of viewport width stacks the panes: the outline on top within 38vh of height without a splitter, the document at full width with a halved depth shift, the filter spanning the header; on a device without hover every border and control stays shown.

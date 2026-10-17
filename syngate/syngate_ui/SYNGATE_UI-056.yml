@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI-CONTENT]
+order: 30
+test: {click: ~, enter: ~}
+---
+Block click
+turns the block into its description editor, as Enter does on the selected block or row; a click that ends a text selection leaves the rendered view as it is.

@@ -1,0 +1,8 @@
+---
+parents: [CLAUDE_CODE-010]
+test: ~
+---
+Claude model selection
+offers the Claude Code model aliases `fable`, `opus`, `sonnet` and `haiku` without version suffix
+
+The alias is passed to the CLI as `--model` unchanged, so the installed CLI resolves it to the actual current version and no version is pinned in the connector.

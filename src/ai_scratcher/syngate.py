@@ -116,6 +116,13 @@ def _bindings_of(item, discovered, tests_on):
     return [name for uid, name in discovered if uid == item.uid]
 
 
+def _tagged_elsewhere(uid, discovered, names):
+    """The routines tagged for `uid` under bindings other than `names`, as the hint of a binding that resolves to none."""
+    found = [f"{syngatelib.binding_tag(uid, name)} {l.name}" for (tagged, name), locations in sorted(discovered.items(), key=lambda b: (b[0][0], b[0][1] or ""))
+             if tagged == uid and name not in names for l in locations]
+    return f"; routines tagged for {uid}: {', '.join(found)}" if found else ""
+
+
 def _resolve(item, discovered, names):
     """({binding: Location}, {binding: why it cannot run}) -- a binding runs only when exactly one routine carries its tag pair."""
     resolved, unrun = {}, {}
@@ -125,7 +132,8 @@ def _resolve(item, discovered, names):
             resolved[name] = locations[0]
         else:
             found = ", ".join(l.name for l in locations) or "none"
-            unrun[name] = f"binding {syngatelib.binding_tag(item.uid, name)} must match exactly one routine, found: {found}"
+            unrun[name] = (f"binding {syngatelib.binding_tag(item.uid, name)} must match exactly one routine, found: {found}"
+                           + ("" if locations else _tagged_elsewhere(item.uid, discovered, names)))
             print(f"{item.uid}: {unrun[name]}", file=sys.stderr)
     return resolved, unrun
 
@@ -263,7 +271,7 @@ def cmd_test(args):
     run and still record coverage. Stamping is `review`'s and stays gated."""
     items = _load_or_die()
     tests_on = syngatelib.features(items)["test"]
-    narrowed, errors = {}, []
+    narrowed, whole, errors = {}, set(), []
     for arg in args.uid:
         pattern, _, name = arg.partition(":")
         matched, bad = _expand_uids(items, [pattern], _addressable(items), "leaf")
@@ -272,6 +280,8 @@ def cmd_test(args):
             narrowed.setdefault(uid, [])
             if name:
                 narrowed[uid].append(name)
+            else:
+                whole.add(uid)
     uids = list(narrowed)
     discovered = syngatelib.discover_bindings()
     resolved, unresolved = {}, {}
@@ -281,15 +291,17 @@ def cmd_test(args):
             errors.append(f"unknown UID '{uid}'")
             continue
         names = _bindings_of(item, discovered, tests_on)
-        unknown = [name for name in narrowed[uid] if name not in names]
-        if unknown:
-            errors.append(f"{uid}: no binding named {', '.join(unknown)}")
-            continue
-        names = narrowed[uid] or names
+        unknown = [name for name in dict.fromkeys(narrowed[uid]) if name not in names]
+        declared = ", ".join(syngatelib.binding_tag(uid, name) for name in names) or "none"
+        for name in unknown:
+            unresolved[(uid, name)] = f"{uid}: no binding named {name}, the item declares {declared}{_tagged_elsewhere(uid, discovered, names)}"
+            errors.append(unresolved[(uid, name)])
+        if narrowed[uid] and uid not in whole:
+            names = [name for name in dict.fromkeys(narrowed[uid]) if name in names]
         if not names:
             # With the switch off the tree never claimed the item has a test, so
             # having none is nothing to report; with it on, it binds none by mistake.
-            if tests_on:
+            if tests_on and not unknown:
                 errors.append(f"{uid}: a branch binds no tests of its own")
             continue
         resolved[uid], missing = _resolve(item, discovered, names)
@@ -302,7 +314,7 @@ def cmd_test(args):
     for line in errors:
         print(line, file=sys.stderr)
     broken = {uid for uid, _ in unrun}
-    print(f"test: {len(resolved) - len(broken)}/{len(uids)} item(s) run -- {'passed' if passed and not unrun else 'FAILED'}")
+    print(f"test: {len(resolved.keys() - broken)}/{len(uids)} item(s) run -- {'passed' if passed and not unrun else 'FAILED'}")
     return 0 if passed and not errors and not unrun else 1
 
 
@@ -458,7 +470,7 @@ def main():
     p = sub.add_parser("ui", help="serve the local tree editor in the browser (loopback + session token)")
     p.add_argument("--port", type=int, default=8712, help="listen port on 127.0.0.1 (default 8712, 0 = ephemeral)")
     p.add_argument("--coverage", action="append", default=[], help="syngate_coverage.jsonl file(s) to color statuses; repeatable (default: well-known local files)")
-    p.add_argument("--build-dir", default="cmake-build-debug-clang", help="build tree with the Catch2 test binaries for review runs")
+    p.add_argument("--build-dir", default="cmake-build-debug-clang", help="build tree the test runner uses for test and review runs")
     p.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
     p.set_defaults(func=cmd_ui)
 

@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 145
+test: ~
+---
+Subagent mirror
+shows, in that item's chat and as an agent message once the turn ends, the report and collapsed transcript of a subagent the model launched itself with `@UID` as the first line of its prompt.

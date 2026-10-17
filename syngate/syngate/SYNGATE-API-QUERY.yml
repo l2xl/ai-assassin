@@ -6,4 +6,4 @@ review: 330a23d23d497a12bb1f72714ed11cefbffbe8ba97844c9a2fa583986023584a
 ---
 Query node
 
-The syngate query call shall return an item's header, description, parents, children in sibling order and kind.
+The syngate query call shall return an item's header, description, parents, children in sibling order, kind and, for a leaf, the names of its test bindings.

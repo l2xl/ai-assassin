@@ -67,7 +67,7 @@ def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(t
     assert synthetic.apply_call(items, "ROOT", {"tool": "context", "uid": "LEAF-001"}, syngate_dir=syngate_dir) == f"- context of LEAF-001:\n{seed}"
     app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
     app.connectors = {"echo": EchoAnswer()}
-    reply = app.chat({"uid": "LEAF-001", "connector": "echo", "model": "model-a", "effort": "low", "text": "Go."})["reply"]
+    reply = app.chat({"uid": "LEAF-001", "connector": "echo", "model": "model-a", "effort": "low", "modes": ["tree"], "text": "Go."})["reply"]
     assert reply == f"{seed}|Go.|model-a|low||None"
     synthetic.apply_call(items, "ROOT", {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow.", "sources": ["src/leaf.py"]}, syngate_dir=syngate_dir)
     assert items["LEAF-002"].sources == ["src/leaf.py"] and synthetic.seed_context(items, "LEAF-002", root=tmp_path).endswith(root_source + "\n# Source src/leaf.py\n````\n```\nLEAF = 2\n````\n")
@@ -161,11 +161,11 @@ def test_the_skill_call_brings_the_named_skill_back_as_the_next_prompt_and_an_un
     app.connectors = {"scripted": (scripted := ScriptedConnection(calls({"tool": "skill", "name": "call_tool"}), {"kind": "text", "text": "Got it."}))}
     result = ask()
     assert scripted.prompts[1] == (synthetic.RESULTS_PREAMBLE + "- skill call_tool:\n" + synthetic.SKILLS["call_tool"].text, "session-1")
-    assert result["reply"].endswith(synthetic.SKILLS["call_tool"].text + "\nGot it.") and result["session"] == "session-2"
-    app.connectors = {"scripted": ScriptedConnection(calls({"tool": "skill", "name": "fly"}))}
-    with pytest.raises(syngate_ui.ApiError, match="skill fly refused: unknown skill 'fly'") as refused:
-        ask()
-    assert refused.value.status == 400
+    assert result["reply"] == "Got it." and result["session"] == "session-2"  # what was read stays out of the reply
+    app.connectors = {"scripted": (scripted := ScriptedConnection(calls({"tool": "skill", "name": "fly"}), {"kind": "text", "text": "No such skill."}))}
+    result = ask()
+    assert scripted.prompts[1] == (synthetic.RESULTS_PREAMBLE + "- skill fly refused: unknown skill 'fly'", "session-1")
+    assert result["reply"] == "- skill fly refused: unknown skill 'fly'\nNo such skill."
 
 
 class EchoConnection:
@@ -222,13 +222,36 @@ def test_claude_code_connector_dispatches_a_non_interactive_turn(tmp_path):
 def test_claude_code_settings_list_models_by_display_name_efforts_and_modes():
     settings = synthetic.claude_code_connector().settings()
     assert settings["label"] == "Claude Code"
-    assert {"id": "claude-opus-5-5", "name": "opus-5-5", "efforts": ["low", "medium", "high", "xhigh", "max"]} in settings["models"]
-    assert {"id": "claude-haiku-4-5-20251001", "name": "haiku-4-5-20251001", "efforts": []} in settings["models"]
-    assert [model["id"] for model in settings["models"]] == list(synthetic.CLAUDE_MODELS)
     assert all(model["efforts"] == list(synthetic.CLAUDE_MODEL_EFFORTS[model["id"]]) for model in settings["models"])
     assert not [model for model in settings["models"] if model["name"].startswith("claude")]
-    assert [(mode["id"], mode["label"], mode["hint"], mode["default"]) for mode in settings["modes"]] == [
-        ("edit", "Edit", "project files", True), ("internet", "Internet", "access", True), ("workflows", "Workflows", "run subagents", False)]
+    assert [(mode["id"], mode["label"], mode["hint"], mode["default"], mode["advanced"]) for mode in settings["modes"]] == [
+        ("edit", "Edit files", "change project files without asking", True, False), ("internet", "Internet", "search and fetch the web", True, False),
+        ("bash", "Raw command", "run shell commands", False, True), ("workflows", "Workflows", "run workflow scripts", False, True)]
+
+
+@pytest.mark.syngate("CLAUDE_CODE-MODEL-SELECT")
+def test_claude_models_are_unversioned_aliases_passed_to_the_cli_unchanged(tmp_path):
+    settings = synthetic.claude_code_connector().settings()
+    assert [model["id"] for model in settings["models"]] == ["fable", "opus", "sonnet", "haiku"]
+    assert [model["name"] for model in settings["models"]] == ["fable", "opus", "sonnet", "haiku"]
+    stub = tmp_path / "claude_stub.py"
+    stub.write_text(STUB_CLAUDE)
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
+    argv = json.loads(connector.dispatch("", "Go.", model="opus")[0])["argv"]
+    assert argv[argv.index("--model") + 1] == "opus"
+
+
+@pytest.mark.syngate("CLAUDE_CODE-EFFORT-SELECT")
+def test_every_claude_model_offers_all_effort_levels_passed_to_the_cli(tmp_path):
+    levels = ["low", "medium", "high", "xhigh", "max"]
+    assert all(model["efforts"] == levels for model in synthetic.claude_code_connector().settings()["models"])
+    stub = tmp_path / "claude_stub.py"
+    stub.write_text(STUB_CLAUDE)
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
+    for level in levels:
+        argv = json.loads(connector.dispatch("", "Go.", model="haiku", effort=level)[0])["argv"]
+        assert argv[argv.index("--effort") + 1] == level
+    assert "--effort" not in json.loads(connector.dispatch("", "Go.", model="haiku")[0])["argv"]
 
 
 def _mode_argv(tmp_path, modes):
@@ -262,6 +285,15 @@ def test_workflows_mode_allows_the_workflow_tool(tmp_path):
     assert combined[combined.index("--permission-mode") + 1] == "acceptEdits"
 
 
+@pytest.mark.syngate("CLAUDE_CODE-BASH-MODE")
+def test_raw_command_mode_allows_the_shell_tool(tmp_path):
+    argv = _mode_argv(tmp_path, ["bash"])
+    assert argv[argv.index("--allowedTools") + 1] == "Agent,Bash" and "--permission-mode" not in argv
+    assert argv[argv.index("--disallowedTools") + 1] == ",".join(synthetic.claude_code_connector.denied)  # the tree stays closed to the shell too
+    bare = _mode_argv(tmp_path, ["edit", "internet"])
+    assert "Bash" not in bare[bare.index("--allowedTools") + 1]
+
+
 @pytest.mark.syngate("CLAUDE_CODE-050")
 def test_the_seed_context_is_the_appended_system_prompt(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
@@ -276,10 +308,10 @@ def test_the_seed_context_is_the_appended_system_prompt(tmp_path, syngate_tree):
 
 
 @pytest.mark.syngate("CLAUDE_CODE-TREE-GUARD")
-def test_tree_file_edits_are_denied_in_every_mode(tmp_path):
+def test_tree_files_are_denied_to_read_and_edit_in_every_mode(tmp_path):
     for modes in ([], ["edit"], ["edit", "internet", "workflows"]):
         argv = _mode_argv(tmp_path, modes)
-        assert argv[argv.index("--disallowedTools") + 1] == "Edit(syngate/**),Write(syngate/**)"
+        assert argv[argv.index("--disallowedTools") + 1] == "Read(syngate/**),Edit(syngate/**),Write(syngate/**)"
 
 
 @pytest.mark.syngate("SYNTHETIC-020")
@@ -351,7 +383,7 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
     query, add = {"tool": "query", "uid": "@"}, {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow."}
     agent = {"tool": "agent", "uid": "LEAF-002", "prompt": "Check it."}
-    ask = lambda connection: app.chat({"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "text": "Add a second leaf."})
+    ask = lambda connection: app.chat({"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "modes": ["tree"], "text": "Add a second leaf."})
 
     app.connectors = {"scripted": (scripted := ScriptedConnection(calls(query), calls(add, query), calls(agent), {"kind": "text", "text": "Checked."},
                                                                   {"kind": "text", "text": "Done."}))}
@@ -362,18 +394,18 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     for prompt, children in ((scripted.prompts[1][0], ["LEAF-001"]), (scripted.prompts[2][0], ["LEAF-001", "LEAF-002"])):
         assert prompt.startswith(synthetic.RESULTS_PREAMBLE) and json.loads(prompt.split("- ROOT: ", 1)[1])["children"] == children
     assert scripted.prompts[2][0].split("\n")[1] == "- added LEAF-002 under ROOT"
-    assert result["session"] == "session-5" and result["calls"] == [query, add, query, agent] and result["reply"].endswith(
-        "- added LEAF-002 under ROOT\n- ROOT: " + json.dumps(synthetic.item_view(app._load(), "ROOT"), ensure_ascii=False) + "\n- agent LEAF-002: Checked.\nDone.")
+    assert result["session"] == "session-5" and result["calls"] == [query, add, query, agent]
+    assert result["reply"] == "- added LEAF-002 under ROOT\n- agent LEAF-002: Checked.\nDone."  # what was read stays out of the reply
 
     app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}
     with pytest.raises(syngate_ui.ApiError, match="kept querying") as refused:
         ask(looping)
     assert len(looping.prompts) == synthetic.QUERY_ROUNDS and refused.value.extra["session"] == f"session-{synthetic.QUERY_ROUNDS}"
 
-    app.connectors = {"scripted": (unknown := ScriptedConnection(calls(query, {"tool": "query", "uid": "LEAF-009"})))}
-    with pytest.raises(syngate_ui.ApiError, match="query LEAF-009 refused") as refused:
-        ask(unknown)
-    assert refused.value.status == 404 and str(refused.value).startswith("- ROOT: ") and len(unknown.prompts) == 1
+    app.connectors = {"scripted": (unknown := ScriptedConnection(calls(query, {"tool": "query", "uid": "LEAF-009"}), {"kind": "text", "text": "No such leaf."}))}
+    result = ask(unknown)
+    assert unknown.prompts[1][0].startswith(synthetic.RESULTS_PREAMBLE + "- ROOT: ") and unknown.prompts[1][0].endswith("\n- query LEAF-009 refused: unknown UID 'LEAF-009'")
+    assert result["reply"] == "- query LEAF-009 refused: unknown UID 'LEAF-009'\nNo such leaf." and len(unknown.prompts) == 2
 
 
 # Stub `syngate test`: records one coverage line per addressed binding -- `two` failing with a log -- and keeps the argv it was run with.
@@ -381,10 +413,14 @@ STUB_RUNNER = """
 import json, sys
 argv = sys.argv[1:]
 open(sys.argv[0] + ".argv", "a").write(" ".join(argv) + "\\n")
+bound = {"LEAF-001": ["one", "two"], "LEAF-002": [""]}
 with open(argv[argv.index("--coverage-out") + 1], "a") as out:
     for leaf in argv[1:argv.index("--build-dir")]:
         uid, _, name = leaf.partition(":")
-        for binding in ([name] if name else {"LEAF-001": ["one", "two"], "LEAF-002": [""]}[uid]):
+        if name and name not in bound[uid]:
+            print(f"{uid}: no binding named {name}")
+            continue
+        for binding in ([name] if name else bound[uid]):
             failed = binding == "two"
             out.write(json.dumps({"tags": [uid] + ([binding] if binding else []), "passed": not failed, "name": "", "log": "boom" if failed else ""}) + "\\n")
 """
@@ -403,26 +439,38 @@ def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports
     everything, narrowed = {"tool": "test", "uid": "@"}, {"tool": "test", "uid": "LEAF-001", "name": "two"}
     ask = lambda: app.chat({"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "text": "Run the tests."})
 
-    app.connectors = {"scripted": (scripted := ScriptedConnection(calls(everything), calls(narrowed), {"kind": "text", "text": "Done."}))}
+    matched, undeclared = {"tool": "test", "uid": "LEAF-*"}, {"tool": "test", "uid": "LEAF-001", "name": "three"}
+    app.connectors = {"scripted": (scripted := ScriptedConnection(calls(everything), calls(narrowed), calls(matched, undeclared), {"kind": "text", "text": "Done."}))}
+    (tmp_path / app.run_coverage).write_text(json.dumps({"tags": ["LEAF-001", "three"], "passed": True, "name": "earlier", "log": ""}) + "\n")
     result = ask()
     runs = (tmp_path / "runner_stub.py.argv").read_text().splitlines()
-    assert [run.split(" --build-dir")[0] for run in runs] == ["test LEAF-001 LEAF-002", "test LEAF-001:two"]
-    assert all(run.endswith(f"--coverage-out {app.run_coverage}") for run in runs)
-    outcome, again = scripted.prompts[1][0], scripted.prompts[2][0]
+    assert [run.split(" --build-dir")[0] for run in runs] == ["test LEAF-001 LEAF-002", "test LEAF-001:two", "test LEAF-001 LEAF-002 LEAF-001:three"]
+    assert not any(run.endswith(f"--coverage-out {app.run_coverage}") for run in runs)  # every run records apart, folded into the page's after
+    outcome, again, unrun = scripted.prompts[1][0], scripted.prompts[2][0], scripted.prompts[3][0]
     assert outcome == synthetic.RESULTS_PREAMBLE + "- LEAF-001:one: pass\n- LEAF-001:two: fail\n- LEAF-002: pass\nLEAF-001:two output:\nboom"
     assert again == synthetic.RESULTS_PREAMBLE + "- LEAF-001:two: fail\nLEAF-001:two output:\nboom"
-    assert result["calls"] == [everything, narrowed] and result["reply"].endswith("boom\nDone.") and result["session"] == "session-3"
+    assert unrun == synthetic.RESULTS_PREAMBLE + ("- LEAF-001:one: pass\n- LEAF-001:two: fail\n- LEAF-002: pass\n- LEAF-001:three: fail\n"  # a glob addresses its leaves
+                                                  "LEAF-001:two output:\nboom\nLEAF-001:three output:\nLEAF-001: no binding named three")  # no record: the runner's own words
+    assert result["calls"] == [everything, narrowed, matched, undeclared] and result["reply"].endswith("no binding named three\nDone.") and result["session"] == "session-4"
     axes = syngatelib.compute_axes(app._load(), syngatelib.load_coverage([app.run_coverage])[0])
     assert (axes["LEAF-001"]["test"], axes["LEAF-002"]["test"], axes["ROOT"]["test"]) == (syngatelib.TEST_FAILED, syngatelib.TEST_PASSED, syngatelib.TEST_FAILED)
 
-    app.connectors = {"scripted": ScriptedConnection(calls(everything))}
+    app.connectors = {"scripted": (busy := ScriptedConnection(calls(everything), {"kind": "text", "text": "Later."}))}
     app.jobs.start([sys.executable, "-c", "import time; time.sleep(60)"], cwd=tmp_path)
     try:
-        with pytest.raises(syngate_ui.ApiError, match="test ROOT refused: a run is already in progress") as refused:
-            ask()
-        assert refused.value.status == 409 and len((tmp_path / "runner_stub.py.argv").read_text().splitlines()) == 2
+        result = ask()
+        assert busy.prompts[1][0].startswith(synthetic.RESULTS_PREAMBLE + "- test ROOT refused: a run is already in progress")
+        assert result["reply"].startswith("- test ROOT refused: a run is already in progress") and result["reply"].endswith("\nLater.")
+        assert len((tmp_path / "runner_stub.py.argv").read_text().splitlines()) == 3
     finally:
         app.jobs.cancel()
+
+    items = app._load()
+    assert synthetic.parse_reply({"kind": "calls", "calls": [named := {"tool": "edit", "uid": "LEAF-002", "tests": ["api", "page"]}]}) == ("calls", [named])
+    assert synthetic.apply_call(items, "ROOT", named, syngate_dir=syngate_dir) == "- edited LEAF-002"  # the bindings the routines are tagged with
+    assert app._load()["LEAF-002"].tests == {"api": None, "page": None} and synthetic.item_view(items, "LEAF-002")["tests"] == ["api", "page"]
+    with pytest.raises(syngatelib.tree_error):
+        synthetic.apply_call(items, "ROOT", {"tool": "edit", "uid": "LEAF-002", "tests": ["", "api"]}, syngate_dir=syngate_dir)
 
 
 class DelegatedConnection(ScriptedConnection):
@@ -475,7 +523,7 @@ def test_a_stop_closes_the_turns_gate_so_no_call_run_or_delegation_is_applied_pa
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
     app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
-    setup = {"connector": "scripted", "model": "model-a", "effort": "low"}
+    setup = {"connector": "scripted", "model": "model-a", "effort": "low", "modes": ["tree"]}
     batch = {"kind": "calls", "calls": [{"tool": "add", "uid": "LEAF-002", "description": "Late.\n"}, {"tool": "test", "uid": "LEAF-001"},
                                         {"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf"}]}
 
@@ -486,7 +534,7 @@ def test_a_stop_closes_the_turns_gate_so_no_call_run_or_delegation_is_applied_pa
     outcome = app.turn_snapshot(turn, wait=5)
     assert connection.halted is True and (outcome["status"], outcome["error"]) == (409, "turn stopped")
     assert "LEAF-002" not in app._load() and app.jobs.current is None and "LEAF-001" not in app.chats
-    assert len(connection.prompts) == 1 and app.chats_snapshot()["chats"]["ROOT"]["log"][-1] == {"role": "error", "text": "turn stopped"}
+    assert len(connection.prompts) == 1 and app.chats_snapshot()["chats"]["ROOT"]["log"][-1] == {"role": "stopped", "text": "turn stopped"}
 
     connection = HaltedConnection("Hold", {"kind": "calls", "calls": [{"tool": "agent", "uid": "LEAF-001", "prompt": "Hold"}]}, {"kind": "text", "text": "Never."})
     app.connectors = {"scripted": connection}
@@ -509,7 +557,7 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
     leaf = {"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf", "model": "model-b"}
     other = {"tool": "agent", "uid": "LEAF-002", "prompt": "Do the other"}
-    setup = {"connector": "scripted", "model": "model-a", "effort": "low"}
+    setup = {"connector": "scripted", "model": "model-a", "effort": "low", "modes": ["tree"]}
 
     app.connectors = {"scripted": (connection := DelegatedConnection(calls(leaf, other), {"kind": "text", "text": "All done."}))}
     started = app.start_turn({**setup, "uid": "ROOT", "text": "Split the work."})
@@ -525,11 +573,12 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
                                    for child, prompt in (("LEAF-001", "Do the leaf"), ("LEAF-002", "Do the other"))]
 
     held = app.start_turn({**setup, "uid": "LEAF-001", "text": "Hold"})["turn"]
-    app.connectors["scripted"].answers = [calls(dict(other, prompt="Hold"), leaf, {"tool": "agent", "uid": "@", "prompt": "Me"})]
-    with pytest.raises(syngate_ui.ApiError, match=f"agent LEAF-001 refused: a turn of LEAF-001 is running \\({held}\\)") as refused:
-        threading.Timer(0.3, connection.release.set).start()
-        app.chat({**setup, "uid": "ROOT", "text": "Again."})
-    assert refused.value.status == 409 and str(refused.value).startswith("- agent LEAF-002: Held.\n")
+    connection.prompts.clear()
+    connection.answers = [calls(dict(other, prompt="Hold"), leaf, {"tool": "agent", "uid": "@", "prompt": "Me"}), {"kind": "text", "text": "Noted."}]
+    threading.Timer(0.3, connection.release.set).start()
+    result = app.chat({**setup, "uid": "ROOT", "text": "Again."})
+    busy = f"- agent LEAF-002: Held.\n- agent LEAF-001 refused: a turn of LEAF-001 is running ({held})"
+    assert result["reply"] == busy + "\nNoted." and connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + busy  # the refusal ends the batch and comes back
     assert app.turn_snapshot(held, wait=5)["reply"] == "Held."
 
     connection.release.clear()
@@ -542,9 +591,10 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
     stopped = app.turn_snapshot(parent, wait=5)
     assert (stopped["status"], stopped["error"]) == (409, "- agent LEAF-002: turn stopped\nturn stopped")
 
-    app.connectors["scripted"].answers = [calls({"tool": "agent", "uid": "@", "prompt": "Me"})]
+    connection.prompts.clear()
+    connection.answers = [calls({"tool": "agent", "uid": "@", "prompt": "Me"}), {"kind": "text", "text": "Alone then."}]
     itself = app.turn_snapshot(app.start_turn({**setup, "uid": "ROOT", "text": "Delegate to yourself."})["turn"], wait=5)
-    assert (itself["status"], itself["error"]) == (409, "agent ROOT refused: a turn of ROOT is running (ROOT:3)")
+    assert itself["reply"] == "- agent ROOT refused: the anchored item runs this turn — delegate to another item or do the work in this turn\nAlone then."
 
 
 STUB_AWAITED = """
@@ -738,16 +788,16 @@ def test_a_turn_streams_its_messages_tool_calls_results_and_subagents_as_steps_w
 @pytest.mark.syngate("CLAUDE_CODE-100")
 def test_reasoning_is_requested_through_the_effort_of_a_model_that_has_one_and_recorded_only_when_it_comes(tmp_path):
     connector = _streaming(tmp_path, [_said({"type": "thinking", "thinking": "Pondering."}), _said({"type": "thinking", "thinking": "", "signature": "x"})])
-    _, steps, _ = _announced(connector, "Go.", model="claude-opus-5-5", effort="high")
+    _, steps, _ = _announced(connector, "Go.", model="opus", effort="high")
     assert _without_at(steps) == [{"kind": "reasoning", "text": "Pondering."}]
     argv = lambda: json.loads((tmp_path / "argv.json").read_text())
     assert argv()[argv().index("--effort") + 1] == "high" and "--verbose" in argv()
-    assert synthetic.CLAUDE_MODEL_EFFORTS["claude-haiku-4-5-20251001"] == ()
-    connector.dispatch("", "Go.", model="claude-haiku-4-5-20251001", effort="high")
-    assert "--effort" not in argv() and argv()[argv().index("--model") + 1] == "claude-haiku-4-5-20251001"
+    connector.model_efforts = {**connector.model_efforts, "haiku": ()}
+    connector.dispatch("", "Go.", model="haiku", effort="high")
+    assert "--effort" not in argv() and argv()[argv().index("--model") + 1] == "haiku"
     connector.dispatch("", "Go.", effort="low")
     assert argv()[argv().index("--effort") + 1] == "low"
-    _, steps, _ = _announced(_streaming(tmp_path, [_said({"type": "text", "text": "No thinking."})]), "Go.", model="claude-sonnet-5", effort="max")
+    _, steps, _ = _announced(_streaming(tmp_path, [_said({"type": "text", "text": "No thinking."})]), "Go.", model="sonnet", effort="max")
     assert [step["kind"] for step in steps] == ["message"] and argv()[argv().index("--effort") + 1] == "max"
 
 

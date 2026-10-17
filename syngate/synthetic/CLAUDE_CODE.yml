@@ -1,8 +1,8 @@
 ---
 parents: [AI_CONNECTION]
 order: 10
-test: d377fbec9bb00831be4b3873b9e01e3cb9cb0d26d0a1b868a5e30cf84b14e5fc
-review: 77c839e9e01073482c3b8308816eafb3ec5958cb32f705fc90031e89b7236020
+test: 1a0e17191fcfcc8886d01339b783410431c6e8301fbae8c72be381cfe7d548a8
+review: bd55aa8a142ffa72a07e114d2bb85a037ae9d572a9fb3d68f8249072f239fad6
 ---
 Claude Code connector
 is the AI connection running the local `claude` CLI non-interactively: a turn is one `claude -p` call with the chosen model, effort and resumed session, its reply and session id read from the CLI's JSON output.

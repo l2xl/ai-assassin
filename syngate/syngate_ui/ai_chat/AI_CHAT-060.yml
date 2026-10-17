@@ -1,7 +1,7 @@
-header: Awaited turn
-description: |
-  A turn shall run on the server as a job the page awaits by polling, the waiting state shown in the chat meanwhile; a reloaded page shall re-attach to the running turn and show its reply when it comes.
+---
 parents: [AI_CHAT]
-order: 120
-test: 87e634be2bd475ee998691ddd959027af1f4ddec61bacebe2bdd7e905d7a0aee
-review: 55925303e1ec8abb544579ad9a522d113d87a83d42dcdd3a1e651608b5f7227a
+order: 90
+test: ~
+---
+Server turn
+runs an exchange as a job on the server whose steps the page receives as they happen, the reply closing it; a reloaded page re-attaches to the running turn, receives the steps so far and the reply when it comes.

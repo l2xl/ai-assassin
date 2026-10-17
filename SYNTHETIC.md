@@ -26,10 +26,17 @@ is one non-interactive turn of the chosen connector.
 - **Context.** The seed context is the system prompt of the turn and the user's text is the prompt;
   every `@UID` the text names brings that item's statement in as one more section. Nothing else of
   the conversation travels except the connector's own session, which the next replica resumes; a
-  turn without a session (a message was dropped from or restored to the exchange) carries the kept
+  turn without a session (text was folded out of or back into the exchange) carries the kept
   messages as a transcript heading the text. The Claude Code connector runs the local `claude` CLI
-  with the call modes (edit, internet, workflows) as its permission mode and allowed tools; its
-  models and efforts are the ones the page offers.
+  with the call modes — each listed with its label, hint, default and whether it is advanced, for
+  the page's permission switches — as its permission mode and allowed tools; its models and
+  efforts are the ones the page offers. The Tree edit permission is the harness's
+  own, on by default: while it is off a reply's add, edit, move and remove calls are refused
+  (`tree edits are off for this chat — switch Tree edit on`), the refusal going back to the model as
+  its next prompt; query, context, skill, test and agent stay allowed — reading the tree is the rail
+  the harness runs on and is never switched off; a delegated child cannot switch it on while its
+  parent's is off, and one line ahead of the user's text tells the model the tree is read-only for
+  this chat, so it answers in text.
 - **Prompt library.** The markdown files under the package's `prompts/` folder, by file stem
   (`synthetic.LIBRARY`), each opened by a front matter: `kind` — `skill` or `tool` — a
   `description` and, for a skill, `default`. A *tool* defines the format of a structured answer the
@@ -43,18 +50,30 @@ is one non-interactive turn of the chosen connector.
   the item's UID (`GET /api/chats`) and shown as the same chat wherever the item is shown — at every
   occurrence of a multi-parent item and in every browser tab, each polling the server for changes.
   Any number of items chat at the same time, each exchange running in parallel with the others, one
-  turn per item at a time. A hidden chat keeps its history and session, and the `▾` mark shows it
-  again; only the editor's send starts the item's chat anew, erasing the old one first.
+  turn per item at a time. The chat is the item's live conversation; the earlier ones are filed
+  behind it with their logs, sessions and setups, and the `▾` mark of a hidden chat lists them —
+  even a single one — to pick from. A new conversation begins — the live one filed, never
+  erased — by the editor's send (`/api/turn` with `fresh`), by the reply line entered on a hidden
+  chat or by the page's new-chat action (`update_chat` with `begin`); a filed one resumes with its
+  session and setup (`update_chat` with `resume`), the live one filed in its place; `erase` deletes
+  the live conversation only, after the page's confirmation; a session reset without erasing is the
+  page's other reset (`update_chat` with `reset`), after which the next turn carries the kept
+  messages as its transcript. The chats live in `syngate_chats.json` next to the tree, outside git,
+  written on every settled change (a message appended, a setup or mark changed, a conversation
+  begun, resumed or erased, a reset) through a debounced writer and read at start — a running turn
+  is never stored as running — the chat of a removed item dropped with every conversation.
 - **Two kinds of reply, never mixed.** A reply is **either** plain text — the dialog goes on — **or**
   exactly one list of Syngate API calls — the dialog is condensed into the DAG. The tools are handed
   to the turn as the JSON schema of its structured answer (`synthetic.ANSWER_SCHEMA`:
   `{"kind": "text", "text"}` or `{"kind": "calls", "calls": [...]}`; the Claude Code connector
   passes it as `--json-schema` and reads the turn's `structured_output`); a connector without
   structured output carries the same list in one fenced ```` ```syngate ```` block. A reply carrying
-  both, or a malformed call, is refused (HTTP 422, shown as an error in the chat; the session is
-  kept, so the next replica can ask for a clean answer).
-- **Tree calls are the only way the agent touches the DAG.** The model never edits the files under
-  `syngate/` — the Claude Code connector denies `Edit`/`Write` under `syngate/**` in every mode.
+  both, or a malformed call, is refused (HTTP 422, shown as an error message in the chat whose
+  retry mark sends the last message again; the session is kept, so the retry can ask for a clean
+  answer).
+- **Tree calls are the only way the agent touches the DAG.** The model never opens the files under
+  `syngate/` — the Claude Code connector denies `Read`, `Edit` and `Write` under `syngate/**` in
+  every mode, a shell command reading there refused the same way.
   `"@"` stands for the anchored item, every other item is addressed by its UID:
   `{"tool": "add", "uid", "parent" (default "@"), "description", "sources", "kind": "leaf"|"branch"}`
   adds a statement last among its parent's children, in the folder of its last sibling (else the
@@ -62,9 +81,11 @@ is one non-interactive turn of the chosen connector.
   replacing the item's; `{"tool": "remove", "uid"}` drops a childless statement;
   `{"tool": "move", "uid", "to", "before" (default last), "from"}` re-points the parent link and
   places the item, `from` naming the link when the item has several parents. The harness runs the
-  calls in order through `add_item`, `edit_item`, `delete_item` and `move_item`, stops at the first
-  refused one and shows the applied list in the history; the user reviews the result as any other
-  edit.
+  calls in order through `add_item`, `edit_item`, `delete_item` and `move_item` and stops at the
+  first refused one: the refusal goes back to the model as its next prompt with the results of the
+  calls applied before it, so the model corrects the call or answers in text. The history shows
+  every batch with what it applied, read or had refused; the reply lists what was applied, ran or
+  was reported, never what was read; the user reviews the result as any other edit.
 - **Queries read the DAG back the same way.** `{"tool": "query", "uid"}` returns the item's
   description, parents, sources, children in sibling order and kind; `{"tool": "context", "uid"}`
   its seed context; `{"tool": "skill", "name"}` the named skill. What a batch read goes back into
@@ -73,7 +94,7 @@ is one non-interactive turn of the chosen connector.
 - **Test runs go through the page's runner.** `{"tool": "test", "uid", "name"}` runs the routines
   bound to the leaves under the item, `name` narrowing a leaf to one binding (the CLI spelling
   `syngate test UID:binding`); every `test` call of a batch joins one run after the batch's other
-  calls. It is the same single-flight runner as ▶ run — the records land in the run coverage, the
+  calls. It is the same single-flight runner as `▶ Run test` — the records land in the run coverage, the
   statuses recolor, a run live elsewhere refuses the call — and its outcome comes back like a
   query's result: one line per leaf binding with pass/fail, then the output of every failed routine.
   Review stamping stays the user's act: there is no review call.
@@ -93,7 +114,9 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   subagent: its prompt, the item it is anchored at if any, its own steps and its final report) and
   `workflow` (opaque: input and result). The connector streams every event into the turn as it
   happens, and each appended step bumps the chats version, so the pages render the progress live
-  rather than a spinner.
+  rather than a spinner. The connector closes the turn with a `usage` step — `seconds`, `cost_usd`,
+  `input_tokens`, `output_tokens` as the CLI's `result` event reports them — which the page folds
+  into the activity header; the dispatch's `(reply, session)` shape stays as it is.
 - **Reasoning is requested whenever it may be had.** The harness always asks the connection to
   expose the model's reasoning when the call mode allows it, and records it only when it comes. For
   the Claude Code connector that depends on the model and the effort — a model without effort
@@ -114,12 +137,13 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   connector reads the session's transcript files for the subagents' own turns and attaches them to
   the `agent` steps. The delegation skill asks the model to open every subagent prompt with its
   target item (`@UID` on the first line), and the harness mirrors such a subagent's report and
-  collapsed transcript into that item's chat as an agent message. Disk changes are the connector's
+  collapsed transcript into that item's chat as an agent message once the turn ends — every `agent`
+  step naming a known item other than the turn's anchor and its explicitly delegated children. Disk changes are the connector's
   own record: snapshots of the project files before and after the turn yield the `diff` step, the
   `Edit` / `Write` events its order.
 - **Workflows are monolithic.** A `Workflow` tool call is one `workflow` step holding its input and
   result; the disk diff covers what it wrote; nothing is mirrored to children.
-- **Stop is an emergency halt.** The chat's close mark is a `■ stop` button while the turn runs
+- **Stop is an emergency halt.** The chat's hide mark is a `■ stop` button while the turn runs
   (`POST /api/turn/<UID>:<n>/stop`); the user means "nothing more happens, from now", so the server
   acts in this order, the instant the request lands: the turn is marked stopped, which closes its
   gate — no tree call, test run or delegation of the turn is applied past that mark, a batch
@@ -133,8 +157,8 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   has not ended within a grace period (`claude_code_connector.grace` seconds) is killed with its
   whole process group, so the shell commands and subagents it started die with it. Either way the
   dispatch fails as a connection error; the steps collected and the calls applied before the stop
-  stay, and the turn ends marked as stopped. A stop that lands before the connector spawned its
-  process spawns none.
+  stay, and the turn ends marked as stopped — a `stopped` message in the log, not an error. A stop
+  that lands before the connector spawned its process spawns none.
 
 The chat's place in the item panel, its ways of starting, the message tools and the history are
 specified in [AI_CHAT.md](AI_CHAT.md).

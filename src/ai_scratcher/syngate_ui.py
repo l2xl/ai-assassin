@@ -23,10 +23,13 @@ import hashlib
 import hmac
 import http.server
 import json
+import os
 import re
 import secrets
+import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -48,6 +51,14 @@ RUN_COVERAGE = "syngate_coverage.jsonl"
 TURN_ROUTE = r"/api/turn/([A-Za-z0-9_\-]+:\d+)"
 # Project files opened from a link: git-tracked files are readable, only markdown is written.
 FILE_LIMIT = 1 << 20
+# The chats of the items, kept next to the tree across server runs; a settled change is written this many seconds after the first.
+CHATS_FILE = "syngate_chats.json"
+WRITE_DELAY = 0.5
+# The harness's own permission, first among every connector's modes: whether a reply's add, edit, move and remove calls are
+# applied; its reads -- query, context, skill -- always are.
+TREE_MODE = {"id": "tree", "label": "Tree edit", "hint": "add, edit, move and remove items; reading the tree stays on", "default": True, "advanced": False}
+TREE_OFF = "The tree is read-only for this chat: add, edit, move and remove are refused — answer in text and say what you would change."
+TREE_REFUSAL = "tree edits are off for this chat — switch Tree edit on"
 
 
 class ApiError(Exception):
@@ -55,6 +66,13 @@ class ApiError(Exception):
         super().__init__(message)
         self.status = status
         self.extra = extra
+
+
+def _number(value, name, cast=float):
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        raise ApiError(400, f"'{name}' must be a number") from None
 
 
 def _call(run):
@@ -110,6 +128,14 @@ def shifted(step, shift):
     return moved
 
 
+def agent_steps(steps, skip=()):
+    """Every agent step among `steps`, the ones nested in agent steps included, but those of the items in `skip` and under them."""
+    for step in steps:
+        if step.get("kind") == "agent" and step.get("uid") not in skip:
+            yield step
+            yield from agent_steps(step.get("steps") or (), skip)
+
+
 class Turn:
     """One chat exchange run on its own thread: the page awaits its outcome by polling, re-attaching after a reload, and may stop it.
     Its steps are recorded as they happen, every change announced through `changed`."""
@@ -155,13 +181,40 @@ class Turn:
 SETUP_KEYS = ("connector", "model", "effort", "modes")
 
 
+def cut_ranges(text, cuts):
+    """The cuts of a message -- `[from, to]` spans of its text folded out of the exchange -- sorted, merged where they touch and clipped to
+    the text; anything malformed is left out."""
+    spans = sorted((max(0, cut[0]), min(len(text), cut[1])) for cut in (cuts if isinstance(cuts, list) else ())
+                   if isinstance(cut, (list, tuple)) and len(cut) == 2 and all(type(edge) is int for edge in cut))
+    merged = []
+    for start, end in spans:
+        if start >= end:
+            continue
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return merged
+
+
+def kept_text(text, cuts):
+    """The text with its cuts taken out."""
+    at, parts = 0, []
+    for start, end in cut_ranges(text, cuts):
+        parts.append(text[at:start])
+        at = end
+    return "".join(parts) + text[at:]
+
+
 class Chat:
-    """The one chat of an item, shared by every page showing the item: its exchange log, setup, connector session and the turn in flight.
+    """The one chat of an item, shared by every page showing the item: its live conversation -- exchange log, setup, connector session
+    and the turn in flight -- and the conversations filed behind it, each with its log, session and setup, in start order.
     Turns are numbered per item and addressed as `<UID>:<n>`."""
 
     def __init__(self, uid):
         self.uid = uid
         self.turns = 0
+        self.archive = []
         self.erase()
 
     def erase(self):
@@ -169,6 +222,32 @@ class Chat:
         self.session = None
         self.setup = {}
         self.turn = None
+        self.started = None
+
+    def conversation(self):
+        return {"started": self.started, "log": [dict(m) for m in self.log], "session": self.session, "setup": dict(self.setup)}
+
+    def file(self):
+        """Begin a new conversation: the live one joins the filed ones when it holds messages, the setup staying with the live one."""
+        if self.log:
+            self.archive.append(self.conversation())
+            self.archive.sort(key=lambda stored: stored["started"] or 0)
+        self.log, self.session, self.started = [], None, None
+
+    def resume(self, index):
+        """The filed conversation `index` becomes the live one, with its setup, the live one filed in its place."""
+        if not isinstance(index, int) or not 0 <= index < len(self.archive):
+            raise ApiError(404, f"no conversation {index} of {self.uid}")
+        stored = self.archive.pop(index)
+        self.file()
+        self.log, self.session, self.started = stored["log"], stored["session"], stored["started"]
+        self.setup = dict(stored["setup"]) or self.setup
+
+    @staticmethod
+    def summary(stored):
+        """A filed conversation as the page lists it: its start, first line of text and message count."""
+        first = next((m["text"] for m in stored["log"] if m.get("text")), "")
+        return {"started": stored["started"], "title": first.strip().split("\n", 1)[0][:120], "messages": len(stored["log"])}
 
     @property
     def running(self):
@@ -180,11 +259,49 @@ class Chat:
         return self.turn
 
     def kept(self):
-        return [{"role": m["role"], "text": m["text"]} for m in self.log if not m.get("dropped") and m["role"] != "error"]
+        """The exchange as it travels: every message but a failed or stopped turn's, its cuts taken out, one left empty left out."""
+        kept = []
+        for m in self.log:
+            text = kept_text(m["text"], m.get("cuts"))
+            if m["role"] not in ("error", "stopped") and text.strip():
+                kept.append({"role": m["role"], "text": text})
+        return kept
 
     def snapshot(self):
-        return {"uid": self.uid, "log": [dict(m) for m in self.log], "session": self.session, **self.setup, "turn": self.turn.id if self.running else None,
+        return {"uid": self.uid, "log": [dict(m) for m in self.log], "session": self.session, "started": self.started, **self.setup,
+                "archive": [self.summary(stored) for stored in self.archive], "turn": self.turn.id if self.running else None,
                 **({"steps": list(self.turn.steps)} if self.running else {})}
+
+    def record(self):
+        """The chat as it is kept across server runs: what is settled, never the turn in flight."""
+        return {"turns": self.turns, **self.conversation(), "archive": [dict(stored, log=[dict(m) for m in stored["log"]]) for stored in self.archive]}
+
+    @classmethod
+    def restore(cls, uid, record):
+        chat = cls(uid)
+        turns = record.get("turns")
+        chat.turns = turns if isinstance(turns, int) else 0
+        live = cls._conversation(record)
+        chat.log, chat.session, chat.setup, chat.started = live["log"], live["session"], live["setup"], live["started"]
+        chat.archive = [cls._conversation(stored) for stored in record.get("archive") or () if isinstance(stored, dict) and isinstance(stored.get("log"), list)]
+        return chat
+
+    @classmethod
+    def _conversation(cls, stored):
+        setup, started = stored.get("setup"), stored.get("started")
+        return {"started": started if isinstance(started, (int, float)) and not isinstance(started, bool) else None,
+                "log": [cls._message(m) for m in stored.get("log") or () if isinstance(m, dict) and isinstance(m.get("role"), str) and isinstance(m.get("text"), str)],
+                "session": stored.get("session"),
+                "setup": {key: value for key, value in (setup.items() if isinstance(setup, dict) else ()) if key in SETUP_KEYS}}
+
+    @staticmethod
+    def _message(stored):
+        """A stored message with its cuts normalised; a record from before cuts marked a whole message `dropped` instead."""
+        m = dict(stored)
+        cuts = [[0, len(m["text"])]] if m.pop("dropped", False) else cut_ranges(m["text"], m.get("cuts"))
+        m.pop("folded", None)
+        m.pop("cuts", None)
+        return {**m, "cuts": cuts} if cuts else m
 
 
 class JobRunner:
@@ -204,7 +321,7 @@ class JobRunner:
             job = Job(self._counter, argv)
             try:
                 job.proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE,
-                                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+                                            stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
             except OSError as exc:
                 raise ApiError(500, f"failed to start {argv[0]}: {exc}")
             self.current = job
@@ -225,19 +342,20 @@ class JobRunner:
         job = self.current
         return job if job and job.id == job_id else None
 
-    def cancel(self):
-        job = self.current
-        if not job:
+    def cancel(self, job=None):
+        """End the live job (or `job`) with its whole process group -- asked to terminate, killed after a grace period -- and await
+        its exit for at most another grace period."""
+        job = job or self.current
+        if not job or job.returncode is not None:
             return
-        if job.returncode is None and job.proc:
-            job.proc.terminate()
-            try:
-                job.proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                job.proc.kill()
         with job.cond:
-            while job.returncode is None:
-                job.cond.wait(0.2)
+            for signum, grace in ((signal.SIGTERM, 5), (signal.SIGKILL, 5)):
+                try:
+                    os.killpg(job.proc.pid, signum)
+                except ProcessLookupError:
+                    pass
+                if job.cond.wait_for(lambda: job.returncode is not None, timeout=grace):
+                    return
 
 
 class SyngateUIApp:
@@ -250,9 +368,11 @@ class SyngateUIApp:
         self.build_dir = build_dir
         self.token = secrets.token_urlsafe(24)
         self.jobs = JobRunner()
-        self.chats = {}
+        self.chats_file = self.root / CHATS_FILE
+        self.chats = self._read_chats()
         self.chats_version = 0
         self._chat_lock = threading.Condition()
+        self._writer = None
         self.connectors = {name: connector(cwd=self.root) for name, connector in synthetic.CONNECTORS.items()}
 
     # -- model ------------------------------------------------------------
@@ -321,7 +441,7 @@ class SyngateUIApp:
             "coverage": {"files": self._coverage_files(), "errors": coverage_errors},
             "build_dir": self.build_dir,
             "features": syngatelib.features(items),
-            "connectors": {name: connector.settings() for name, connector in self.connectors.items()},
+            "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, *settings["modes"]]} for name, connector in self.connectors.items()},
             "job": job.id if job and job.returncode is None else None,
         }
 
@@ -360,6 +480,12 @@ class SyngateUIApp:
     def delete_item(self, uid):
         items = self._load()
         _call(lambda: syngatelib.delete_item(items, uid, clear=True))
+        with self._chat_lock:
+            chat = self.chats.get(uid)
+            if chat and chat.running:
+                self.stop_turn(chat.turn.id)
+            if self.chats.pop(uid, None) is not None:
+                self._bump()
         return {"ok": True}
 
     # -- linked project files ---------------------------------------------
@@ -437,52 +563,99 @@ class SyngateUIApp:
             chat = self.chats[uid] = Chat(uid)
         return chat
 
-    def _bump(self):
+    def _bump(self, settled=True):
+        """Announce a change of the chats; a settled one -- anything but the steps of a running turn -- is also written out, debounced."""
         self.chats_version += 1
         self._chat_lock.notify_all()
+        if settled and self._writer is None:
+            self._writer = threading.Timer(WRITE_DELAY, self.save_chats)
+            self._writer.daemon = True
+            self._writer.start()
 
     def _notify(self):
         with self._chat_lock:
-            self._bump()
+            self._bump(settled=False)
 
     def _changed(self, chat):
         self._bump()
-        return chat.snapshot()
+        return {**chat.snapshot(), "version": self.chats_version}
+
+    def _read_chats(self):
+        """The stored chats of the items still in the tree -- an item whose file is unreadable right now keeps its chat."""
+        items, errors = syngatelib.load_tree(self.syngate_dir)
+        known = set(items) | {error.split(":", 1)[0] for error in errors}
+        stored = synthetic.read_json(self.chats_file)
+        return {uid: Chat.restore(uid, record) for uid, record in stored.items() if uid in known and isinstance(record, dict)}
+
+    def save_chats(self):
+        """Write the chats pending a write to `CHATS_FILE`, whole, at once."""
+        with self._chat_lock:
+            pending, self._writer = self._writer, None
+            if pending is None:
+                return
+            pending.cancel()
+            draft = self.chats_file.with_suffix(".json.tmp")
+            try:
+                draft.write_text(json.dumps({uid: chat.record() for uid, chat in self.chats.items()}, ensure_ascii=False, indent=1), encoding="utf-8")
+                os.replace(draft, self.chats_file)
+            except OSError as err:
+                print(f"syngate ui: chats not saved to {self.chats_file}: {err}", file=sys.stderr)
 
     def update_chat(self, uid, data):
-        """Change the item's chat in place: its setup, one message's fold or keep mark (dropping or keeping a message ends the connector
-        session, so the next turn carries the kept messages), or `erase` -- refused while a turn runs."""
+        """Change the item's chat in place: its setup, one message's cuts -- the spans of its text folded out of the exchange; a change of
+        them ends the connector session, so the next turn carries the kept text -- the removal of a failed or stopped turn's message,
+        `reset` -- the session dropped, the log kept -- `erase` of the live conversation, `begin` of a new one -- the live one filed --
+        or `resume` of the filed one at that index; everything but the setup is refused while a turn runs."""
         with self._chat_lock:
             chat = self._chat(uid)
+            patch = data.get("message") if isinstance(data.get("message"), dict) else {}
+            if chat.running and (data.get("erase") or data.get("reset") or data.get("begin") or "resume" in data or "cuts" in patch or patch.get("remove")):
+                raise ApiError(409, f"a turn of {uid} is running; change the exchange once it ends")
             if data.get("erase"):
-                if chat.running:
-                    raise ApiError(409, f"a turn of {uid} is running")
                 chat.erase()
+            if data.get("begin"):
+                chat.file()
+            if "resume" in data:
+                chat.resume(_number(data["resume"], "resume", int))
+            if data.get("reset"):
+                chat.session = None
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
-            patch = data.get("message")
-            if isinstance(patch, dict) and 0 <= int(patch.get("index", -1)) < len(chat.log):
-                message = chat.log[int(patch["index"])]
-                if "folded" in patch:
-                    message["folded"] = bool(patch["folded"])
-                if "dropped" in patch and bool(patch["dropped"]) != message.get("dropped", False):
-                    message["dropped"] = bool(patch["dropped"])
-                    chat.session = None
+            if patch and 0 <= (index := _number(patch.get("index", -1), "index", int)) < len(chat.log):
+                message = chat.log[index]
+                if "cuts" in patch:
+                    if not isinstance(patch["cuts"], list):
+                        raise ApiError(400, "'cuts' must be a list of [from, to] spans")
+                    cuts = cut_ranges(message["text"], patch["cuts"])
+                    if cuts != message.get("cuts", []):
+                        message.pop("cuts", None)
+                        if cuts:
+                            message["cuts"] = cuts
+                        if message["role"] not in ("error", "stopped"):
+                            chat.session = None
+                if patch.get("remove"):
+                    if message["role"] not in ("error", "stopped"):
+                        raise ApiError(400, "only the message of a failed or stopped turn is removed from the log")
+                    del chat.log[index]
             return self._changed(chat)
 
     def start_turn(self, data):
         """Start one turn of the item's chat -- the typed text joins the log, marked as an `agent` message when a parent turn sent it,
-        a `statement` is the content itself and is not repeated, `fresh` erases the old chat first -- as a job the page polls through
-        `turn_snapshot`; -> `{"turn": "<UID>:<n>", "chat": …}`."""
+        a `statement` is the content itself and is not repeated, a `retry` resends it without logging it again, `fresh` files the live
+        conversation first -- as a job the page polls through `turn_snapshot`; -> `{"turn": "<UID>:<n>", "chat": …}`, the chat stamped
+        with the chats `version`."""
         uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
         with self._chat_lock:
             chat = self._chat(uid)
             if chat.running:
                 raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
             if data.get("fresh"):
-                chat.erase()
+                chat.file()
+            if chat.started is None:
+                chat.started = time.time()
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
-            history = [] if chat.session else chat.kept()
-            if not data.get("statement"):
+            kept = chat.kept()
+            history = [] if chat.session else kept[:-1] if data.get("retry") else kept
+            if not data.get("statement") and not data.get("retry"):
                 chat.log.append({"role": "user", "text": text, **({"agent": data["agent"]} if data.get("agent") else {})})
             turn = chat.next_turn(chat.setup.get("connector"), self._notify)
             exchange = {"uid": uid, "text": text, "session": chat.session, "history": history, **chat.setup}
@@ -496,17 +669,31 @@ class SyngateUIApp:
             except Exception as err:
                 outcome = {"error": f"{type(err).__name__}: {err}", "status": 500}
             with self._chat_lock:
-                if chat.turn is turn:
-                    if outcome.get("session"):
-                        chat.session = outcome["session"]
-                    message = {"role": "error", "text": outcome["error"]} if "error" in outcome else {"role": "ai", "text": outcome["reply"]}
-                    chat.log.append({**message, **({"steps": list(turn.steps)} if turn.steps else {})})
-                    self._bump()
-                turn.finish(outcome)
+                try:
+                    if chat.turn is turn:
+                        if outcome.get("session"):
+                            chat.session = outcome["session"]
+                        role = "ai" if "error" not in outcome else "stopped" if turn.stopped else "error"
+                        chat.log.append({"role": role, "text": outcome.get("error", outcome.get("reply")), **({"steps": list(turn.steps)} if turn.steps else {})})
+                        self._mirror(turn, uid)
+                        self._bump()
+                finally:
+                    turn.finish(outcome)
 
         turn.thread = threading.Thread(target=run, daemon=True)
         turn.thread.start()
         return {"turn": turn.id, "chat": started}
+
+    def _mirror(self, turn, anchor):
+        """The report of every subagent the connector ran on an item -- not the anchor, not a delegated child -- as an agent message of
+        that item's chat, its transcript as the message's steps."""
+        delegated = {child.id.rpartition(":")[0] for child in turn.children}
+        reported = [step for step in agent_steps(turn.steps, delegated) if step.get("uid") not in (None, anchor) and step.get("report") is not None]
+        items = self._load() if reported else {}
+        for step in reported:
+            if step["uid"] in items:
+                self._chat(step["uid"]).log.append({"role": "ai", "agent": turn.id, "prompt": step.get("prompt") or "", "text": step["report"],
+                                                    "steps": list(step.get("steps") or ())})
 
     def _turn(self, key):
         """The turn `<UID>:<n>` addresses: the latest of its item's chat, readable until the next one starts."""
@@ -541,28 +728,34 @@ class SyngateUIApp:
         A plain answer comes back as the reply; an answer of tool calls is applied to the tree -- its test calls joined
         into one awaited run through the page's runner after the rest, its agent calls then run as parallel turns of their items' chats
         -- and while it carries queries, runs or delegations their results go back into the same session for the next answer.
-        The reply lists everything applied.
+        A refused call ends its batch and goes back the same way, with the results of the calls applied before it, for the next
+        answer to correct it or to explain. The reply lists what was applied, ran or was reported; what was read stays in the steps.
         `history` is the kept part of an exchange whose session was dropped: it travels with the text of the first round.
         A `turn` stopped while a round is out ends the exchange there, what was applied so far staying applied.
-        The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
+        The `tree` mode is the harness's own: without it the text is headed by `TREE_OFF`, the tree calls of a reply are refused and the
+        connector never sees the mode. The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
+        modes = list(data.get("modes") or ())
+        tree = "tree" in modes
+        if not tree and text.strip():
+            text = TREE_OFF + "\n" + text
         halted = lambda: turn is not None and turn.stopped
 
-        def batch_step(lines):
+        def batch_step(lines, batch=()):
             if turn and lines:
-                turn.add_step({"kind": "calls", "lines": list(lines), "at": turn.elapsed()})
+                turn.add_step({"kind": "calls", "tools": [call["tool"] for call in batch], "lines": list(lines), "at": turn.elapsed()})
 
-        def stopped(lines=()):
-            batch_step(lines)
-            return ApiError(409, "\n".join([*applied, *lines, "turn stopped"]), session=session)
+        def stopped(lines=(), batch=(), shown=()):
+            batch_step(lines, batch)
+            return ApiError(409, "\n".join([*applied, *shown, "turn stopped"]), session=session)
 
         for _ in range(synthetic.QUERY_ROUNDS):
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
-                                                 data.get("effort"), modes=data.get("modes") or (), session=session, history=history, root=self.root,
-                                                 on_step=on_step, stopped=halted if turn else None)
+                                                 data.get("effort"), modes=[mode for mode in modes if mode != "tree"], session=session, history=history,
+                                                 root=self.root, on_step=on_step, stopped=halted if turn else None)
             except synthetic.query_error as err:
                 raise ApiError(400, str(err)) from None
             except synthetic.connection_error as err:
@@ -577,40 +770,50 @@ class SyngateUIApp:
                 raise ApiError(422, f"answer refused: {err}", session=session) from None
             if kind == "chat":
                 return {"ok": True, "reply": "\n".join([*applied, payload]), "session": session, **({"calls": calls} if calls else {})}
-            items, results = self._load(), []
+            items, results, shown, refusal = self._load(), [], [], None
             named = lambda call: synthetic.call_target(uid, call)
-
-            def refused(err, line):
-                batch_step(results)
-                return ApiError(err.status, "\n".join([*applied, *results, f"{line} refused: {err}"]), session=session)
-
+            denied = lambda line, err: f"- {line} refused: {err}"
             runs = [call for call in payload if synthetic.is_run(call)]
             delegations = [call for call in payload if synthetic.is_delegation(call)]
             for call in payload:
                 if synthetic.is_run(call) or synthetic.is_delegation(call):
                     continue
                 if halted():
-                    raise stopped(results)
+                    raise stopped(results, payload, shown)
+                if call["tool"] in synthetic.TOOLS and not tree:
+                    refusal = denied(f"{call['tool']} {named(call)}", ApiError(403, TREE_REFUSAL))
+                    break
                 try:
                     results.append(_call(lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir)))
                 except ApiError as err:
-                    raise refused(err, f"{call['tool']} {named(call)}") from None
-            if runs:
+                    refusal = denied(f"{call['tool']} {named(call)}", err)
+                    break
+                if not synthetic.is_query(call):
+                    shown.append(results[-1])
+            if runs and refusal is None:
                 if halted():
-                    raise stopped(results)
+                    raise stopped(results, payload, shown)
                 try:
                     results.append(self._run_calls(items, [(named(call), call.get("name") or None) for call in runs], turn))
+                    shown.append(results[-1])
                 except ApiError as err:
-                    raise refused(err, f"test {' '.join(dict.fromkeys(named(call) for call in runs))}") from None
-            refusal = self._delegate(items, uid, data, delegations, turn, results) if delegations else None
+                    refusal = denied(f"test {' '.join(dict.fromkeys(named(call) for call in runs))}", err)
+            if delegations and refusal is None:
+                reported = len(results)
+                delegated = self._delegate(items, uid, data, delegations, turn, results)
+                shown += results[reported:]
+                if delegated:
+                    err, line = delegated
+                    refusal = denied(line, err)
             if halted():
-                raise stopped(results)
+                raise stopped(results, payload, shown)
             if refusal:
-                raise refused(*refusal)
-            batch_step(results)
-            applied += results
+                results.append(refusal)
+                shown.append(refusal)
+            batch_step(results, payload)
+            applied += shown
             calls += payload
-            if not any(synthetic.is_query(call) for call in payload) and not runs and not delegations:
+            if refusal is None and not any(synthetic.is_query(call) for call in payload) and not runs and not delegations:
                 return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
             text = synthetic.RESULTS_PREAMBLE + "\n".join(results)
         raise ApiError(422, "\n".join([*applied, "answer refused: the exchange kept querying"]), session=session)
@@ -618,15 +821,20 @@ class SyngateUIApp:
     def _delegate(self, items, anchor, data, calls, turn, results):
         """Every agent call of a batch as a turn of its item's chat with the call's prompt, in the setup of `data` the call may override,
         all running in parallel and awaited -- a stop of the parent `turn` starts none more and stops the running ones. Each child's
-        report joins `results` and its transcript the parent's steps as an agent step; -> (error, line) of the call refused, which starts
-        none after it."""
+        report joins `results` and its transcript the parent's steps as an agent step; a child switches the `tree` mode on only when the
+        parent has it; -> (error, line) of the call refused, which starts none after it."""
         started, refusal = [], None
         for call in calls:
             child = synthetic.call_target(anchor, call)
             setup = {**{key: data[key] for key in SETUP_KEYS if key in data}, **{key: call[key] for key in ("model", "effort", "modes") if key in call}}
+            if "tree" not in (data.get("modes") or ()):
+                own = setup["modes"] if "modes" in setup else self.chats[child].setup.get("modes") if child in self.chats else ()
+                setup["modes"] = [mode for mode in own or () if mode != "tree"]
             try:
                 if turn and turn.stopped:
                     raise ApiError(409, "turn stopped")
+                if child == anchor:
+                    raise ApiError(409, "the anchored item runs this turn — delegate to another item or do the work in this turn")
                 if child not in items:
                     raise ApiError(404, f"unknown UID '{child}'")
                 key = self.start_turn({**setup, "uid": child, "text": call["prompt"], "agent": turn.id if turn else anchor})["turn"]
@@ -641,9 +849,7 @@ class SyngateUIApp:
                 if turn.stopped:
                     self.stop_turn(key)
         for child, step, shift in started:
-            while child.snapshot(0.5)["running"]:
-                pass
-            outcome = child.snapshot()
+            outcome = child.snapshot(wait=None)
             step.update(report=outcome.get("reply", outcome.get("error")), steps=outcome.get("steps", []))
             if turn:
                 turn.add_step(step, shift)
@@ -652,18 +858,21 @@ class SyngateUIApp:
 
     def _run_calls(self, items, addressed, turn=None):
         """Every test call of a batch -- `addressed` being (uid, binding|None) -- as one run of the page's runner, awaited and held
-        by the `turn` so its stop cancels it; -> its outcome as the AI reads it back."""
+        by the `turn` so its stop cancels it; -> its outcome as the AI reads it back. The run records apart and its records are then folded
+        into the page's, so the outcome tells of this run alone, never of a binding's record left by an earlier one."""
         targets = list(dict.fromkeys((leaf, name) for uid, name in addressed for leaf in syngatelib.leaves_under(items, uid)))
-        job = self.jobs.get(self.start_run({"action": "test", "uids": [f"{leaf}:{name}" if name else leaf for leaf, name in targets]})["job"])
-        if turn:
-            turn.job = job
-            if turn.stopped:
-                self.jobs.cancel()
-        for _ in job.stream():
-            pass
-        return synthetic.run_report(items, targets, syngatelib.load_coverage([self.run_coverage])[0])
+        with tempfile.TemporaryDirectory() as scratch:
+            fresh = Path(scratch) / RUN_COVERAGE
+            job = self.jobs.get(self.start_run({"action": "test", "uids": [f"{leaf}:{name}" if name else leaf for leaf, name in targets]}, fresh)["job"])
+            if turn:
+                turn.job = job
+                if turn.stopped:
+                    self.jobs.cancel()
+            output = list(job.stream())
+            syngatelib.merge_coverage(self.run_coverage, fresh)
+            return synthetic.run_report(items, targets, syngatelib.load_coverage([fresh])[0], output)
 
-    def start_run(self, data):
+    def start_run(self, data, coverage_out=None):
         action = data.get("action")
         if action not in ("test", "review", "clear"):
             raise ApiError(400, "'action' must be 'test', 'review' or 'clear'")
@@ -680,10 +889,17 @@ class SyngateUIApp:
             under = syngatelib.items_under if action == "review" else syngatelib.leaves_under
             targets = list(dict.fromkeys(target for uid in uids for target in under(items, uid)))
             if not targets:
-                raise ApiError(400, f"no test-bearing leaf under {', '.join(uids)}")
-            argv += [*targets, "--build-dir", str(data.get("build_dir") or self.build_dir), "--coverage-out", self.run_coverage]
+                raise ApiError(400, f"no leaf with a test under {', '.join(uids)}")
+            argv += [*targets, "--build-dir", str(data.get("build_dir") or self.build_dir), "--coverage-out", str(coverage_out or self.run_coverage)]
         job = self.jobs.start(argv, cwd=self.root)
         return {"job": job.id}
+
+    def cancel_job(self, job_id):
+        job = self.jobs.get(job_id)
+        if job is None:
+            raise ApiError(404, f"no such job {job_id}")
+        threading.Thread(target=self.jobs.cancel, args=(job,), daemon=True).start()
+        return {"ok": True}
 
 
 def _page_bytes(nonce):
@@ -774,10 +990,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             elif path == "/api/chats":
                 query = parse_qs(urlsplit(self.path).query)
                 since = query.get("since")
-                self._json(200, self.app.chats_snapshot(int(since[0]) if since else None, min(float((query.get("wait") or ["0"])[0]), 30)))
+                self._json(200, self.app.chats_snapshot(_number(since[0], "since", int) if since else None,
+                                                        min(_number((query.get("wait") or ["0"])[0], "wait"), 30)))
             elif (match := re.fullmatch(TURN_ROUTE, path)):
                 wait = (parse_qs(urlsplit(self.path).query).get("wait") or ["0"])[0]
-                self._json(200, self.app.turn_snapshot(match.group(1), min(float(wait), 30)))
+                self._json(200, self.app.turn_snapshot(match.group(1), min(_number(wait, "wait"), 30)))
             elif (match := re.fullmatch(r"/api/job/(\d+)", path)):
                 self._job_snapshot(int(match.group(1)))
             elif (match := re.fullmatch(r"/api/job/(\d+)/events", path)):
@@ -786,8 +1003,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._json(404, {"error": f"no route for GET {path}"})
         except ApiError as exc:
             self._json(exc.status, {"error": str(exc), **exc.extra})
-        except BrokenPipeError:
+        except ConnectionError:
             pass
+        except Exception as exc:
+            self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
 
     def do_POST(self):
         if not self._authorized():
@@ -815,10 +1034,16 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._json(200, self.app.start_turn(payload))
             elif (match := re.fullmatch(TURN_ROUTE + "/stop", path)):
                 self._json(200, self.app.stop_turn(match.group(1)))
+            elif (match := re.fullmatch(r"/api/job/(\d+)/cancel", path)):
+                self._json(200, self.app.cancel_job(int(match.group(1))))
             else:
                 self._json(404, {"error": f"no route for POST {path}"})
         except ApiError as exc:
             self._json(exc.status, {"error": str(exc), **exc.extra})
+        except ConnectionError:
+            pass
+        except Exception as exc:
+            self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
 
     def _job_snapshot(self, job_id):
         job = self.app.jobs.get(job_id)
@@ -870,7 +1095,7 @@ def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_brow
     if coverage:
         print(f"syngate ui: coloring statuses from {', '.join(coverage)}")
     else:
-        print("syngate ui: no coverage files found; leaf statuses show as not implemented until tests are run from the page (or pass --coverage FILE)")
+        print("syngate ui: no coverage files found; leaf statuses show as not run until tests are run from the page (or pass --coverage FILE)")
     print("syngate ui: loopback only; the URL token is this session's key. Ctrl+C stops the server.")
     if open_browser:
         webbrowser.open(url)
@@ -880,6 +1105,7 @@ def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_brow
         print("\nsyngate ui: stopped")
     finally:
         app.jobs.cancel()
+        app.save_chats()
         server.server_close()
     return 0
 
@@ -888,7 +1114,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"listen port on 127.0.0.1 (default {DEFAULT_PORT}, 0 = ephemeral)")
     parser.add_argument("--coverage", action="append", default=[], help="syngate_coverage.jsonl file(s) to color statuses; repeatable (default: well-known local files)")
-    parser.add_argument("--build-dir", default=DEFAULT_BUILD_DIR, help="build tree containing the Catch2 test binaries for review runs")
+    parser.add_argument("--build-dir", default=DEFAULT_BUILD_DIR, help="build tree the test runner uses for test and review runs")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
     parser.add_argument("--root", help="managed project root (default: SYNGATE_ROOT, else the nearest ancestor of the working directory holding syngate/)")
     args = parser.parse_args()

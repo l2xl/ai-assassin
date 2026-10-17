@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-CONTROLS]
+order: 30
+test: ~
+---
+Selection marks
+replace the message's own while text inside it is selected: the same three marks on the border lines level with the selection, whose fold mark cuts the selected text out of the message — shown folded in its place with a mark of its own that expands it back into the text — and whose extraction marks make the selected text alone a child or next sibling item.

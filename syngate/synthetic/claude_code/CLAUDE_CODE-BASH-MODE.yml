@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE, AI_CHAT-PERMISSION-BASH]
+order: 45
+test: ~
+---
+Raw command mode
+instructs the Claude Code connector to call `claude` with its shell tool allowed without prompting.

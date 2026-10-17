@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 130
+test: {api: ~, reset: ~}
+---
+Chat reset
+is offered in the setup menu in three strengths: a new session that keeps the shown history and sends the kept messages as the transcript of the next turn, a new chat that files the live conversation and leaves an empty one, and a delete that erases the live conversation's log and session after confirmation, the filed ones untouched; all are refused while a turn runs.

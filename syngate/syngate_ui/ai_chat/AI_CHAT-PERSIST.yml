@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 140
+test: ~
+---
+Chat store
+keeps every item's chat — its live conversation and the filed ones, each with log, setup and connector session — in `syngate_chats.json` next to the tree, outside git, so a restarted server shows the chats as they were; the chat of an item no longer in the tree is dropped on load and when the item is deleted through the page.

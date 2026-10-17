@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 150
+test: ~
+---
+Message marks
+are round buttons on the block's border lines, shown while the pointer is over the message and none of its text is selected: the fold mark on the left line level with the first line of each part of the text, the extraction marks on the right line — child level with the first line, sibling with the last, pushed under the child when the two would meet — acting on the kept text of the message; the item's statement, shown once as the content, carries none.

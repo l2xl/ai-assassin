@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-070]
+order: 20
+test: ~
+---
+Draft during a turn
+stays editable in the reply line while the AI answers, its send refused until the turn ends.

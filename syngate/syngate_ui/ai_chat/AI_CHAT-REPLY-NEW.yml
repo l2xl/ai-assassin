@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-070]
+order: 10
+test: ~
+---
+New conversation by entry
+begins when the reply line is entered while the item's chat holds messages and is shown nowhere in the tab, the previous conversation filed; a chat whose turn is running is joined instead.

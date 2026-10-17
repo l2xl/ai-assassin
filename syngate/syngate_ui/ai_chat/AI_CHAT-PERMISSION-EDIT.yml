@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-011]
+order: 10
+test: ~
+---
+Edit files permission
+switch of the chat is on by default and lets the connector change project files without asking.

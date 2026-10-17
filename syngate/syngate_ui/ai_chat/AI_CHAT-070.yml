@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 10
+test: ~
+---
+Reply line
+waits empty under every item's statement, outside the Tab order until the item's chat is shown; entered by click or focus, it shows that chat — the log and the controls — and a message sent from it goes to the exchange without touching the item.

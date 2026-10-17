@@ -1,0 +1,8 @@
+---
+parents: [AI_CHAT-PROMPTS-SKILLS]
+order: 20
+sources: [src/ai_scratcher/prompts/delegate.md]
+test: 3d2878ad5c5d15abd30a08d063fc54b1b262ff65059394c8eedc5a2dc9cf89d8
+review: 0c53bf11ddd7e867a699997a7089f3c91e33ae382e0e741eab36b91cccd9b642
+---
+The delegation skill shall be a default skill stating how a turn on an item with children analyses their scope and delegates the separable ones through the agent tool, and that an implicit subagent's prompt opens with its target item as `@UID`

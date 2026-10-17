@@ -1,19 +1,9 @@
-header: Single composite status icon
-description: |
-  Every place that shows an item shall label it with one composite status icon followed by the ID.
+---
+parents: [SYNGATE_UI]
+order: 40
+test: ~
+---
+Common item label
+is one composite status icon followed by the UID, wherever an item is shown.
 
-  The icon is a single element: a circle whose fill color carries the test status, with the review glyph rendered over it. The circle's diameter is about 1.4x the glyph font size plus 2px; the eyes are shifted toward the circle's right edge so they still mostly overlap it.
-
-  Test status (circle fill):
-  - Green - tests passed
-  - Red - tests failed
-  - Grey - test status unknown
-
-  Review status (glyph over the circle):
-  - Stamp ok - the eyes glyph 👀 (U+1F440)
-  - Stamp violated - the same eyes glyph with the red exclamation glyph ❗ (U+2757, no circle) laid over the eyes' right part via CSS, outside of the circle and as tall as the circle
-  - No stamp - the circle stays empty (no glyph)
-parents: [SYNGATE_UI-040]
-order: 10
-test: ca598b04ddc4e3e65405b64c965af9a6e910bacd949880cb46e67ae4cb8edbd3
-review: 1165f7f0f7fc451687750c1e6f9bf75b9fb31bfad374d8a92803ef5c9850b295
+The icon is a single element: a circle whose fill carries the test status — green passed, red failed, grey not run — with the review glyph over it: the eyes 👀 (U+1F440) for a standing stamp, the eyes with ❗ (U+2757) laid over their right part, outside the circle and as tall as it, for a violated stamp, nothing for no stamp.

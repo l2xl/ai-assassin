@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT]
+order: 120
+test: {api: ~, retry: ~}
+---
+Retry and remove marks
+of a failed turn's error message, the last in the chat, send the user's last message again in the same session or drop the attempt from the log, the kept messages and the session staying as they were.

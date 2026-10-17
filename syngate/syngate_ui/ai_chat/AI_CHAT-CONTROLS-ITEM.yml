@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-CONTROLS]
+order: 20
+test: {marks: ~, selection: ~}
+---
+Item extraction marks
+of a message make its kept text a new child of the anchored item or its next sibling through the editor's own add, a leading heading mark stripped, the chat staying as it is and the outline flashing the new row.

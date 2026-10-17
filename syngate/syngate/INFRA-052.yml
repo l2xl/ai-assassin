@@ -7,4 +7,4 @@ review: 564b3010ecdf9660325c6e36a845e417a8c68662e1a2e6f11293a4e1fe9fd4e4
 ---
 Bound test run
 
-The test command shall run the routines bound to the addressed leaf items without stamping them -- pytest routines selected by node id, Catch2 cases by an OR of their tag pairs in one run per test binary -- and, given a coverage output file, replace the previous records of every re-run binding with the fresh ones, recording a binding it cannot run -- no or several tagged routines, test binary not built -- as failed.
+The test command shall run the routines bound to the addressed leaf items without stamping them -- pytest routines selected by node id, Catch2 cases by an OR of their tag pairs in one run per test binary -- and, given a coverage output file, replace the previous records of every re-run binding with the fresh ones, recording a binding it cannot run -- no or several tagged routines, test binary not built, a binding name the item does not declare -- as failed with the reason, which for a binding finding no routine names the routines tagged for the item under its other bindings.

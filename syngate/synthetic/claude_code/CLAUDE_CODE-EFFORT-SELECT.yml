@@ -1,0 +1,9 @@
+---
+parents: [CLAUDE_CODE-010]
+order: 10
+test: ~
+---
+Claude effort selection
+offers every model the effort levels `low`, `medium`, `high`, `xhigh` and `max`
+
+The chosen level is passed to the CLI as `--effort`; a turn without a chosen level leaves the CLI default.

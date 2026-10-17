@@ -125,6 +125,15 @@ def test_a_binding_without_a_routine_is_recorded_as_failed(monkeypatch, tmp_path
     assert records[("PAT-001", None)][0]["passed"] is False
     assert "must match exactly one routine" in records[("PAT-001", None)][0]["log"]
 
+    named = syngatelib.Location("scripts/tests/test_pat.py", 1, "scripts/tests/test_pat.py::test_api", "")
+    monkeypatch.setattr(syngatelib, "discover_bindings", lambda: {("PAT-001", "api"): [named]})
+    assert syngate.cmd_test(argparse.Namespace(uid=["PAT-001", "PAT-002:api", "PAT-002"], build_dir=str(tmp_path), coverage_out=str(coverage))) == 1
+    records, errors = syngatelib.load_coverage([coverage])
+    assert errors == [] and records[("PAT-001", None)][0]["log"].endswith(  # a mistagged routine is named where the binding finds none
+        "found: none; routines tagged for PAT-001: [PAT-001][api] scripts/tests/test_pat.py::test_api")
+    assert [(r["passed"], r["log"]) for r in records[("PAT-002", "api")]] == [(False, "PAT-002: no binding named api, the item declares [PAT-002]")]
+    assert records[("PAT-002", None)][0]["log"] == "binding [PAT-002] must match exactly one routine, found: none"  # the whole item, narrowed or not
+
 
 def _option_at_root(syngate_dir, option):
     """The feature switch read off a root file carrying `option` (a `key: value` line, or nothing)."""

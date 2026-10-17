@@ -1,7 +1,7 @@
-header: Feature-off affordances
-description: |
-  With a feature switched off the page shall show none of its affordances — without test no test axis or bindings button; without review no review mark, review or clear run — while a test run stays offered whichever way the switches sit.
-parents: [SYNGATE_UI-040]
-order: 40
-test: 941d45b060f6de8477bbd42a85dc0ce250fa3602aacee78ca29e1d3b349c7df1
-review: b4c27bb0f95f371669db6267f7f8463251dd61aa643ce99d70dfc119bcda5872
+---
+parents: [SYNGATE_UI]
+order: 60
+test: ~
+---
+Feature-off affordances
+are none: with the test feature off the page shows no test fill in the status icon, no test details and no binding editor in the status popup; with the review feature off no review glyph and no review or clear run — while a test run stays offered whichever way the switches sit.

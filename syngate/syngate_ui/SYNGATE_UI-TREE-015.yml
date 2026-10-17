@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI-TREE]
+order: 20
+test: ~
+---
+Row title
+is the first line of the item's body shown after the common label, cut with an ellipsis exactly where the row runs out of room, the whole line in its tooltip.

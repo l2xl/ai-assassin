@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI-CONTENT]
+order: 10
+test: ~
+---
+Block label
+is the common item label at the left end of the block's top border, as the section's heading, without a title and without a menu.

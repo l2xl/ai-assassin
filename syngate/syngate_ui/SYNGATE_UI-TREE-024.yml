@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE_UI-TREE-020]
+order: 40
+test: ~
+---
+Unlink action
+of the menu, offered when the row's item has several parents, drops the link to the parent the row sits under, after confirmation when the item is reviewed, since its parents are under the stamp.

@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-070]
+test: ~
+---
+Reply hint
+appears with the block's border and names the line's state — a new chat to start, the open chat to continue or the AI's reply awaited, the wait adding a spinner left of the field.

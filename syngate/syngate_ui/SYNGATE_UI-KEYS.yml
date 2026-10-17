@@ -1,0 +1,9 @@
+---
+parents: [SYNGATE_UI]
+order: 105
+test: ~
+---
+Keyboard navigation
+moves the selection in the pane holding the focus — Up and Down, PageUp and PageDown, Home and End, Right and Left unfolding and folding a row — and Enter opens the editor, Esc is the done mark, Ctrl/⌘+Enter sends, Ctrl/⌘+. stops the turn, Alt+Shift+arrows move the row, / focuses the filter and ? lists the keys.
+
+Every border-mounted control and tool is a button in the Tab order; the reply line joins it only with the open chat or the editor.

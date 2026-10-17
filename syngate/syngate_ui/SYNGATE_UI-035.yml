@@ -1,8 +1,9 @@
-header: Test and review runs
-description: |
-  The run menu of an item shall start the test, review or clear command for it — for a branch addressing every leaf below — streaming the command output until exit and refusing a second run while one is active.
-parents: [SYNGATE_UI-030]
-order: 50
-test: {stream: 6012329e8b930175cd6b11a3d7a63e2536bbe9e05b895b596c5caa3ff8e12a57, single_flight: efb399b59bf5b8f31b9480acb6df3a89a0c814fc20fa3ddfbc03eeadae395d26,
-  branch: f4766c8cee46b6fdc222a12bc43c19559ccef2a26b9ecfeb49d95ef8224bc686}
-review: dc972df6c33fb497b8c39b5075ed141d75127c504507e2b27132d6c377dbb413
+---
+parents: [SYNGATE_UI-042]
+order: 10
+test: {stream: ~, single_flight: ~, branch: ~, reattach: ~, cancel: ~}
+---
+Run actions
+of the status popup start the test, review or clear command for the item — review and clear only while the review feature is on, clear only on a reviewed item — streaming the output into the console until the command exits, where a run can be stopped and a reloaded page re-attaches to the running one.
+
+On a branch the test run addresses every leaf below and the review, after confirmation, stamps every item below, children first, then the branch; a second run is refused while one is active.

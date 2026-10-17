@@ -1,5 +1,8 @@
-header: Syngate UI
-description: |
-  Local browser UI of the syngate tree.
+---
 parents: [AI-SCRATCHER]
 order: 10
+---
+Syngate UI
+is the local browser editor of the project: the outline of the DAG, the document of its items and the AI chat anchored at each item.
+
+[SYNGATE-UI.md](SYNGATE-UI.md)

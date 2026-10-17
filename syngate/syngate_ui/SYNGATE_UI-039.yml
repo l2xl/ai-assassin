@@ -1,7 +1,9 @@
-header: Edit automatically cleans review
-description: |
-  An edit of a reviewed item's header, description, parents or test bindings shall clear its review stamp and revert its bound routine shas, while a change of its order alone leaves the review intact.
-parents: [SYNGATE_UI-030]
-order: 25
-test: 617e4ec34b7f277d55aad426b7bc9484ef7cf12b8355977293cb325d93df45ac
-review: 8b02b08b4cc8a4ca5a5d23f643fe6b912284458a2121d79e2885238f6cbb6fd6
+---
+parents: [SYNGATE_UI]
+order: 80
+test: ~
+---
+Review clearing
+follows an edit of a reviewed item's statement, parents or bindings in the page, dropping its stamp and reverting its routine shas.
+
+A change of its order alone leaves the review intact.

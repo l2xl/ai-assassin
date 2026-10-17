@@ -22,8 +22,7 @@ import yaml
 from . import syngatelib
 
 CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
-CLAUDE_MODEL_EFFORTS = {"claude-fable-5-1": CLAUDE_EFFORTS, "claude-opus-5-5": CLAUDE_EFFORTS, "claude-sonnet-5": CLAUDE_EFFORTS,
-                        "claude-haiku-4-5-20251001": ()}
+CLAUDE_MODEL_EFFORTS = {"fable": CLAUDE_EFFORTS, "opus": CLAUDE_EFFORTS, "sonnet": CLAUDE_EFFORTS, "haiku": CLAUDE_EFFORTS}
 CLAUDE_MODELS = tuple(CLAUDE_MODEL_EFFORTS)
 AGENT_TOOLS = ("Agent", "Task")
 WORKFLOW_TOOL = "Workflow"
@@ -79,8 +78,9 @@ QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
 RUNS = {"test": ("uid",)}
 DELEGATIONS = {"agent": ("uid", "prompt")}
 CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS}
-EDITABLE = ("description", "sources")
+EDITABLE = ("description", "sources", "tests")
 QUERY_ROUNDS = 8
+RUN_TAIL = 40
 RESULTS_PREAMBLE = "Results of the calls in your last answer:\n"
 # A message names an item the way a file is named: `@UID` brings the item's statement into the turn.
 REFERENCE_RE = re.compile(r"@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\b")
@@ -105,7 +105,7 @@ ANSWER_SCHEMA = {
         "text": STRING,
         "calls": {"type": "array", "minItems": 1, "items": {"anyOf": [
             _call_schema("add", parent=STRING, description=STRING, sources=PATHS, kind={"enum": ["leaf", "branch"]}),
-            _call_schema("edit", description=STRING, sources=PATHS),
+            _call_schema("edit", description=STRING, sources=PATHS, tests={"type": "array", "items": STRING}),
             _call_schema("remove"),
             _call_schema("move", to=STRING, before=STRING, link={"type": "boolean"}, **{"from": STRING}),
             _call_schema("query"),
@@ -159,13 +159,14 @@ def transcript(history, text):
 
 
 def item_view(items, uid):
-    """The item as the AI reads it back: its fields, its kind and the UIDs of its children in sibling order."""
+    """The item as the AI reads it back: its fields, its kind, the UIDs of its children in sibling order and, for a leaf, the names
+    of its test bindings, "" naming the default one."""
     if uid not in items:
         raise syngatelib.unknown_uid(f"unknown UID '{uid}'")
     item = items[uid]
     return {"uid": uid, "description": item.description, "parents": item.parents, "sources": list(item.sources),
             "children": syngatelib.sorted_children(items, syngatelib.children_map(items), uid),
-            "kind": "branch" if item.tests is None else "leaf"}
+            "kind": "branch" if item.tests is None else "leaf", **({} if item.tests is None else {"tests": [name or "" for name in item.tests]})}
 
 
 def is_query(call):
@@ -180,18 +181,23 @@ def is_delegation(call):
     return call["tool"] in DELEGATIONS
 
 
-def run_report(items, targets, records):
+def run_report(items, targets, records, output=()):
     """The outcome of a run as the AI reads it back: one line per addressed leaf binding -- `targets` being (uid, binding|None),
     None standing for every binding of the leaf -- with pass/fail, a binding without a record having failed, then the captured
-    output of every failed routine."""
+    output of every failed routine; a failed binding no routine output tells of -- one the runner could not run or address --
+    shows the lines of the run's `output` naming its item, else the run's last lines."""
     lines, logs = [], []
     for uid, name in targets:
         declared = [name] if name else list(items[uid].tests) if uid in items and items[uid].is_leaf else []
         for binding in declared or [found for found_uid, found in records if found_uid == uid] or [None]:
             found = list({record["name"]: record for record in records.get((uid, binding), [])}.values())
             label = f"{uid}:{binding}" if binding else uid
-            lines.append(f"- {label}: {'pass' if found and all(record['passed'] for record in found) else 'fail'}")
-            logs += [f"{label} output:\n{record['log']}" for record in found if not record["passed"] and record["log"]]
+            passed = bool(found) and all(record["passed"] for record in found)
+            lines.append(f"- {label}: {'pass' if passed else 'fail'}")
+            told = [record["log"] for record in found if not record["passed"] and record["log"]]
+            if not passed and not told:
+                told = ["\n".join([line for line in output if uid in line] or list(output)[-RUN_TAIL:]) or "the run left no record and no output"]
+            logs += [f"{label} output:\n{log}" for log in told]
     return "\n".join(lines + logs)
 
 
@@ -242,7 +248,8 @@ def parse_reply(reply):
         missing = [name for name in CALLS[tool] if not (isinstance(call.get(name), str) and call[name].strip())]
         if missing:
             raise protocol_error(f"{tool}: missing {', '.join(missing)}")
-        if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip()) or isinstance(call.get("sources"), list)):
+        if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip())
+                                   or any(isinstance(call.get(field), list) for field in ("sources", "tests"))):
             raise protocol_error(f"edit: missing {' or '.join(EDITABLE)}")
     return "calls", calls
 
@@ -528,14 +535,18 @@ class claude_code_connector:
     efforts = CLAUDE_EFFORTS
     model_efforts = CLAUDE_MODEL_EFFORTS
     always_allowed = ("Agent",)
-    # Direct edits of the tree files are denied in every mode; the tree changes only through tree calls.
-    denied = ("Edit(syngate/**)", "Write(syngate/**)")
-    # Call modes: what a turn may do without prompting, as (label, hint, on by default, permission mode, allowed tools).
+    # The tree files are closed to the turn in every mode, to read as to write: the tree is read and changed only through tree calls.
+    denied = ("Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)")
+    # Call modes: what a turn may do without prompting, as (label, hint, on by default, advanced, permission mode, allowed tools);
+    # an advanced mode is kept out of the page's switch row, in its drop-down list.
     modes = {
-        "edit": ("Edit", "project files", True, "acceptEdits", ()),
-        "internet": ("Internet", "access", True, None, ("WebSearch", "WebFetch")),
-        "workflows": ("Workflows", "run subagents", False, None, ("Workflow",)),
+        "edit": ("Edit files", "change project files without asking", True, False, "acceptEdits", ()),
+        "internet": ("Internet", "search and fetch the web", True, False, None, ("WebSearch", "WebFetch")),
+        "bash": ("Raw command", "run shell commands", False, True, None, ("Bash",)),
+        "workflows": ("Workflows", "run workflow scripts", False, True, None, ("Workflow",)),
     }
+    # What the CLI's closing `result` event tells of the turn's cost, folded into the closing `usage` step when present.
+    usage_fields = ("duration_ms", "total_cost_usd", "usage")
 
     # Seconds a `claude` process asked to interrupt its turn may take to end before it is killed with its process group.
     grace = 5.0
@@ -568,7 +579,8 @@ class claude_code_connector:
         return {"label": self.label,
                 "models": [{"id": model, "name": model.removeprefix("claude-"), "efforts": list(self.model_efforts.get(model, ()))} for model in self.models],
                 "efforts": list(self.efforts),
-                "modes": [{"id": mode, "label": label, "hint": hint, "default": default} for mode, (label, hint, default, _, _) in self.modes.items()]}
+                "modes": [{"id": mode, "label": label, "hint": hint, "default": default, "advanced": advanced}
+                          for mode, (label, hint, default, advanced, _, _) in self.modes.items()]}
 
     def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False):
         """(answer, session id) of one non-interactive `claude -p` turn, the answer being the structured output shaped by
@@ -577,15 +589,16 @@ class claude_code_connector:
         keeps the stdin open for an `interrupt`. The turn lasts until the process exits: a subagent or workflow launched in
         it is awaited by the CLI, which answers again on its report, and the answer of the turn is that last one.
         Its events stream into `on_step` as steps while it runs; once it exits, the subagents' own turns are read from the
-        session's transcript and the project files it changed, from snapshots taken before and after, close it as a diff step.
+        session's transcript, the project files it changed, from snapshots taken before and after, follow as a diff step and the
+        wall time, cost and token counts the result event reports close it as a usage step.
         The effort, which is what asks the model for its reasoning, goes only with a model that has effort levels.
         A turn `stopped` before its process is spawned spawns none."""
         root = Path(self.cwd or os.getcwd())
         if stopped():
             raise connection_error("turn stopped")
         before, steps = project_snapshot(root), turn_steps(on_step)
-        permission = next((self.modes[mode][3] for mode in modes if self.modes[mode][3]), None)
-        tools = list(dict.fromkeys([*self.always_allowed, *(tool for mode in modes for tool in self.modes[mode][4])]))
+        permission = next((self.modes[mode][4] for mode in modes if self.modes[mode][4]), None)
+        tools = list(dict.fromkeys([*self.always_allowed, *(tool for mode in modes for tool in self.modes[mode][5])]))
         effort = effort if effort in self.model_efforts.get(model, self.efforts) else None
         with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as seed, tempfile.TemporaryFile("w+", encoding="utf-8") as errors:
             seed.write(context)
@@ -620,12 +633,23 @@ class claude_code_connector:
         changed = project_diff(before, project_snapshot(root))
         if changed:
             steps.add("diff", {"kind": "diff", "files": changed})
+        if reply and any(field in reply for field in self.usage_fields):
+            steps.add("usage", self.usage_step(reply, steps.now()))
         if reply is None:
             raise connection_error((stderr or "\n".join(steps.noise)).strip() or f"claude exited with {done.returncode}")
         if done.returncode or reply.get("is_error"):
             raise connection_error(str(reply.get("result") or stderr.strip() or f"claude exited with {done.returncode}"))
         answer = reply.get("structured_output")
         return (reply.get("result") if answer is None else answer), reply.get("session_id")
+
+    @staticmethod
+    def usage_step(result, elapsed):
+        """The turn's wall time in seconds, its cost in dollars and its input -- the cache included -- and output tokens, each None
+        when the result event lacks it."""
+        usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+        counted = [usage.get(key) for key in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens") if isinstance(usage.get(key), int)]
+        return {"kind": "usage", "seconds": round(result["duration_ms"] / 1000, 2) if isinstance(result.get("duration_ms"), (int, float)) else elapsed,
+                "cost_usd": result.get("total_cost_usd"), "input_tokens": sum(counted) if counted else None, "output_tokens": usage.get("output_tokens")}
 
 
 CONNECTORS = {"claude_code": claude_code_connector}

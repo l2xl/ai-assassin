@@ -1,0 +1,9 @@
+---
+parents: [SYNGATE_UI-CONTENT]
+order: 20
+test: ~
+---
+Block at rest
+shows only its text and the common label; its border and the controls mounted on it appear while it is hovered or holds the focus, the controls staying shown while the block is selected or its chat or editor is open.
+
+The revealed border is dim: the line color or dimmer, never the accent or selection color.

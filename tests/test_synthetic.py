@@ -178,6 +178,16 @@ def test_the_delegation_skill_is_a_default_skill_stating_how_separable_children_
     assert skill.text in shipped and synthetic.LIBRARY["agent"].kind == "tool" and synthetic.LIBRARY["agent"].text in shipped
 
 
+@pytest.mark.syngate("SYNTHETIC-SKILL-ROUTE")
+def test_the_task_routing_skill_is_a_default_skill_carrying_a_request_to_the_best_fitting_item_new_or_found_through_an_agent_call():
+    skill = synthetic.SKILLS["route"]
+    assert skill.default and skill.text.startswith("# Task routing\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    for phrase in ("change of the project", "fits it best", "the anchored item, the items of its seed context and those the exchange names by `@UID`",
+                   "asking for no change stays in the anchored chat", "already states", "becomes a new item first", "`add`", "UID semantic",
+                   '{"tool": "agent"', "own chat and context", "Only when the fit is the anchored item itself"):
+        assert phrase in skill.text
+
+
 @pytest.mark.syngate("SYNTHETIC-SKILL-DELIVER")
 def test_the_delivery_skill_is_a_default_skill_carrying_reworked_items_into_tests_and_sources_by_the_test_switch_the_seed_states(syngate_tree):
     skill = synthetic.SKILLS["deliver"]
@@ -280,6 +290,21 @@ def test_claude_code_settings_list_models_by_display_name_efforts_and_modes():
     assert [(mode["id"], mode["label"], mode["hint"], mode["default"], mode["advanced"]) for mode in settings["modes"]] == [
         ("edit", "Edit files", "change project files without asking", True, False), ("internet", "Internet", "search and fetch the web", True, False),
         ("bash", "Raw command", "run shell commands", False, True), ("workflows", "Workflows", "run workflow scripts", False, True)]
+
+
+@pytest.mark.syngate("AI_CONNECTION-DEFAULT", "settings")
+def test_every_connection_reports_a_default_model_with_an_effort_that_model_supports():
+    for connector in synthetic.CONNECTORS.values():
+        settings = connector().settings()
+        models = {model["id"]: model["efforts"] for model in settings["models"]}
+        default = settings["default"]
+        assert default["model"] in models
+        assert default["effort"] is None or default["effort"] in models[default["model"]]
+
+
+@pytest.mark.syngate("CLAUDE_CODE-DEFAULT")
+def test_claude_code_starts_with_sonnet_at_high_effort():
+    assert synthetic.claude_code_connector().settings()["default"] == {"model": "sonnet", "effort": "high"}
 
 
 @pytest.mark.syngate("CLAUDE_CODE-MODEL-SELECT")

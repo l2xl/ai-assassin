@@ -908,22 +908,40 @@ def test_the_fold_mark_folds_a_message_to_its_first_line_grey_and_out_of_the_exc
     assert "cuts" not in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"][1] and len(app.chats["LEAF-001"].kept()) == 2
 
 
+CHILD_ASK = "Make the text below a new child item of @LEAF-001, then carry its task on in the new item's own chat.\n\n"
+SIBLING_ASK = "Make the text below the next sibling item of @LEAF-001 under @ROOT, then carry its task on in the new item's own chat.\n\n"
+
+
+def settled(page, uid, messages):
+    page.wait(f"state.chats.get('{uid}')?.log.length === {messages} && !state.chats.get('{uid}').turn")
+
+
+def logged(app, uid):
+    return [(m["role"], m["text"]) for m in app.chats[uid].log]
+
+
 @pytest.mark.syngate("AI_CHAT-CONTROLS-ITEM", "marks")
-def test_a_message_turns_into_a_child_or_next_sibling_item_while_the_chat_stays(server, chrome):
-    page = open_chat(server, chrome, echo=CallsConnector("Leaf sentence\n\nIt shall be extracted."))
+def test_a_message_mark_sends_its_kept_text_as_a_turn_asking_the_ai_for_a_child_or_next_sibling_item_and_its_hand_over(server, chrome):
+    base, app = server
+    statement = "Leaf sentence\n\nIt shall be extracted."
+    handed = [{"tool": "add", "uid": "LEAF-EXTRACTED", "parent": "ROOT", "description": statement}, {"tool": "agent", "uid": "LEAF-EXTRACTED", "prompt": "Deliver it."}]
+    page = open_chat(server, chrome, echo=CallsConnector(statement, "Child asked.", "```syngate\n" + json.dumps(handed) + "\n```", "Delivered."))
     send(page, "LEAF-001", "Say something")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
+    settled(page, "LEAF-001", 2)
+    page.eval("state.chats.get('LEAF-001').turn = 'LEAF-001:99'")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-child').click()")
-    page.wait("document.querySelector('#tree [data-path^=\"ROOT/LEAF-001/\"]')")
+    assert page.eval(TOASTS)[-1] == "toast info:a turn of LEAF-001 is running — wait for it or stop it" and len(app.chats["LEAF-001"].log) == 2  # refused while a turn runs
+    page.eval("state.chats.get('LEAF-001').turn = null")
+    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-child').click()")
+    settled(page, "LEAF-001", 4)
+    assert logged(app, "LEAF-001")[2:] == [("user", CHILD_ASK + statement), ("ai", "Child asked.")]
+    assert page.eval(PATHS % "#tree") == ["ROOT", "ROOT/LEAF-001"]  # the page writes no item of its own: the AI words and names it
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-sibling').click()")
-    page.wait("document.querySelectorAll('#tree [data-path]').length === 4")
-    paths = page.eval(PATHS % "#tree")
-    child, sibling = paths[2].rsplit("/", 1)[1], paths[3].rsplit("/", 1)[1]
-    assert paths[2].startswith("ROOT/LEAF-001/") and paths[3] == f"ROOT/{sibling}" and sibling != "LEAF-001"
-    for uid in (child, sibling):
-        extracted = tree_item(server, uid)
-        assert (extracted["title"], extracted["description_raw"]) == ("Leaf sentence", "Leaf sentence\n\nIt shall be extracted.\n")
-    assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg')].map((el) => el.className)") == ["chat-msg user", "chat-msg ai"]
+    settled(page, "LEAF-001", 6)
+    assert logged(app, "LEAF-001")[4:] == [("user", SIBLING_ASK + statement), ("ai", "- added LEAF-EXTRACTED under ROOT\n- agent LEAF-EXTRACTED: Delivered.\nDelivered.")]
+    assert logged(app, "LEAF-EXTRACTED") == [("user", "Deliver it."), ("ai", "Delivered.")]  # the task went on in the new item's own chat
+    page.wait("document.querySelector('#tree [data-path=\"ROOT/LEAF-EXTRACTED\"]')")
+    assert tree_item(server, "LEAF-EXTRACTED")["description_raw"] == statement + "\n"
 
 
 SEL_TOOLS = "document.getElementById('sel-tools')"
@@ -965,16 +983,14 @@ def test_a_selection_inside_a_message_gets_the_three_marks_on_the_border_lines_c
     select_text(page, f"{reply}.querySelector('.msg-part p:last-child').firstChild", 9, 21)
     page.wait(f"{SEL_TOOLS}.matches(':popover-open')")
     page.eval(f"{SEL_TOOLS}.querySelector('.msg-child').click()")
-    page.wait("document.querySelector('#tree [data-path^=\"ROOT/LEAF-001/\"]')")
-    child = page.eval(PATHS % "#tree")[2].rsplit("/", 1)[1]
-    assert tree_item(server, child)["description_raw"] == "be extracted\n"
-    assert page.eval(f"[{SEL_TOOLS}.matches(':popover-open'), document.querySelectorAll('.has-selection').length, getSelection().isCollapsed, {LEAF_BLOCK}.querySelectorAll('.chat-msg').length]") == [False, 0, True, 2]
+    settled(page, "LEAF-001", 4)
+    assert app.chats["LEAF-001"].log[2] == {"role": "user", "text": CHILD_ASK + "be extracted"}  # the selected text alone goes to the AI
+    assert page.eval(f"[{SEL_TOOLS}.matches(':popover-open'), document.querySelectorAll('.has-selection').length, getSelection().isCollapsed]") == [False, 0, True]
     select_text(page, f"{LEAF_BLOCK}.querySelector('.chat-msg.user .msg-part').lastChild", 0, 3)
     page.wait(f"{SEL_TOOLS}.matches(':popover-open')")
     page.eval(f"{SEL_TOOLS}.querySelector('.msg-sibling').click()")
-    page.wait("document.querySelectorAll('#tree [data-path]').length === 4")
-    sibling = page.eval(PATHS % "#tree")[3]
-    assert sibling.startswith("ROOT/") and sibling.count("/") == 1 and tree_item(server, sibling[5:])["description_raw"] == "Say\n"
+    settled(page, "LEAF-001", 6)
+    assert app.chats["LEAF-001"].log[4] == {"role": "user", "text": SIBLING_ASK + "Say"} and page.eval(PATHS % "#tree") == ["ROOT", "ROOT/LEAF-001"]
 
 
 @pytest.mark.syngate("AI_CHAT-050")
@@ -994,6 +1010,17 @@ def pick(page, attribute, value):
     page.eval("document.querySelector('.chat-setup').click()")
     assert page.eval("document.getElementById('status-menu').matches(':popover-open')")
     page.eval(f"document.querySelector('#status-menu [data-chat-{attribute}=\"{value}\"]').click()")
+
+
+class DefaultingConnector(EchoConnector):
+    def settings(self):
+        return {**super().settings(), "default": {"model": "model-b", "effort": "high"}}
+
+
+@pytest.mark.syngate("AI_CONNECTION-DEFAULT", "page")
+def test_a_chat_without_a_setup_starts_with_the_reported_default_model_and_effort(server, chrome):
+    page = open_chat(server, chrome, echo=DefaultingConnector())
+    assert page.eval(SETUP) == "b · high ▾"
 
 
 @pytest.mark.syngate("AI_CHAT-010")
@@ -1016,7 +1043,7 @@ def test_the_connector_menu_selects_the_setup(server, chrome):
     pick(page, "model", rich)
     offered, setup = page.eval(menu), page.eval(SETUP)
     expected = [names, list(synthetic.CLAUDE_MODEL_EFFORTS[rich])]
-    assert offered == expected and setup == f"Claude Code · {rich.removeprefix('claude-')} · medium ▾", f"rich model {rich!r}: menu {offered} expected {expected}, setup {setup!r}"
+    assert offered == expected and setup == f"Claude Code · {rich.removeprefix('claude-')} · {synthetic.claude_code_connector.default_effort} ▾", f"rich model {rich!r}: menu {offered} expected {expected}, setup {setup!r}"
 
 
 def css_color(page, var):

@@ -80,6 +80,14 @@ python3 -m venv .venv
 .venv/bin/assassin                    # http://127.0.0.1:8712, tree = this checkout
 ```
 
+`bin/assassin` does the same in one step: it creates `.venv` on first use (with `uv` when present,
+else `python3 -m venv`), installs the checkout editable, and starts the UI with the arguments given.
+`ASSASSIN_VENV` relocates the environment and `PYTHON` picks the interpreter.
+
+```
+bin/assassin --port 8712 --no-browser
+```
+
 `assassin` and `syngate` take the managed project from `--root`, else `SYNGATE_ROOT`, else the nearest
 ancestor of the working directory holding `syngate/` — started from this checkout they edit this tree,
 started from a managed project's checkout the same install edits that project's tree. The rest of the loop:

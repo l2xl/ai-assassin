@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# AI Assassin launcher: runs `assassin` from the checkout's own virtual environment, provisioning it on first use.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+venv=${ASSASSIN_VENV:-$here/.venv}
+stamp=$venv/.assassin-installed
+
+if [ ! -x "$venv/bin/python" ]; then
+  if command -v uv >/dev/null 2>&1; then
+    uv venv --quiet ${PYTHON:+--python "$PYTHON"} "$venv"
+  else
+    "${PYTHON:-python3}" -m venv "$venv"
+  fi
+fi
+if [ ! -x "$venv/bin/assassin" ] || [ "$here/pyproject.toml" -nt "$stamp" ]; then
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install --quiet --python "$venv/bin/python" -e "$here"
+  else
+    "$venv/bin/python" -m pip install --quiet -e "$here"
+  fi
+  touch "$stamp"
+fi
+
+exec "$venv/bin/assassin" "$@"

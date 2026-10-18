@@ -1,0 +1,10 @@
+---
+parents: [ASSASSIN-UI]
+order: -10
+sources: [bin/assassin]
+test: ~
+---
+Launcher script
+`bin/assassin` starts the `assassin` command with the arguments given from the checkout's own virtual environment, creating the environment and installing the package editable on first use, so no Python setup is needed beforehand.
+
+The package is installed again once `pyproject.toml` is newer than the last install. The environment is created and filled with `uv` where it is on the PATH, else with `python3 -m venv` and pip; `ASSASSIN_VENV` relocates it and `PYTHON` picks the interpreter.

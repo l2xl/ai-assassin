@@ -88,13 +88,16 @@ and is never a permission.
     does not travel with the next turn — or expands a cut back into the text. The fold marks are
     frozen while a turn runs (`aria-disabled`, the server answering 409).
   - on the right line, the two marks that turn the kept text of the message into a syngate item:
-    `↳` (`.msg-child`), level with the first line, adds it as a child of the anchored item, `↓`
+    `↳` (`.msg-child`), level with the first line, as a child of the anchored item, `↓`
     (`.msg-sibling`), level with the last line and pushed under the child on a message of a line or
-    two, as its next sibling. Both go through the editor's own `add_item`; the text is the item's
-    body, its first line thereby the title shown in the outline (a leading heading mark is
-    stripped). The chat stays as it is after the transform: the new item is extracted from it, not
-    replaced by it; a toast names the new UID and the outline flashes its row. A message folded
-    whole carries no extraction marks.
+    two, as its next sibling. Neither writes the item itself: the mark sends the text as a new turn
+    of the anchored item's chat, headed by the request to make it that child or sibling and to
+    carry the new item's task on in its own chat. The AI words the statement by the DAG rules,
+    names it with a semantic UID — never a numbered suggestion of the page — adds it and hands the
+    task on through an `agent` call, the task routing skill of the prompt library
+    ([SYNTHETIC.md](SYNTHETIC.md)) telling it how; the new item's chat then shows the delegated
+    turn. While a turn of the chat runs the send is refused with a notice, as a typed message is.
+    A message folded whole carries no extraction marks.
 
   An error message (`.chat-msg.error`, a failed turn) carries on the right line instead `↻ retry`
   (`.msg-retry`), which sends the user's last message again in the same session without logging it
@@ -106,8 +109,8 @@ and is never a permission.
   and child marks at its first line, the sibling mark at its last. The fold mark cuts the selected
   text out of the message: the cut is shown folded in its place, its own mark expanding it back;
   the selection is mapped onto the message's text by the alphanumerics shown, so the markup of a
-  reply is stepped over. The extraction marks make the selected text alone a child or the next
-  sibling item.
+  reply is stepped over. The extraction marks send the selected text alone, as the message's own
+  marks send its kept text.
 - **Items as references.** A chat message names an item the way a file is named with `@`: the
   harness resolves every `@UID` into the item's statement for the turn, appended to the seed
   context as one more section (`@UID`, then the statement), the message text staying as typed; in

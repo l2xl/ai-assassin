@@ -574,6 +574,8 @@ class claude_code_connector:
     model_efforts = CLAUDE_MODEL_EFFORTS
     always_allowed = ("Agent",)
     library_delivery = "native"
+    default_model = "sonnet"
+    default_effort = "high"
     # The tree files are closed to the turn in every mode, to read as to write: the tree is read and changed only through tree calls.
     denied = ("Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)")
     # Call modes: what a turn may do without prompting, as (label, hint, on by default, advanced, permission mode, allowed tools);
@@ -617,7 +619,7 @@ class claude_code_connector:
     def settings(self):
         return {"label": self.label, "library": self.library_delivery,
                 "models": [{"id": model, "name": model.removeprefix("claude-"), "efforts": list(self.model_efforts.get(model, ()))} for model in self.models],
-                "efforts": list(self.efforts),
+                "efforts": list(self.efforts), "default": {"model": self.default_model, "effort": self.default_effort},
                 "modes": [{"id": mode, "label": label, "hint": hint, "default": default, "advanced": advanced}
                           for mode, (label, hint, default, advanced, _, _) in self.modes.items()]}
 

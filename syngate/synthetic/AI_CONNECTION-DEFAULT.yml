@@ -1,0 +1,9 @@
+---
+parents: [AI_CONNECTION]
+order: 30
+test: {settings: ~, page: ~}
+---
+Default setup
+of an AI connection is reported in its settings next to the lists of its models and call modes: the model and effort a chat starts with, the effort being one the model supports or none.
+
+A chat of the page that has no setup of its own starts with the reported default model and effort and with the modes the settings mark as default.

@@ -376,7 +376,7 @@ textarea.block-text:focus { outline: none; }
 <div id="toasts" role="status" aria-live="polite"></div>
 <div id="tests-pop" popover></div>
 <div id="status-menu" popover role="menu"></div>
-<div id="sel-tools" popover="manual" class="msg-tools"><button type="button" class="msg-fold" aria-expanded="true" title="fold the selected text — it leaves the exchange"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.5 5.25h9L8 10.75z"/></svg></button><button type="button" class="msg-child" title="make the selection a child item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v6.5h7M9 7.5l2.5 2.5L9 12.5"/></svg></button><button type="button" class="msg-sibling" title="make the selection the next sibling item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg></button></div>
+<div id="sel-tools" popover="manual" class="msg-tools"><button type="button" class="msg-fold" aria-expanded="true" title="fold the selected text — it leaves the exchange"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.5 5.25h9L8 10.75z"/></svg></button><button type="button" class="msg-child" title="ask the AI to make the selection a child item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v6.5h7M9 7.5l2.5 2.5L9 12.5"/></svg></button><button type="button" class="msg-sibling" title="ask the AI to make the selection the next sibling item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg></button></div>
 <div id="help-pop" popover aria-label="keys"><dl>
   <dt>/</dt><dd>filter</dd>
   <dt>?</dt><dd>this list</dd>
@@ -1200,7 +1200,7 @@ function messageHtml(m, index, busy, last) {
   const right = out || m.role === "stopped" ? "" : m.role === "error"
     ? (last ? `<button type="button" class="msg-retry" title="retry — send the last message again in the same session">${MARK.retry}</button>` : "")
       + `<button type="button" class="msg-drop" title="remove the failed turn from the log">${MARK.remove}</button>`
-    : `<button type="button" class="msg-child" title="make the kept text a child item">${MARK.child}</button><button type="button" class="msg-sibling" title="make the kept text the next sibling item">${MARK.sibling}</button>`;
+    : `<button type="button" class="msg-child" title="ask the AI to make the kept text a child item">${MARK.child}</button><button type="button" class="msg-sibling" title="ask the AI to make the kept text the next sibling item">${MARK.sibling}</button>`;
   const [agent, turn] = String(m.agent || "").split(":");
   const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>` : "";
   return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${out ? " dropped" : ""}" data-index="${index}">`
@@ -1370,7 +1370,8 @@ function modelSetup(connector, model, effort = null) {
 }
 function chatSetup(connector) {
   const setup = state.model.connectors[connector];
-  return { connector, ...modelSetup(connector, setup.models[0].id), modes: setup.modes.filter((m) => m.default).map((m) => m.id) };
+  const start = setup.models.some((m) => m.id === setup.default?.model) ? setup.default : { model: setup.models[0].id };
+  return { connector, ...modelSetup(connector, start.model, start.effort), modes: setup.modes.filter((m) => m.default).map((m) => m.id) };
 }
 
 // Showing the chat in a block: wherever the item is shown, in this tab or another, it is the same chat.
@@ -1449,15 +1450,15 @@ function toggleChatMode(chat, mode) {
   updateChat(chat.uid, { modes: chat.modes.includes(mode) ? chat.modes.filter((m) => m !== mode) : [...chat.modes, mode] });
 }
 
-// A turn: the typed text joins the log as the user's message; a statement sent from the editor is the content itself, not repeated,
-// and starts the item's chat anew, the old one erased first; a retry sends the last message again without logging it twice.
-async function sendChat(row, statement = null, retry = false) {
+// A turn: the typed text -- or the `composed` one of a mark -- joins the log as the user's message; a statement sent from the editor is the
+// content itself, not repeated, and starts the item's chat anew, the old one filed first; a retry sends the last message again without logging it twice.
+async function sendChat(row, statement = null, retry = false, composed = null) {
   const chat = row && chatAt(row), input = chat && chatInput(row.path);
-  const text = retry ? chat?.log.findLast((m) => m.role === "user")?.text ?? "" : statement ?? (input ? input.value.trim() : "");
+  const text = retry ? chat?.log.findLast((m) => m.role === "user")?.text ?? "" : statement ?? composed ?? (input ? input.value.trim() : "");
   if (!chat) return;
   if (busy(chat)) { toast(`a turn of ${chat.uid} is running — wait for it or stop it`, "info"); return; }
   if (!text) { toast("type a message first", "info"); return; }
-  if (input && statement === null && !retry) input.value = "";
+  if (input && statement === null && composed === null && !retry) input.value = "";
   state.views.get(row.path).byEdit = false;
   persistViews();
   if (statement !== null) for (const key of state.unfolded) if (key.startsWith(chat.uid + ":")) state.unfolded.delete(key);
@@ -1487,27 +1488,19 @@ function messageTool(chat, row, msg, tool) {
     const cuts = part.classList.contains("msg-cut") ? (m.cuts || []).filter(([a, b]) => a !== from || b !== to) : mergeCuts([...(m.cuts || []), [from, to]], m.text.length);
     updateChat(chat.uid, { message: { index, cuts } });
   }
-  if (tool.classList.contains("msg-child")) extractItem(row, keptText(m), row.uid, null);
-  if (tool.classList.contains("msg-sibling")) extractItem(row, keptText(m), row.parent, row.uid);
+  if (tool.classList.contains("msg-child")) extractItem(row, keptText(m), false);
+  if (tool.classList.contains("msg-sibling")) extractItem(row, keptText(m), true);
   if (tool.classList.contains("msg-retry")) sendChat(row, null, true);
   if (tool.classList.contains("msg-drop")) updateChat(chat.uid, { message: { index, remove: true } });
 }
 
-// A message becomes an item through the editor's own scaffold: its text is the body, a heading mark stripped off the first line.
-async function extractItem(row, text, parent, after) {
-  if (!parent) { toast("the root has no siblings"); return; }
-  const description = text.trim().replace(/^#+\s*/, "");
-  const kids = item(parent).children, anchor = after ? item(after) : kids.length ? item(kids[kids.length - 1]) : null, uid = suggestUid(parent);
-  const next = after ? kids[kids.indexOf(after) + 1] : null;
-  try {
-    await api("/api/new", { uid, parents: [parent], dir: (anchor || item(parent)).folder, kind: "leaf", description, order: anchor ? anchor.order + 10 : 0 });
-    if (next) await api(`/api/move/${uid}`, { from: parent, to: parent, before: next });
-    state.expanded.add(parent);
-    persistExpanded();
-    state.flash = uid;
-    await refresh();
-    toast(`${uid} added under ${parent}`, "info");
-  } catch (err) { toast(err.message); }
+// A message becomes an item through the AI: the text goes as a turn of the anchored item's chat, which words the item, names it and
+// carries its task on in the new item's own chat.
+const extractionText = (row, text, sibling) => `Make the text below ${sibling ? `the next sibling item of @${row.uid} under @${row.parent}` : `a new child item of @${row.uid}`}`
+  + `, then carry its task on in the new item's own chat.\n\n${text.trim()}`;
+function extractItem(row, text, sibling) {
+  if (sibling && !row.parent) { toast("the root has no siblings"); return; }
+  sendChat(row, null, false, extractionText(row, text, sibling));
 }
 
 // The editor's send: the item is saved first and its stored statement is the user's text of the turn; a chat with messages is erased
@@ -2093,7 +2086,7 @@ selTools.addEventListener("click", (event) => {
   if (tool.classList.contains("msg-fold")) {
     const chat = chatAt(row), m = chat?.log[index];
     if (span && m) updateChat(chat.uid, { message: { index, cuts: mergeCuts([...(m.cuts || []), span], m.text.length) } });
-  } else tool.classList.contains("msg-child") ? extractItem(row, text, row.uid, null) : extractItem(row, text, row.parent, row.uid);
+  } else extractItem(row, text, tool.classList.contains("msg-sibling"));
   getSelection().removeAllRanges();
 });
 $("help").addEventListener("click", toggleHelp);

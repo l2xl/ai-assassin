@@ -149,6 +149,15 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   turn of the child's chat, so its whole transcript is where the child is shown. The delegation
   skill, a default one, tells the model to analyse the scope of an item with children — reading them
   with `query` — and to delegate the separable ones this way. This is the preferred form.
+- **Task routing.** The task routing skill, a default one too, moves a request for a change to
+  the item whose context fits it best — the anchored item, an item of its seed context, or one the
+  exchange names by `@UID` — and, where no item states the facility yet, has the model add it
+  first, with a semantic UID and a statement condensed from the request. The task then goes on as
+  an `agent` call to that item rather than as an implicit subagent: only the harness's own turn is
+  seeded with the target item's context, and the delegated turn is a turn of that item's chat, shown
+  there live. Only when the fit is the anchored item does the turn keep the work. The extraction
+  marks of the chat ([AI_CHAT.md](AI_CHAT.md)) are this routing started by hand, the parent named
+  by the mark.
 - **Implicit subagents, observed.** Subagents the model launches inside its own session are
   observed, not steered. The Claude Code connector runs `claude` with
   `--output-format stream-json --verbose`, so every message, tool call and result arrives as an

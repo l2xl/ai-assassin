@@ -5,4 +5,4 @@ test: {marks: 342c3036bf0e39d0b9db3d7285958e0db3861796a440f95fc791e2a9e6372dbf, 
 review: fa327396ddf442c9d1f0a0f3aa7371597ee89fe7e0090952fe54d5d833890c0d
 ---
 Item extraction marks
-of a message make its kept text a new child of the anchored item or its next sibling through the editor's own add, a leading heading mark stripped, the chat staying as it is and the outline flashing the new row.
+of a message send its kept text as a new turn of the anchored item's chat asking the AI to make it a new child of the anchored item or its next sibling and to carry the new item's task on in that item's own chat, so the AI words the item and names its UID; while a turn runs the send is refused with a notice.

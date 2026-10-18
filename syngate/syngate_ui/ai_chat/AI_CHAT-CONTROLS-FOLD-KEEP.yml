@@ -2,8 +2,8 @@
 parents: [AI_CHAT-CONTROLS]
 order: 10
 test: {marks: 10c360d5e124ac5e24bc9c89bc12934b8d73272ddc6e592c84c9b9a467ae770a, drop_travels: ab03629ef0ece8c600d230bb03ce87299e3f165cfea4932f61b6bc2d2b351ea5,
-  cuts: d4b05cf1dec867201e9fcd3fff2bf27aa321b271ec62a3c8d96d0aaed45f0609}
-review: 097e686895294499ddf82b5528b2f30abe0b5b4c381c4c01fee62e9a82adae75
+  cuts: 7b7d287ebc6fa03998b2ec55dcc77df55d7302e41f6ede860aef5b7a88b67872}
+review: 56c506ed94b262bdfef34a0db82a8f3a0b6cfb252d594aef7b0a05b2c8a4698f
 ---
 Fold mark
 of a part of a message is one switch of that text's place in the exchange: unfolded text travels with the next turn, folded text is shown as its first line in grey and does not travel, either switch ending the connector session so the next turn starts anew headed by the unfolded text; the fold marks are frozen while a turn runs.

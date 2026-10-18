@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-CONTENT]
 order: 30
-test: ~
+test: f63f2d059250dd44f10a81f5241311359e7b47233f41c38b64b700550aaedd9b
+review: e8a5a98d1418faeadf4e31dd772779783247a238fa4d628ef7556e0fe2fa4b09
 ---
 Sub-element delimiting
 inside an item's block — a file view, a chat message — is by horizontal lines, a shift and alignment, never by a full rectangle border.

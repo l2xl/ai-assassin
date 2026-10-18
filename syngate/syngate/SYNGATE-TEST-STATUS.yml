@@ -2,7 +2,7 @@
 parents: [SYNGATE-STATUS]
 order: 50
 test: a66d49ec267c4548e37018e996e25fef1da43c52040e4863002a0ad368717b8b
-review: 34090c23a61b7e6fee3de341b517f08d72deebd8ca5d377bf76f08235cb2a8bb
+review: 7504ee371d428d8116271223fc0459ce4a286e277e84fbeb1b3bfa61848d9114
 ---
 Test status axis
 of an item is the superposition of its own bound tests' status and its children's, recursively: unknown, test passed or test failed, where a failed item fails every ancestor and otherwise one unknown item leaves them unknown.

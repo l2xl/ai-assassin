@@ -1,7 +1,9 @@
 ---
 parents: [ASSASSIN-UI]
 order: 10
-test: {csp: ~, render: ~, problems: ~}
+test: {csp: e6d5a6d4fd34d83b5c1299acb752f69918338052ac2d6c24b6a677dd905f67bc, render: dd96e54ef7af00e883e53df0724e5f8d5322496e6d6165cec552a3d42cf10a85,
+  problems: d455a560ba2dc4bc87afdacb78bf1f21423dd76760e25bd3b67c6abf83d42c92}
+review: 3be406c9d11ba6d7aa70da5f26ed42e322afc442c8db197fb550a6cec83c7050
 ---
 Browser rendering
 builds the whole item tree in the page from the served tree model, the page running only its own nonced script.

@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-CONTENT]
 order: 10
-test: ~
+test: 49e901d6b11e5fa8100e8f66299e44c98e1d1e7e78cb08ef4b6e71ada6923048
+review: 4ca6edfde14a74985d2380b8b652a3337b24a9e8c86b462816704068d9a9dc7c
 ---
 Block at rest
 shows only its text and the common label; its border and the controls mounted on it appear while it is hovered or holds the focus, the controls staying shown while the block is selected or its chat or editor is open.

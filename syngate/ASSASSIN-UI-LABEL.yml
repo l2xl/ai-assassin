@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 30
-test: ~
+test: c511b9441f6671cb52004c8c9c86a4e04edcc3e0484fb9b4287ac12c83f77eee
+review: 18dacdc1c2f634050bfe72a90f04459846df9b09b8469384c3b504b5bf0a4630
 ---
 Common item label
 is one composite status icon followed by the UID, wherever an item is shown.

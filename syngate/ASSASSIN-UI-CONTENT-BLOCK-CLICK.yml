@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-CONTENT]
 order: 20
-test: {click: ~, enter: ~}
+test: {click: a3a4d79e552a3ff647dabda6c483fba0e0242a3f20d23cdb96676813563d2966, enter: c2f24cd7624003042412df89b26971b0f3625006d4c1c98de3579ffcec82f21d}
+review: c8b2fbc7b0aacb700b411f20306bdcf1837ef0e2b5f646f9787c56b4ebd38097
 ---
 Block click
 turns the block into its description editor, as Enter does on the selected block or row; a click that ends a text selection leaves the rendered view as it is.

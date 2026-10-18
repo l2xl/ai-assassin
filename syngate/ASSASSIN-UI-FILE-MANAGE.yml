@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 80
-test: ~
+test: 6e513bb3d4a0c7ea36a600a67e4001e7f5dbd32f60ee164c447bb88e71a03e0e
+review: f375109d9f7183f24e30def35a1d05b6c17cff8b0154fdbf983a8bf8378c7169
 ---
 Item file management
 by the page creates a new item file under a chosen parent and removes the file of a childless item.

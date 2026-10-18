@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 20
-test: ~
+test: ae908ead3a90b6bf784e054ba0d709e8766b7c380fb7ea9cce716ca21dc60dce
+review: 39d0bdd692e7674f40c2a3c1979a333abb05e2f184143e70c821792d886bcf40
 ---
 Row menu button ⋯
 sits at the right end of the row and opens an explicit drop-down of the item's structure actions, none of them one click away on the row itself.

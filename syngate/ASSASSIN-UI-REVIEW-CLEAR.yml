@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 70
-test: ~
+test: 3c813c81ddaba682b842b1aae5e1664a9eadd1e4bee2503156a40d22533101f6
+review: 4cf87717c40ef6686a1e845defbd11aa9aca095d4fc6ee748f44f2acff1b2ba7
 ---
 Review clearing
 follows an edit of a reviewed item's statement, parents or bindings in the page, dropping its stamp and reverting its routine shas.

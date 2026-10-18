@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 50
-test: ~
+test: fc7f5c3a9c3d63ddb41cbd3a35b60d1c0e619071bd31e7a2fd06bbe804fe8cfe
+review: 6ce65a44c497af74f7a7a55fbd39fa78faff21488d02bd1f07c9e24b48d18fcd
 ---
 Feature-off affordances
 are none: with the test feature off the page shows no test fill in the status icon, no test details and no binding editor in the status popup; with the review feature off no review glyph and no review or clear run — while a test run stays offered whichever way the switches sit.

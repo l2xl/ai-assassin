@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 60
-test: {reorder: ~, reparent: ~}
+test: {reorder: dcab695f61a0a66fcef7b5284405b9322b7c7c77f9f7824888a62be868db3447, reparent: 042b9943c0ebc0728820ef88c4d4e79c6de1076faf3d05ae64b8eff25bb6b530}
+review: 73c0e031f8e3c5366e9b126b51556e94c4261a2d18d525d24c04cdc0fec21cb9
 ---
 Row drop
 lands the dragged row at the drop position, re-pointing or adding its parent link without breaking the DAG.

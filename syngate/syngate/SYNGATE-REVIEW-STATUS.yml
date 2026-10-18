@@ -2,7 +2,7 @@
 parents: [SYNGATE-STATUS]
 order: 60
 test: 4d4b046641b1ee8d406fa093ab4a42ef56eed041995a97eb6e213771cb64b4a9
-review: de97a5181cac9f8607ef1ae5ecce1eb8103ad9430e5d01a771b96095b003258c
+review: 5e13bfcdd934593b963e67227fca2f430924321bfa333e95bd0b32f668a47b31
 ---
 Review status axis
 of an item is the superposition of its own review mark and its children's, recursively: not reviewed, reviewed or review violated, where an item's own validation problem is a violated review, violated outranks not reviewed and not reviewed outranks reviewed.

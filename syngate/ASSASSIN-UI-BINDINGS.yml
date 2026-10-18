@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-STATUS-POPUP]
 order: 10
-test: ~
+test: 7aa79c1034aecf3f4890420e74d4565b62f761edce40777b6da3adbf46ef6b8f
+review: b0b3ff645b25517e5cfb68c4f539dd2e64d5ffbfd1a38bafa49cd0f091202a2d
 ---
 Binding editor
 in the status popup of a childless item switches its `test` key on and off and adds or removes named bindings — names `[a-z0-9_]+`, the default binding standing alone — a frozen one removed only after confirmation, every change saved as a compare-and-swap of the binding list.

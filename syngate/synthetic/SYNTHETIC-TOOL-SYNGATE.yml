@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-TOOLS, SYNTHETIC-020]
 order: -5
 sources: [src/ai_scratcher/prompts/syngate_api.md]
-test: ~
+test: d86351490258d687aada9d32dfcee85344166f02a3cfab4c8bc5e7e4dc8697d2
+review: e13742f89ede3f0e45f7c974da45c657cd7264368d9ed06efaf5ed5594985e81
 ---
 Syngate API tool
 

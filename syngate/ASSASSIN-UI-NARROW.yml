@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 120
-test: ~
+test: 8c97a4eaa67fb9c5c0b2453cf98477b75cde8fc0ec70e513e08ca25ee46d6fd8
+review: 3e19e5365e62e045495862124ed9a770a0492422e71f7c939ccdf1ba7de6ee13
 ---
 Narrow layout
 below 60rem of viewport width stacks the panes: the outline on top within 38vh of height without a splitter, the document at full width with a halved depth shift, the filter spanning the header; on a device without hover every border and control stays shown.

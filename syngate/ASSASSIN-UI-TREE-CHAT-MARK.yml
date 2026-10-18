@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 50
-test: ~
+test: 46fc85a6573f6b362b973431fa039053ed635b0dbc098aca93f6d01858100d57
+review: 5853aacc1e81e4ae3486387f69eb82e86d11f78363644bde44b8f6c2d7f55e81
 ---
 Chat state mark
 follows the common label in the row: absent while the item has no chat, a spinner while its turn runs, a dot while a reply this tab has not shown waits, a warning when the last turn failed, a dim mark for a hidden chat; clicking it activates the block and shows the chat.

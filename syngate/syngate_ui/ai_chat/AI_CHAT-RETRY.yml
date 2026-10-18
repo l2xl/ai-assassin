@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 120
 test: {api: 9297394f365d5c530275646fb480e8fce3dd06c854227b98f9021acb97999b11, retry: a77f040cecb7bbbe97a5f9f55c0e4f71d72101baae57bdd12b057e6287aa20b9}
-review: 1b4b4f2bb5547cab80395023149fe7aaffd349e51e0055f7b39595006b6f284a
+review: 09835af5725675e461f1cfa82bf083769b43d607b4c6fd71e97444f4e79b6d1d
 ---
 Retry and remove marks
 of a failed turn's error message, the last in the chat, send the user's last message again in the same session or drop the attempt from the log, the kept messages and the session staying as they were.

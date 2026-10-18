@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 90
-test: ~
+test: 184780a7d5244e29e6e1f072639e71263b89a055a90acca396a029d0dc844782
+review: c2469aaa7b5b06cd71151aa9edee3c25f25d21fe9aabc69abdad8cba39fb6856
 ---
 Live tree
 is re-read by the page within a couple of seconds of any change to an item file, a coverage file or an opened project file on disk — by the agent's tree calls, git, an IDE or another tab — the selection, the open editor, the shown chats and the typed drafts surviving the re-read.

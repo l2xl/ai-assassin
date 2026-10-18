@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOLS]
 sources: [src/ai_scratcher/prompts/skill.md]
-test: ~
+test: 5c1ed38d0a83541e2a48e31e5e9183cd9ba899b0476d1a319ee3257c663ce2e9
+review: 3517711a51b3a4d34ba6b261732ff6cee2d304aae24ae1f78e916a56f2adfc0d
 ---
 The skill tool shall bring the named skill's text back as the next prompt of the same session, the way a query's result does, an unknown name being refused

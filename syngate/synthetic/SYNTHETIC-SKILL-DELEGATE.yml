@@ -2,6 +2,7 @@
 parents: [SYNTHETIC-SKILLS]
 order: 20
 sources: [src/ai_scratcher/prompts/delegate.md]
-test: ~
+test: d78a45d0d137d9da77e43189361460a61925544b7ff9a955807ae9640140cf15
+review: fbb4de43b62b1cccbc5fae56e3cf7cc686b03d89500b2f9324735e9c531009bd
 ---
 The delegation skill shall be a default skill stating how a turn on an item with children analyses their scope and delegates the separable ones through the agent tool, and that an implicit subagent's prompt opens with its target item as `@UID`

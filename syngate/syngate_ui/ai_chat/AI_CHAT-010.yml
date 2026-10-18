@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 40
 test: 9966afbf28987fa68d1add2af945c0eb4217c4e33bc9aaf4acac6ea2feac7c9f
-review: 6e8695e3bab1c98fcce75959c3fd251c96e18d038ddf5052cec1ba567a7a9993
+review: bd927f2cf2f5324a7252151d8a9f67b6ffb81a9f48816ebb49753ac58e6914df
 ---
 Setup selector
 of the chat picks the AI connector, its model and effort, offering only the efforts the chosen model supports.

@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 70
-test: ~
+test: 9c489c2bf632ea7675366d222d9b35c9542ec1e32b91610472acda6b0983e5bd
+review: dfa5bcb722cc357a1135da2016116daa9c0b8a8e3e2112c4f60a15397e05e6d1
 ---
 Outline splitter
 resizes the outline by dragging within its width limits.

@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE-ROW-MENU]
 order: 30
-test: ~
+test: 2a0fe08b2a5880a645aa271c81d4a333b9551609c3653f744bcf26d300408194
+review: 9fa233d95289226e80f7b929e16efa893fcc3e472e8ac98fd028634fb4261684
 ---
 Unlink action
 of the menu, offered when the row's item has several parents, drops the link to the parent the row sits under, after confirmation when the item is reviewed, since its parents are under the stamp.

@@ -1,6 +1,7 @@
 ---
 parents: [ASSASSIN-UI-CONTENT-FILE-VIEW]
-test: ~
+test: 4cbe9e98ad2331b8c586c7b9a347abb48aaa05dc044e2005b8052eb4d4fc1423
+review: e1369dd9593bb9623f8c7cd70a09bfff559e773cef934738ab2eef9dbc2ef439
 ---
 File view placement
 is inside the block of the item holding the link, as the chat is, the block growing to hold it, with no separate file panel beside or under it.

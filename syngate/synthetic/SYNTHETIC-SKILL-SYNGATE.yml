@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 10
 sources: [src/ai_scratcher/prompts/syngate.md]
-test: ~
+test: b72ee56014663ad31f5509162763d88e62e9a46e51887299b32890973a711850
+review: f65447fe18089975611956e7d93f117dadceda44af79e7f2bd5f34e4cdb2fd4a
 ---
 Syngate rules skill
 is a default skill stating the rules of the DAG and its items.

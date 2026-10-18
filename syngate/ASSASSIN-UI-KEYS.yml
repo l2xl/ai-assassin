@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 110
-test: ~
+test: aeb3c4afc8127cf14c3a1adea5aad5204c25f781cc6d345c2885a7131a77a9df
+review: 92b51226cc730453e79e6f1529dc16240d373c6ed6d99275531dcd0db1b766c4
 ---
 Keyboard navigation
 moves the selection in the pane holding the focus — Up and Down, PageUp and PageDown, Home and End, Right and Left unfolding and folding a row — and Enter opens the editor, Esc is the done mark, Ctrl/⌘+Enter sends, Ctrl/⌘+. stops the turn, Alt+Shift+arrows move the row, / focuses the filter and ? lists the keys.

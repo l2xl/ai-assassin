@@ -2,7 +2,7 @@
 parents: [AI-ASSASSIN]
 order: 50
 sources: [src/ai_scratcher/syngatelib.py, src/ai_scratcher/syngate.py, src/ai_scratcher/check_self_approval.py, src/ai_scratcher/render_syngate_report.py]
-review: fc80cc3aed22aa2b652802450439a1fc3c7e5f2b1ef4a89a0e4fa476329f5ae2
+review: d2dbe94e1db5785f0f7636c2fc2e612f0127a62ad81b80833404506c002a1a01
 ---
 Synergy Context Gate (SynGate)
 is the subsystem managing the project's DAG of statements, their test coverage and review status as a gate: open while every status passes, closed by anything failed.

@@ -1,6 +1,7 @@
 ---
 parents: [SYNGATE-STATUS]
 order: 10
-test: ~
+test: 9894dd8dcc586a3e36d092e9e14545740af121a11b70d0dade6087c83194f413
+review: 7cf90e4b824df24f435449ba94d26e1ba379b1235302f760142c8587cf21b87e
 ---
 Branch thesis status is recursively computed for every node in the project graph as the superposition of the status of its own tests, if it carries any, and its children's, from the leaves upward through the `parents` DAG.

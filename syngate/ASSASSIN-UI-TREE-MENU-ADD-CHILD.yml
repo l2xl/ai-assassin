@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE-ROW-MENU]
 order: 10
-test: ~
+test: 91d53c2d039451451c37bc117e066595be8e80297bd5af3b3f802b1dcf4c478f
+review: 9d60310d9ec0e5e4a30b46f940c1802b723330c6cfbec59c230f5e86ecdc24f6
 ---
 Add child action
 opens the new-UID row under the item with a UID suggested from its siblings; Enter creates the item and opens its editor, Esc cancels.

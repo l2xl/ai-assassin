@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 20
-test: {styles: ~, buttons: ~}
+test: {styles: 74d892ba88e6eb8b7aba7e5e7384ab27e6b05148de38c68c2972f7584673cf9a, buttons: 1ba9ac155ce25f0804382a74a1abc8fac31c91a276eacbc0ede8ba5871632729}
+review: 0c4babef553a1ac8c6b4f655e21708138f26534f5c196c2dccd0ca3ab264ecef
 ---
 Single style source
 of the page is its one stylesheet: the tree and the content panel take every visual definition — colors, borders, backgrounds, buttons, pills, indicators — from it as custom properties and shared classes, with no inline style attribute inside the panes and no purpose-specific rule (send, test, review, hide, stop) redefining the shape a control's kind already has, so all border-mounted controls share one class and one look.

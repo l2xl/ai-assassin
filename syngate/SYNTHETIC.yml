@@ -2,7 +2,7 @@
 parents: [AI-ASSASSIN]
 order: 60
 sources: [src/ai_scratcher/synthetic.py]
-review: 67935cbe9ce964f0ca22c6901bce4ebac7711c269683445068f17f8306d48552
+review: daadf9b1c3ca9754cad6b4265a92f79380ee0cc48d2df1e68f92ae0a883aea06
 ---
 Synthetic
 is the AI harness core of AI Assassin: the prompt library, the seed context, the AI connections and the tool call protocol of a reply.

@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE-ROW-MENU]
 order: 20
-test: ~
+test: 633705833cc55eb4d8102b5a87e8b7c5cd6ddc8504660fb0e741429fb75c71f1
+review: a4bd06a0bfd00b681cef174949ed431af9a1f8ba1996fd50cd85225ebfebd148
 ---
 Delete action
 of the menu, offered for a childless item only, unlinks it from every parent and deletes its file after a confirmation that names them.

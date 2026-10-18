@@ -1,8 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 35
-test: {api: d2a49e231c7e7f912b767adac378bd42055155bb37c8b3731982032950333f1c, list: 0251accca68a5ba43af7353382cd82ec7784222f47ad26d58b326ad9ad714309}
-review: f63b209f84a303a177584074ea64b6492b9ca4e521e54e7c8707c35b294d0a9d
+test: {api: 4062827f1a6df037c42076d2ab3388803e68bd151fc8197a8dce174ed50873b6, list: 0251accca68a5ba43af7353382cd82ec7784222f47ad26d58b326ad9ad714309}
+review: 0df26145473df91515a07ac16896f24d2fb1972f207c9a33d385e8c3dd2502d5
 ---
 Conversation list
 of an item keeps every earlier conversation — log, connector session and setup — filed behind the live one in start order, each read by the page as its start, first line and message count: beginning a new conversation files the live one when it holds messages, nothing erased, and resuming a filed one makes it the live chat again with its session and setup, the live one filed in its place; both are refused while a turn runs.

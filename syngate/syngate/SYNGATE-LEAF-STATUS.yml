@@ -1,5 +1,6 @@
 ---
 parents: [SYNGATE-STATUS]
-test: ~
+test: b6287d467e8d130413ce1251396fa6f37ae95b7a36183b28741fcf07db8ea0a4
+review: 2f858413b67ecee3ac57576268dc7fb49511aaa73d4a7dc00f938634b6e0cc73
 ---
 Leaf thesis status is computed from whether the automated tests bound to it currently pass in the offline test run.

@@ -1,6 +1,7 @@
 ---
 parents: [ASSASSIN-UI-FIELD-SAVE]
-test: ~
+test: 445efa5e3cfa5ae68483502352075f098f3ac0b9c124fb84ccdb09e1bb74b014
+review: 69224c5097facfc2d00654931a69ac375e3c97167ad23672fb9fbb2f524016bd
 ---
 Edit conflict bar
 appears under the header when a save is refused for a value changed on disk and offers keep mine, which stores the typed text over the disk value, and take theirs, which drops the draft and shows the disk value; the header meanwhile reads the save state — unsaved, saving, saved at a time, or failed with a click to retry — and the edited block carries the same mark.

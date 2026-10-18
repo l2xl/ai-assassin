@@ -1,6 +1,7 @@
 ---
 parents: [ASSASSIN-UI]
-test: ~
+test: 0a1d2b55cc2fc757bf54e5ab03c9538a0ff2618f84270cde597df588a7f12453
+review: 3bb67e1c8deae4046f04410a1aaa659ae5b4c4a5fdd9fa76d1df2244e8875f36
 ---
 Local UI server
 is the `assassin` command serving the page and its API on a loopback port, refusing every request without the session token or with a non-loopback host.

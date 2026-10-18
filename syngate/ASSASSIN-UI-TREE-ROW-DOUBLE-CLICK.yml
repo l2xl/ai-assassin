@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 40
-test: ~
+test: a11595fbefdac0f0c2c3633ce27d2eec3c09329081df0ca4f30130b8bc53aa79
+review: 85aedea064181b0ce33b5cebcd2eecee2d2b2b9789d65ff8af9bfba268aaeb4c
 ---
 Row double click
 activates the row's content block and scrolls to it unless it is already in view.

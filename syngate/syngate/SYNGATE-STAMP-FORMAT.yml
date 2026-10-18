@@ -1,6 +1,7 @@
 ---
 parents: [SYNGATE-REVIEW-FREEZE]
-test: ~
+test: 3fec6963617ac19f0d23c98378608c2f4a0d02345f9c65ed36f6cd7963293b27
+review: 5763ac3bd28099f696d517d61e8925843c6dfbdcd30eaf08f53f9c68853db539
 ---
 Wrong review stamp  not error
 

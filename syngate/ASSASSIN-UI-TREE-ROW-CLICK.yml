@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 30
-test: ~
+test: e2943a5ee341724504870675d37e03f83e3da9727d157231e887b1840aebbdc0
+review: 48de77a74dcbe3bc8efd38f5225bfc35e74e315b244aa13922d4079537d624e6
 ---
 Row single click
 selects the row without activating or scrolling to its content block, an editor open elsewhere staying open.

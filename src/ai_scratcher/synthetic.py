@@ -2,7 +2,7 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""Synthetic agent library: the prompt library of skills and tools, item seed context, AI connections and the tool call protocol of a reply."""
+"""Synthetic, the AI harness core of AI Assassin: the prompt library of skills and tools, item seed context, AI connections and the tool call protocol of a reply."""
 
 import difflib
 import json

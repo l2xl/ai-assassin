@@ -1,9 +1,0 @@
----
-parents: [AI_CHAT-PROMPTS-SKILLS]
-sources: [src/ai_scratcher/prompts/call_tool.md]
-test: 893d423cea5dfaa0483ff0b99daf0e638ec8ee03e792408234c5b182dd06906c
-review: d39597e96fcb3b8acd33bd4837d31b6f67a98d3218de67208458bbc2df923bf5
----
-The tool call skill shall be a default skill stating how an answer requests tool calls and how they are applied
-
-An answer is plain text or exactly one list of calls, as the structured object or one fenced block; the calls apply in order, the first refusal stops the batch, and the results come back as the next prompt.

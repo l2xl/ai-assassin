@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI-TREE]
-order: 30
-test: 38100d3078053aa202124ebf0e3c175a21bd4c42615cf4094698a40bc087c613
-review: 42641b0a7eb34b10529ee116267cfb162ff5aaaab3a04a244a88c3e5083148aa
----
-Row menu button ⋯
-sits at the right end of the row and opens an explicit drop-down of the item's structure actions, none of them one click away on the row itself.

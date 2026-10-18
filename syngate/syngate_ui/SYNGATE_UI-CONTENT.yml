@@ -1,7 +1,0 @@
----
-parents: [SYNGATE_UI]
-order: 120
-review: 873d783a6b253680a3b683af3f8e80104de655b260acfaf5452c037c1134a30b
----
-Content panel
-shows the whole tree as one document on the right, every item a block of it shifted by its depth.

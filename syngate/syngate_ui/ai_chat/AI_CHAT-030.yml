@@ -1,5 +1,5 @@
 ---
-parents: [AI_CHAT]
+parents: [AI-CHAT]
 order: 100
 test: {hide: 1be6fabf2fe3a759804f7154232f5a2047acbe6abffe763f6fcb5f4034858d20, history: 1bc63742b248b9ca5df1ad88410e97b5c4cc35c09f87cacf55ed1ce1ac44478c,
   esc: 390a82874881e25ccf09e5cdc705b3ac2d9c1b17185d21d5dd6eca252a2b130c}

@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOLS]
+sources: [src/ai_scratcher/prompts/skill.md]
+test: ~
+---
+The skill tool shall bring the named skill's text back as the next prompt of the same session, the way a query's result does, an unknown name being refused

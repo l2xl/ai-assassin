@@ -1,6 +1,7 @@
-# Synthetic AI-agent library
+# Synthetic AI harness core
 
-The synthetic agent (`synthetic.py`) answers every exchange from the DAG rather than from a
+Synthetic (`synthetic.py`) is the AI harness core of AI Assassin: the prompt library, the seed
+context, the AI connections and the tool call protocol. It answers every exchange from the DAG rather than from a
 transcript: a replica anchored at an item is answered above the item's seed context, and the reply
 either continues the dialog or condenses it back into the DAG through tree calls.
 
@@ -76,7 +77,7 @@ is one non-interactive turn of the chosen connector.
   session and setup (`update_chat` with `resume`), the live one filed in its place; `erase` deletes
   the live conversation only, after the page's confirmation; a session reset without erasing is the
   page's other reset (`update_chat` with `reset`), after which the next turn carries the kept
-  messages as its transcript. The chats live in `syngate_chats.json` next to the tree, outside git,
+  messages as its transcript. The chats live in `assassin_chats.json` next to the tree, outside git,
   written on every settled change (a message appended, a setup or mark changed, a conversation
   begun, resumed or erased, a reset) through a debounced writer and read at start — a running turn
   is never stored as running — the chat of a removed item dropped with every conversation.

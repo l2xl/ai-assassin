@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI-TREE-ROW-MENU]
+order: 10
+test: ~
+---
+Add child action
+opens the new-UID row under the item with a UID suggested from its siblings; Enter creates the item and opens its editor, Esc cancels.

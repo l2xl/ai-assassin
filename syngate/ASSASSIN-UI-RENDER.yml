@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI]
+order: 10
+test: {csp: ~, render: ~, problems: ~}
+---
+Browser rendering
+builds the whole item tree in the page from the served tree model, the page running only its own nonced script.

@@ -1,0 +1,10 @@
+---
+parents: [SYNTHETIC-SKILLS]
+order: 30
+sources: [src/ai_scratcher/prompts/deliver.md]
+test: ~
+---
+Delivery skill
+is a default skill telling the turn that a task adding or rewording items is a task on the project, carried into it in the same turn the way the tree's test switch sets.
+
+The seed context states the switch under `# Tree features` as `test: enabled|disabled`, read off the root item, between the default prompt and the statements. The skill text is [deliver.md](src/ai_scratcher/prompts/deliver.md).

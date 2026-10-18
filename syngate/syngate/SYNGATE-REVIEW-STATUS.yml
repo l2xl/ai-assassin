@@ -1,5 +1,5 @@
 ---
-parents: [INFRA-042]
+parents: [SYNGATE-STATUS]
 order: 60
 test: 4d4b046641b1ee8d406fa093ab4a42ef56eed041995a97eb6e213771cb64b4a9
 review: de97a5181cac9f8607ef1ae5ecce1eb8103ad9430e5d01a771b96095b003258c

@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI-CONTENT]
+order: 50
+test: ~
+---
+Item reference link
+renders `@UID` — and the older `[UID]` — of a known item, in a statement, a message or a file view, as a link that activates the item's block and unfolds the outline to it.

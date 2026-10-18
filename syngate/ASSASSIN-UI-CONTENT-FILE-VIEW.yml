@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI-CONTENT]
+order: 40
+test: {read: ~, save: ~}
+---
+File view
+opens a file linked from an item inline, served only from inside the project.
+
+Saving is limited to markdown files unchanged on disk since they were loaded.

@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI]
+order: 60
+test: {guard: ~, cas: ~}
+---
+Field save
+writes an edited field on its own as canonical YAML, the other fields untouched.
+
+An unknown parent, a parent cycle or a value changed on disk since it was loaded is refused.

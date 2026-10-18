@@ -1,7 +1,0 @@
----
-parents: [SYNGATE_UI]
-order: 110
-review: b0c578381eb98c9c8a47e4f2890514274866664fe021483bdd18f274bba1f2d8
----
-Tree panel
-is the collapsible outline of the DAG on the left, one row per item occurrence — an item with several parents under each of them — doubling as the table of contents of the content panel.

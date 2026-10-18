@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI-TREE]
-order: 60
-test: d9f37297fbdbbb185645ee5f6cc04fe919965463dbcd4bb7815d3362c19fb0b7
-review: c6fa1d2dc45a8af84a272e955b1e1cbbfd7f47b1af44953b51304945ee4b7436
----
-Chat state mark
-follows the common label in the row: absent while the item has no chat, a spinner while its turn runs, a dot while a reply this tab has not shown waits, a warning when the last turn failed, a dim mark for a hidden chat; clicking it activates the block and shows the chat.

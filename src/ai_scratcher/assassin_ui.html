@@ -1,0 +1,2216 @@
+<!doctype html>
+<!--
+  Open Trader
+  Copyright (c) 2026 l2xl (l2xl/at/proton.me)
+  Distributed under the Intellectual Property Reserve License, v2 (IPRL)
+
+  AI Assassin, single-page frontend for assassin_ui.py: outline tree (the TOC, every row the
+  label, chat state and first line of an item) + the whole tree as one document
+  of statement blocks edited in place, each holding its AI chat and the files it
+  links to + the status popup from every label's icon + run console. Every visual definition lives in
+  the one stylesheet below (see ASSASSIN_UI.md); the markup carries classes only.
+  Vanilla JS, no build step, no external assets; talks JSON to /api/*.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Assassin</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9; --panel: #ffffff; --line: #dde1e6; --text: #1b222b; --dim: #5b6472;
+  --accent: #2e5c6e; --accent-soft: #2e5c6e18;
+  --sel: #4f86c6; --sel-text: #3b6ea8;
+  --sel-line: color-mix(in oklab, var(--sel) 60%, var(--line)); --sel-fill: color-mix(in oklab, var(--sel) 14%, transparent);
+  --gray: #7a7f87; --yellow: #d9a63d; --yellow-text: #9a6f1c; --green: #3f7d52; --red: #a8482e; --red-soft: #a8482e14;
+  --console-bg: #10151b; --console-text: #d6dde6; --tip-ok: #7fc990; --tip-fail: #e58a70; --tip-dim: #9aa4b1;
+  --indent: 1.05rem; --doc-indent: 1.1rem; --block-pad: 2.2rem; --mark: 1.25rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #12161b; --panel: #1a2027; --line: #2c343e; --text: #d6dde6; --dim: #8b96a5;
+    --accent: #6fa8c0; --accent-soft: #6fa8c022;
+    --sel: #78aee6; --sel-text: #8dbbe9;
+    --gray: #98a2ad; --yellow: #e0b253; --yellow-text: #d9a63d; --green: #6fbf85; --red: #e07a5f; --red-soft: #e07a5f1f;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font: 14px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.8em; cursor: pointer; }
+button:not(.pill):hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+input, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; }
+input:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+code, .mono { font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; }
+
+header { display: flex; align-items: center; gap: 0.8rem; padding: 0.55rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 1rem; margin: 0; white-space: nowrap; }
+header .counts { display: flex; gap: 0.4rem; }
+#filter { width: 14rem; }
+#gate-banner { color: var(--red); font-size: 0.82rem; }
+#save-state { font-size: 0.8rem; color: var(--dim); white-space: nowrap; }
+#save-state.unsaved { color: var(--yellow-text); }
+#save-state.failed { color: var(--red); cursor: pointer; }
+.conflict { display: flex; gap: 0.6rem; align-items: center; padding: 0.35rem 1rem; font-size: 0.85rem; color: var(--yellow-text); background: color-mix(in oklab, var(--yellow) 12%, transparent); border-bottom: 1px solid var(--line); }
+.spacer { flex: 1; }
+
+main { flex: 1; display: flex; min-height: 0; }
+#tree-pane { width: clamp(18rem, 30vw, 40rem); min-width: 18rem; max-width: 75vw; flex: none; overflow: auto; padding: 0.6rem 0.4rem 2rem; }
+/* The splitter's hit zone reaches 6px into both panes; it takes the focus so the arrows move it too. */
+#splitter { position: relative; flex: none; width: 5px; cursor: col-resize; background: var(--line); touch-action: none; }
+#splitter::after { content: ""; position: absolute; inset: 0 -6px; }
+#splitter:hover, #splitter:focus-visible, #splitter.dragging { background: var(--accent); outline: none; }
+#doc-pane { flex: 1; overflow: auto; background: var(--panel); padding: 1.1rem 1.6rem 0; }
+#doc { max-width: 64rem; padding-bottom: 70vh; }
+
+.chip { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.72rem; padding: 0.12em 0.55em 0.12em 0.4em; border-radius: 3px; white-space: nowrap; border: 1px solid transparent; cursor: pointer; background: none; }
+.chip .ball { display: inline-block; width: 0.62em; height: 0.62em; border-radius: 50%; margin-right: 0.35em; }
+.chip.on { box-shadow: inset 0 0 0 1px currentColor; font-weight: 600; }
+.chip.on::after { content: " ×"; }
+.st-unknown { --tint: color-mix(in oklab, var(--gray) 13%, transparent); background: var(--tint); color: var(--gray); }
+.st-unknown .ball { background: var(--gray); }
+.st-test_passed { --tint: color-mix(in oklab, var(--green) 13%, transparent); background: var(--tint); color: var(--green); }
+.st-test_passed .ball { background: var(--green); }
+.st-test_failed { --tint: color-mix(in oklab, var(--red) 13%, transparent); background: var(--tint); color: var(--red); }
+.st-test_failed .ball { background: var(--red); }
+
+/* Depth is the nesting of the markup: every level of children sits in its own .kids wrapper, indented by the pane's step. */
+#tree .kids { padding-left: var(--indent); }
+#doc .kids { padding-left: var(--doc-indent); }
+.row { position: relative; display: flex; align-items: center; gap: 0.3rem; padding: 0.08rem 0.3rem 0.08rem 0.2rem; border-radius: 4px; white-space: nowrap; cursor: pointer; }
+.row:hover { background: var(--accent-soft); }
+.row.selected { background: var(--sel-fill); outline: 1px solid var(--sel-line); }
+.row:focus-visible { outline: 2px solid var(--accent); }
+.row.dragging { opacity: 0.4; }
+.row[data-drop=inside] { outline: 2px solid var(--accent); background: var(--accent-soft); }
+.row[data-drop=before]::before, .row[data-drop=after]::after { content: ""; position: absolute; left: 0.2rem; right: 0; height: 2px; background: var(--accent); pointer-events: none; }
+.row[data-drop=before]::before { top: -1px; }
+.row[data-drop=after]::after { bottom: -1px; }
+@keyframes flash { from { background: var(--accent); } }
+.row.flash { animation: flash 0.7s ease-out; }
+.cell-node { display: inline-flex; align-items: center; gap: 0.3rem; flex: none; }
+.cell-title { flex: 1; min-width: 6rem; display: flex; }
+.twist { width: 1.4em; padding: 0.3em 0; margin: -0.3em 0; text-align: center; color: var(--dim); flex: none; font-size: 0.75rem; }
+.handle { display: inline-flex; align-items: center; gap: 0.35rem; }
+.handle[draggable=true] { cursor: grab; }
+/* The composite status icon: a circle filled by the test status, the review eyes shifted to its right edge; a violated stamp lays the ❗ glyph, as tall as the circle, over the eyes outside of it.
+   It is the button of the status popup, so with the test feature off it stays as an outline. */
+.status { --size: calc(1.15em + 2px); position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; padding: 0; border: none; background: none; font-size: 0.8rem; line-height: 1; width: var(--size); height: var(--size); border-radius: 50%; }
+.status.gray { background: var(--gray); } .status.green { background: var(--green); } .status.red { background: var(--red); }
+.status.bare { box-shadow: inset 0 0 0 1px var(--dim); }
+.status .eyes, .status .seal { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif; }
+.status .eyes { position: relative; left: 0.3em; font-size: 1em; line-height: 1; }
+.status .seal { position: absolute; left: calc(100% - 0.4em); top: 50%; transform: translateY(-50%); font-size: var(--size); line-height: 1; filter: drop-shadow(0 0 1px var(--panel)); }
+.status.review_violated { margin-right: 0.9em; }
+.node-uid { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.82rem; }
+/* The first line of the body, cut with an ellipsis exactly where the row runs out of room for it. */
+.title { flex: 1; min-width: 0; font-size: 0.82rem; color: var(--dim); padding: 0.05em 0.35em; overflow: hidden; text-overflow: ellipsis; }
+.dupmark { color: var(--dim); font-size: 0.72rem; font-style: italic; }
+/* The chat state mark after the label: present only while the item has a chat, its glyph and colour the phase. */
+.chat-state { flex: none; min-width: 1em; padding: 0 0.2em; border: none; background: none; color: var(--dim); font-size: 0.75rem; line-height: 1.2; }
+.chat-state.unread { color: var(--accent); }
+.chat-state.failed { color: var(--red); }
+/* The one family of icon tools -- row tools, message marks, a file view's close -- hidden at rest and revealed with the element they belong to. */
+.tools { display: inline-flex; flex: none; visibility: hidden; }
+.row:hover .tools, .row.selected .tools, .row:focus-within .tools, .chat-msg:hover .tools, .chat-msg:focus-within .tools, .sub:hover > .tools, .sub:focus-within > .tools { visibility: visible; }
+.tools button { border: none; background: none; padding: 0.25em; margin: -0.25em 0; color: var(--dim); font-size: 0.85rem; line-height: 1.2; }
+.tools button:hover { color: var(--accent); }
+.tools button.danger:hover { color: var(--red); }
+.row.adding { cursor: default; }
+.new-uid { width: 14rem; font-size: 0.82rem; padding: 0.05em 0.35em; }
+.block-problems { margin-top: 0.5rem; padding: 0.3rem 0.6rem; background: var(--red-soft); border-top: 1px solid var(--red); border-bottom: 1px solid var(--red); font-size: 0.78rem; color: var(--red); white-space: normal; overflow-wrap: anywhere; }
+
+/* The pane reads as one document: a block at rest shows its text, UID label and status icon only; its border -- a dim line, never the
+   selection color -- and the controls mounted on it appear while the pointer is over the block or the focus is inside it.
+   A fieldset's legend knocks its gap out of the border natively, so the UID label stays on the line over any (translucent) fill without a masking background. */
+.block { position: relative; min-width: 0; margin: 0 0 1.5rem; padding: 0.35rem 0.95rem 0.8rem var(--block-pad); border: 1px solid transparent; border-radius: 8px; scroll-margin-top: 0.6rem; outline: none; transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s; }
+.block:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.block:hover, .block:focus-within { border-color: var(--line); }
+.block-foot { visibility: hidden; }
+.block:hover .block-foot, .block:focus-within .block-foot, .block.chatting .block-foot, .block.editing .block-foot, .block.selected .block-foot { visibility: visible; }
+.block > legend { margin-left: calc(0.5rem - var(--block-pad)); padding: 0 0.4rem; font: 600 0.72rem/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.03em; color: var(--dim); white-space: nowrap; transition: color 0.15s; }
+.block .tag { display: inline-flex; align-items: center; gap: 0.45em; }
+.block .tag .status { font-size: 0.9rem; }
+.block.in-sel > legend { color: var(--sel-text); }
+.block.selected { background: var(--sel-fill); }
+.block.editing { background: color-mix(in oklab, var(--sel) 7%, transparent); box-shadow: 0 0 0 3px var(--sel-fill); }
+.block-text { font-size: 0.9rem; line-height: 1.55; overflow-wrap: anywhere; }
+.block-sources { display: flex; flex-wrap: wrap; gap: 0.2em 0.8em; margin-top: 0.4rem; font-size: 0.78rem; color: var(--dim); }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol, .md pre, .md blockquote, .md table { margin: 0.35em 0; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { margin: 0.9em 0 0.3em; line-height: 1.3; }
+.md h1 { font-size: 1.25rem; } .md h2 { font-size: 1.1rem; } .md h3 { font-size: 1rem; } .md h4, .md h5, .md h6 { font-size: 0.92rem; }
+.md ul, .md ol { padding-left: 1.5em; } .md li > ul, .md li > ol { margin: 0; }
+.md code { font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; font-size: 0.86em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
+.md pre { padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: 4px; background: var(--accent-soft); overflow-x: auto; }
+.md pre code { background: none; padding: 0; font-size: 0.8rem; }
+.md blockquote { margin-left: 0; padding-left: 0.8em; border-left: 3px solid var(--line); color: var(--dim); }
+.md table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.85rem; } .md th, .md td { border: 1px solid var(--line); padding: 0.2em 0.6em; vertical-align: top; text-align: left; }
+.md hr { border: none; border-top: 1px solid var(--line); margin: 0.8em 0; }
+.md a { color: var(--sel-text); text-decoration: none; border-bottom: 1px dotted currentColor; cursor: pointer; }
+.md a:hover { border-bottom-style: solid; }
+.md a.jump { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; }
+/* A sub-element inside the block -- a file view -- is delimited by two rules and a shift, never a rectangle; its tools sit at its left edge
+   level with its first line, its name on its bottom rule. A file linked from inside a view nests below it the same way. */
+.sub { position: relative; margin: 0.5rem 0 0.9rem 1.1rem; padding: 0.3rem 0 0.5rem 1.5rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.sub > .tools { position: absolute; left: 0; top: 0.3rem; }
+.sub-body { max-height: 70vh; overflow: auto; }
+.sub-foot { display: flex; justify-content: flex-end; margin: 0.3rem 0 -1.05rem; }
+.sub-foot .pill { color: var(--dim); }
+.chat-log { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.5rem; }
+.chat-log:empty { display: none; }
+/* A message is a full-width row of the log whose body is the bubble: the user's text flush left as the description, the AI's reply shifted
+   right and highlighted -- the roles switch one body style. */
+.chat-msg { position: relative; display: flex; font-size: 0.9rem; line-height: 1.55; overflow-wrap: anywhere; }
+.msg-body { min-width: 0; max-width: 100%; padding: 0.35rem 0.6rem; border-radius: 6px; }
+.chat-msg.user .msg-body { padding-left: 0; white-space: pre-wrap; }
+.chat-msg.ai, .chat-msg.error, .chat-msg.stopped { justify-content: flex-end; }
+.chat-msg.ai .msg-body { max-width: 92%; background: var(--accent-soft); }
+.chat-msg.error { color: var(--red); } .chat-msg.error .msg-body { background: var(--red-soft); }
+.chat-msg.stopped { color: var(--dim); } .chat-msg.stopped .msg-body { border-top: 1px solid var(--line); border-radius: 0; }
+.chat-msg.stopped .msg-body::before { content: "■ stopped — "; }
+.chat-msg.note { padding: 0.35rem 0; }
+/* Folded text -- a cut, or the whole message -- shows as its first line, grey, and is out of the exchange. */
+.chat-msg.dropped { color: var(--dim); }
+.msg-cut { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-part + .msg-cut, .msg-cut + .msg-part, .msg-cut + .msg-cut { margin-top: 0.25rem; }
+.msg-part.md > .msg-tools + * { margin-top: 0; }
+/* The marks of a message are round buttons on the block's border lines, revealed with the row under the pointer or holding the focus: the fold
+   mark of every part of the text on the left line level with the part's first line (its static place), the extraction marks -- a failed turn's
+   retry and remove -- on the right line level with the first and the last line, the lower pushed under the upper on a short message.
+   Each column reaches back to the text, so the pointer crossing the padding keeps the row hovered. Hidden marks keep their place in the Tab
+   order and the accessibility tree: they fade rather than vanish, taking no click meanwhile. */
+.msg-tools { position: absolute; display: flex; flex-direction: column; justify-content: space-between; gap: 0.3rem; width: calc(var(--block-pad) + var(--mark) / 2); z-index: 2; opacity: 0; pointer-events: none; }
+/* The hover band of a row spans the document pane at the row's height, past the block's border on both sides, so the pointer travelling from
+   the text to a mark never leaves the row; the right band stops at the pane's padding edge, giving the pane nothing to scroll sideways. */
+.chat-msg::before, .chat-msg::after { content: ""; position: absolute; top: -0.25rem; bottom: -0.25rem; }
+.chat-msg::before { right: 100%; width: 100vw; }
+.chat-msg::after { left: 100%; width: calc(0.95rem + 1.6rem - 2px); }
+.chat-msg:hover .msg-tools, .chat-msg:focus-within .msg-tools { opacity: 1; pointer-events: auto; }
+.msg-tools.left { left: calc(-1 * var(--block-pad) - var(--mark) / 2); margin-top: calc((1.55em - var(--mark)) / 2); align-items: flex-start; }
+.msg-tools.right { right: calc(-0.95rem - var(--mark) / 2); top: 0; bottom: 0; width: calc(0.95rem + var(--mark) / 2); min-height: calc(var(--mark) + 1.55em + 1rem); padding-block: calc(0.35rem + (1.55em - var(--mark)) / 2); box-sizing: border-box; align-items: flex-end; }
+/* The one shape of a mark -- the message marks, the selection's, the hidden chat's show button: a circle of --mark whose glyph is an inline
+   SVG path centred in it, so it draws the same at any font, browser and density. */
+.msg-tools button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: var(--mark); height: var(--mark); margin: 0; padding: 0; border: 1px solid color-mix(in oklab, currentColor 45%, transparent); border-radius: 50%; background: var(--panel); color: var(--text); font-size: 1rem; line-height: 0; cursor: pointer; }
+.msg-tools button svg { display: block; width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.msg-tools button svg .fill { fill: currentColor; stroke: none; }
+.msg-tools button:hover, .msg-tools button:focus-visible { color: var(--accent); border-color: currentColor; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--panel); }
+.msg-tools button.msg-drop:hover { color: var(--red); background: linear-gradient(var(--red-soft), var(--red-soft)), var(--panel); }
+.msg-fold[aria-disabled=true] { opacity: 0.45; pointer-events: none; }
+.chatting textarea.chat-input { min-height: 3.1em; }
+/* The reply line rests as an empty line whose rule and hint come with the block's border; it joins the Tab order only with the open chat or the editor. */
+textarea.chat-input { border-top: 1px solid transparent; padding-top: 0.35rem; cursor: text; transition: border-color 0.15s; }
+.block:not(.chatting) .chat-input { height: calc(1.1em + 0.35rem + 1px); min-height: 0; line-height: 1.1; overflow: hidden; }
+.block:hover .chat-input, .block:focus-within .chat-input, .chatting .chat-input { border-top-color: var(--line); }
+.chat-input::placeholder { color: transparent; transition: color 0.15s; }
+.block:hover .chat-input::placeholder, .block:focus-within .chat-input::placeholder, .chatting .chat-input::placeholder { color: var(--dim); }
+.reply-wait { display: block; position: relative; height: 0; color: var(--dim); }
+.reply-wait .spinner { position: absolute; left: -1.4rem; top: calc(0.35rem + 1px + 0.1em); }
+.block:not([aria-busy]) .reply-wait { display: none; }
+.block.editing .block-body { border-left: 2px solid var(--sel-line); margin-left: -0.6rem; padding-left: 0.45rem; }
+button.pill { appearance: none; line-height: 1.55; }
+.chat-pill { cursor: default; }
+.chat-pill > button { position: relative; font: inherit; color: inherit; background: none; border: none; padding: 0; border-radius: 0; cursor: pointer; }
+.chat-pill > button:hover { color: var(--accent); }
+.chat-pill > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chat-pill.busy .chat-send { opacity: 0.45; pointer-events: none; }
+.chat-msg.user.agent .msg-body { margin-left: 1.1rem; }
+.msg-from { font: 0.66rem/1.55 ui-monospace, Menlo, Consolas, monospace; color: var(--accent); white-space: normal; }
+/* A turn's activity: its header is a dim line under the rule closing the reply, the steps are shifted under it, every one a line unfolding to its content. */
+.turn-activity { align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; margin: -0.1rem 0 0.3rem 8%; border-top: 1px solid var(--line); }
+.turn-head { max-width: 100%; margin-top: 0.15rem; padding: 0; border: none; background: none; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; color: var(--dim); text-align: right; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.turn-head:hover { color: var(--accent); }
+.turn-head::after { content: " ▸"; } .turn-head[aria-expanded=true]::after { content: " ▾"; }
+.turn-head.bare { cursor: default; } .turn-head.bare::after { content: none; }
+.turn-activity .spinner, .pill .spinner { width: 0.8em; height: 0.8em; border-width: 1.5px; }
+.turn-steps { align-self: stretch; padding-left: 1.1rem; font-size: 0.8rem; }
+.step-line { display: block; width: 100%; overflow: hidden; padding: 0; border: none; border-radius: 0; background: none; text-align: left; color: var(--dim); white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+.step-line:hover { color: var(--accent); }
+.step-line::before { content: "▸ "; } .step-line[aria-expanded=true]::before { content: "▾ "; }
+.step-kind { margin-right: 0.5em; font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--text); }
+.step-detail { padding: 0.1rem 0 0.4rem 1.1rem; }
+.step-label { font: 0.66rem/1.55 ui-monospace, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim); }
+.step-detail pre, .step-text { margin: 0.1rem 0 0.3rem; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.step-detail pre { max-height: 40vh; overflow: auto; padding: 0.3rem 0.5rem; background: var(--accent-soft); font-family: ui-monospace, Menlo, Consolas, monospace; }
+#status-menu .menu-label { padding: 0.3em 0.9em 0.1em; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+textarea.block-text { display: block; width: 100%; min-height: 1.55em; padding: 0; border: none; border-radius: 0; background: transparent; field-sizing: content; resize: none; font-family: inherit; }
+textarea.block-text:focus { outline: none; }
+/* In flow, pulled down by the bottom padding plus half a pill: the last pill line straddles the bottom border, earlier lines wrap inside. */
+.block-foot { position: relative; display: flex; justify-content: space-between; align-items: flex-end; gap: 0.6rem; margin: 0.4rem 0 -1.4rem; }
+.block-foot:hover { z-index: 20; }
+.block-ai { display: flex; flex-wrap: wrap-reverse; gap: 0.3rem 0.4rem; }
+.block-ai .pill:not(.chat-mode, .chat-advanced) { --tint: transparent; color: var(--dim); }
+.pill.chat-mode, .pill.chat-advanced { color: var(--dim); --tint: transparent; }
+.pill.chat-mode.on, .pill.chat-advanced.on { color: var(--accent); --tint: var(--accent-soft); border-color: currentColor; }
+.pill.chat-mode .ball { background: currentColor; }
+/* Every strip control reaches a little past its drawn pill, so a finger lands on it too. */
+.block-ai .pill:not(.chat-pill)::before, .chat-pill > button::before { content: ""; position: absolute; inset: -0.45rem -0.3rem; }
+.block-ai .pill.chat-done { color: var(--green); }
+.block-ai .save-mark { cursor: default; }
+.block-ai .save-mark.failed { color: var(--red); cursor: pointer; }
+/* The stop pill arms a moment after it appears, so a click meant for the hide pill it replaces does not stop the turn. */
+.block-ai .pill.chat-stop { color: var(--red); --tint: var(--red-soft); border-color: currentColor; animation: arm 0.35s steps(1, end); }
+@keyframes arm { from { pointer-events: none; } to { pointer-events: auto; } }
+.block-chat { margin-top: 0.3rem; }
+.chatting .block-chat { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
+.pill { position: relative; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; padding: 0 0.65em 0 0.5em; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 40%, transparent); background: linear-gradient(var(--tint), var(--tint)), var(--panel); white-space: nowrap; cursor: pointer; }
+.pill .ball { display: inline-block; width: 0.62em; height: 0.62em; border-radius: 50%; margin-right: 0.4em; }
+.pill .rev { margin-left: 0.6em; padding-left: 0.6em; border-left: 1px solid color-mix(in oklab, var(--dim) 45%, transparent); color: var(--dim); }
+.note { color: var(--dim); font-size: 0.78rem; }
+#tests-pop, #status-menu, #help-pop { position: fixed; inset: auto; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 8px 28px #0004; }
+#tests-pop { width: min(40rem, 90vw); max-height: 70vh; overflow: hidden auto; padding: 0.6rem 1rem 0.8rem; }
+/* The status lines of the popup: one per axis, binding, tally and problem, coloured by its state. */
+.status-lines { font-size: 0.82rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tip-test_passed, .tip-reviewed { color: var(--green); } .tip-test_failed, .tip-review_violated { color: var(--red); } .tip-unknown, .tip-not_reviewed { color: var(--dim); }
+.run-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+#status-menu { padding: 0.3rem; }
+#help-pop { padding: 0.6rem 1rem; }
+#help-pop dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.25rem 0.9rem; margin: 0; font-size: 0.82rem; }
+#help-pop dt { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+#help-pop dd { margin: 0; color: var(--dim); }
+/* The marks of the selected text stand at the same places on the border lines, in place of the message's own: the fold mark at the selection's
+   first line on the left, the child mark there and the sibling mark at its last line on the right, each placed by the script. */
+#sel-tools { position: fixed; inset: 0; display: block; width: auto; height: auto; margin: 0; padding: 0; border: none; background: none; overflow: visible; color: var(--text); opacity: 1; pointer-events: none; }
+#sel-tools:not(:popover-open) { display: none; }
+#sel-tools button { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; }
+.chat-msg.has-selection .msg-tools { opacity: 0; pointer-events: none; }
+#status-menu:popover-open { display: flex; flex-direction: column; }
+#status-menu button { border: none; background: none; padding: 0.35em 0.9em; border-radius: 5px; font-size: 0.85rem; text-align: left; white-space: nowrap; }
+#status-menu button:hover:not(:disabled) { background: var(--sel-fill); color: var(--text); }
+#status-menu button.danger:hover:not(:disabled) { color: var(--red); }
+.section-label { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.7rem; text-transform: uppercase; color: var(--dim); margin: 0.9rem 0 0.3rem; letter-spacing: 0.04em; }
+.leaf-toggle { display: inline-flex; gap: 0.4em; align-items: center; font-size: 0.85rem; }
+.binding-row { display: flex; gap: 0.6rem; align-items: baseline; margin: 0.3rem 0; flex-wrap: wrap; }
+.binding-row .name { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem; min-width: 7rem; }
+.binding-row .sha { color: var(--dim); font-size: 0.75rem; }
+.binding-row .loc { font-size: 0.78rem; color: var(--accent); }
+.binding-row .miss { color: var(--yellow-text); font-size: 0.78rem; }
+.binding-row button.unbind { border: none; background: none; padding: 0 0.15em; color: var(--dim); }
+.binding-row button.unbind:hover:not(:disabled) { color: var(--red); }
+.binding-row .new-uid { flex: 1 1 14rem; min-width: 0; }
+.testrec summary { cursor: pointer; font-size: 0.85rem; overflow-wrap: anywhere; }
+.testrec pre { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 3px; padding: 0.5rem 0.7rem; font-size: 0.75rem; overflow-x: auto; }
+
+#console { border-top: 1px solid var(--line); background: var(--console-bg); color: var(--console-text); display: none; flex-direction: column; max-height: 40vh; }
+#console.open { display: flex; }
+#console .bar { display: flex; gap: 0.8rem; align-items: center; padding: 0.3rem 0.9rem; font-size: 0.8rem; border-bottom: 1px solid #ffffff22; }
+#console .bar .argv { font-family: ui-monospace, Menlo, Consolas, monospace; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#console pre { flex: 1; overflow: auto; margin: 0; padding: 0.6rem 0.9rem; font-size: 0.78rem; }
+#console .bar button { background: none; border-color: #ffffff44; color: var(--console-text); }
+.status-run { color: var(--yellow); } .status-ok { color: var(--tip-ok); } .status-fail { color: var(--tip-fail); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { display: inline-block; width: 0.85em; height: 0.85em; border: 2px solid color-mix(in oklab, currentColor 30%, transparent); border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -0.1em; }
+
+#toasts { position: fixed; top: 3.2rem; right: 1rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 30; }
+.toast { background: var(--panel); border: 1px solid var(--red); color: var(--red); border-radius: 4px; padding: 0.5rem 0.9rem; max-width: 26rem; font-size: 0.85rem; box-shadow: 0 2px 10px #0003; cursor: pointer; }
+.toast.info { border-color: var(--accent); color: var(--accent); }
+.empty { color: var(--dim); margin-top: 3rem; text-align: center; }
+
+/* Without a pointer to hover there is nothing to reveal: every border and control stays shown. */
+@media (hover: none) {
+  .tools, .block-foot { visibility: visible; }
+  .block, .chat-input { border-color: var(--line); }
+  .chat-input::placeholder { color: var(--dim); }
+  .row { padding: 0.3rem 0.3rem 0.3rem 0.2rem; }
+  .block-ai { gap: 0.5rem 0.6rem; }
+  .block-ai .pill { padding-block: 0.45rem; }
+  .block-foot { margin-bottom: -1.9rem; }
+  :root { --mark: 2rem; }
+  .tools button, .binding-row button.unbind, #help { min-height: 2.5rem; }
+  .tools button:only-child, .binding-row button.unbind, #help { min-width: 2.5rem; }
+  .msg-tools { opacity: 1; pointer-events: auto; }
+  .msg-tools button { min-width: 0; min-height: 0; }
+  .chat-msg:has(> .msg-tools.right) { min-height: calc(var(--mark) + 1.55em + 1rem); }
+  .status::after { content: ""; position: absolute; inset: -0.6rem; }
+}
+/* One breakpoint: the panes stack, the outline on top within a share of the height, the document at full width with half the depth shift. */
+@media (max-width: 60rem) {
+  :root { --indent: 0.525rem; --doc-indent: 0.55rem; }
+  main { flex-direction: column; }
+  #splitter { display: none; }
+  #tree-pane { width: auto !important; min-width: 0; max-width: none; max-height: 38vh; border-bottom: 1px solid var(--line); padding-bottom: 0.6rem; }
+  #doc-pane { padding: 0.8rem 1rem 0 1.6rem; overflow-x: hidden; }
+  .chat-msg::after { width: calc(0.95rem + 1rem - 2px); }
+  #filter { width: 100%; }
+  #toasts { left: 1rem; right: 1rem; }
+  .toast { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row.flash { animation: none; outline: 2px solid var(--accent); }
+  .spinner { animation-duration: 2s; }
+  .block, .block > legend, .chat-input, .chat-input::placeholder { transition: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Assassin</h1>
+  <span class="counts" id="counts"></span>
+  <span id="gate-banner" hidden></span>
+  <span class="spacer"></span>
+  <span id="save-state"></span>
+  <button id="help" title="keys (?)">?</button>
+  <input id="filter" type="search" placeholder="Filter by UID or text (press /)" aria-label="filter">
+</header>
+<div id="conflicts"></div>
+<main>
+  <nav id="tree-pane"><div id="tree" role="treegrid" aria-label="Item outline"></div></nav>
+  <div id="splitter" role="separator" aria-orientation="vertical" aria-controls="tree-pane" tabindex="0" title="drag or press ← → to resize the outline, double-click to reset"></div>
+  <section id="doc-pane"><div id="doc" aria-label="Item document"></div></section>
+</main>
+<footer id="console">
+  <div class="bar">
+    <span id="job-state"></span>
+    <span class="argv" id="job-argv"></span>
+    <span class="spacer"></span>
+    <button id="console-stop" class="danger" title="stop the run — a turn awaiting it gets it as cancelled" hidden>■ stop</button>
+    <button id="console-close">hide</button>
+  </div>
+  <pre id="job-out"></pre>
+</footer>
+<div id="toasts" role="status" aria-live="polite"></div>
+<div id="tests-pop" popover></div>
+<div id="status-menu" popover role="menu"></div>
+<div id="sel-tools" popover="manual" class="msg-tools"><button type="button" class="msg-fold" aria-expanded="true" title="fold the selected text — it leaves the exchange"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.5 5.25h9L8 10.75z"/></svg></button><button type="button" class="msg-child" title="make the selection a child item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v6.5h7M9 7.5l2.5 2.5L9 12.5"/></svg></button><button type="button" class="msg-sibling" title="make the selection the next sibling item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg></button></div>
+<div id="help-pop" popover aria-label="keys"><dl>
+  <dt>/</dt><dd>filter</dd>
+  <dt>?</dt><dd>this list</dd>
+  <dt>↑ ↓ PgUp PgDn Home End</dt><dd>move the selection in the pane holding the focus</dd>
+  <dt>→ ←</dt><dd>unfold and fold a row</dd>
+  <dt>Enter</dt><dd>edit the statement</dd>
+  <dt>Esc</dt><dd>done</dd>
+  <dt>Ctrl/⌘+Enter</dt><dd>send</dd>
+  <dt>Ctrl/⌘+.</dt><dd>stop the turn</dd>
+  <dt>m · s</dt><dd>row menu · status popup of the focused block</dd>
+  <dt>Alt+Shift+arrows</dt><dd>move the row</dd>
+  <dt>drag · Ctrl+drag</dt><dd>move · add a parent</dd>
+</dl></div>
+
+<script>
+"use strict";
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+const SAVE_IDLE_MS = 1000, SAVE_MAX_MS = 5000, HOVER_EXPAND_MS = 600;
+const CALM = matchMedia("(prefers-reduced-motion: reduce)");
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const state = {
+  model: null,          // /api/tree payload
+  selected: null,       // uid
+  path: null,           // row / block path of the selected instance (a multi-parent item has one per parent)
+  panel: true,          // whether the selection activates its content panel, or stays a tree row only
+  editing: null,        // path of the document block in editing mode
+  files: new Map(),     // project files opened from links: path -> {path, anchor: the block or file view holding it, text, sha, writable, error}
+  // The items' chats as the server holds them, by UID: {uid, log, session, started, connector, model, effort, modes, turn: "<UID>:<n>" while one runs,
+  // archive: the conversations filed behind the live one as [{started, title, messages}]}
+  chats: new Map(),
+  chatsVersion: -1,
+  // Where this tab shows an item's chat: block path -> {uid, byEdit: opened by this edit and hidden with it unless a message was sent}
+  views: new Map(JSON.parse(sessionStorage.getItem("assassin-chat-views") || "[]")),
+  seen: new Map(JSON.parse(sessionStorage.getItem("assassin-chat-seen") || "[]")),  // uid -> the log length this tab has shown
+  watching: false,      // whether this tab's long poll on the chats is out
+  stopping: new Set(),  // turns whose stop this tab has requested and not yet seen land
+  unfolded: new Set(),  // turn activities and steps unfolded in this tab: "<UID>:<log index of the reply>/<step index path>"
+  expanded: new Set(JSON.parse(sessionStorage.getItem("assassin-expanded") || "[]")),
+  filter: "",
+  statusFilter: new Set(),
+  rows: [],             // flattened visible tree, in DOM order
+  treeSig: null,        // row structure the DOM was last built for
+  docRows: [],          // the whole (filtered) tree unfolded: one document block per row
+  docSig: null,
+  adding: null,         // {parent, path} while the inline new-child row is open
+  drag: null,           // {uid, from, under}
+  job: null,
+  savedAt: null,
+};
+// Autosave: drafts holds the fields typed but not yet stored, keyed "uid field";
+// shown holds the server value each text field was last filled from -- the
+// compare-and-swap base, so an edit never overwrites what the user has not seen.
+const drafts = new Map();
+const shown = new Map();
+const draftKey = (uid, field) => uid + " " + field;
+
+function setHtml(el, html) {
+  if (el._html === html) return;
+  el.innerHTML = html;
+  el._html = html;
+}
+
+async function api(path, payload) {
+  const sent = payload === undefined ? undefined : JSON.stringify(payload);
+  const res = await fetch(path, {
+    method: sent === undefined ? "GET" : "POST",
+    headers: { "X-Assassin-Token": TOKEN, ...(sent !== undefined && { "Content-Type": "application/json" }) },
+    body: sent,
+    keepalive: sent !== undefined && sent.length < 60000,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(body.error || `${res.status} on ${path}`), { status: res.status, body });
+  return body;
+}
+
+// A toast goes by itself, by a click, and waits under the pointer.
+function toast(message, cls = "") {
+  const el = document.createElement("div"), after = cls === "info" ? 5000 : 12000;
+  el.className = "toast " + cls;
+  el.textContent = message;
+  el.title = "click to dismiss";
+  el.onclick = () => el.remove();
+  let timer = setTimeout(() => el.remove(), after);
+  el.onmouseenter = () => clearTimeout(timer);
+  el.onmouseleave = () => { timer = setTimeout(() => el.remove(), after); };
+  $("toasts").appendChild(el);
+}
+
+const item = (uid) => state.model.items[uid];
+const filtersActive = () => Boolean(state.filter || state.statusFilter.size);
+function persistExpanded() { sessionStorage.setItem("assassin-expanded", JSON.stringify([...state.expanded])); }
+
+// ---- autosave ------------------------------------------------------------
+
+function serverValue(uid, field) {
+  return field === "file" ? state.files.get(uid)?.text ?? "" : item(uid).description_raw;
+}
+function currentText(uid, field) { const draft = drafts.get(draftKey(uid, field)); return draft ? draft.value : serverValue(uid, field); }
+
+function syncText(el) {
+  const { uid, field } = el.dataset, key = draftKey(uid, field), draft = drafts.get(key);
+  if (document.activeElement === el) return;
+  if (draft) { if (el.value !== draft.value) el.value = draft.value; return; }
+  const raw = serverValue(uid, field), text = field === "description" ? raw.replace(/\n$/, "") : raw;
+  if (el.value !== text) el.value = text;
+  shown.set(key, raw);
+}
+
+function autoGrow(el) {
+  if (CSS.supports("field-sizing", "content")) return;
+  el.rows = 1;
+  el.rows = Math.max(1, Math.round(el.scrollHeight / parseFloat(getComputedStyle(el).lineHeight)));
+}
+
+function edit(uid, field, value) {
+  const key = draftKey(uid, field);
+  const draft = drafts.get(key) || { key, uid, field, base: shown.has(key) ? shown.get(key) : serverValue(uid, field), since: Date.now() };
+  draft.value = value;
+  drafts.set(key, draft);
+  clearTimeout(draft.timer);
+  draft.timer = setTimeout(() => flush(draft), Math.max(0, Math.min(SAVE_IDLE_MS, draft.since + SAVE_MAX_MS - Date.now())));
+  renderSaveState();
+}
+
+// A flush joins the save already in flight, so awaiting it means the draft is stored (or failed), never skipped.
+function flush(draft) {
+  clearTimeout(draft.timer);
+  if (!draft.saving && !("conflict" in draft) && drafts.get(draft.key) === draft) draft.saving = store(draft);
+  return draft.saving || Promise.resolve();
+}
+
+async function store(draft) {
+  draft.error = null;
+  renderSaveState();
+  const sent = draft.value;
+  try {
+    const result = draft.field === "file" ? await api("/api/file", { path: draft.uid, text: sent, base: draft.base })
+      : await api(`/api/item/${draft.uid}`, { [draft.field]: sent, base: { [draft.field]: draft.base } });
+    draft.base = result.stored[draft.field];
+    if (draft.field === "file" && state.files.has(draft.uid)) Object.assign(state.files.get(draft.uid), { text: draft.base, sha: result.sha });
+    shown.set(draft.key, draft.base);
+    state.savedAt = new Date();
+    await refresh();  // the draft stands until the stored value is read back, so whoever awaits the flush sees it
+    draft.saving = null;
+    if (draft.value === sent) drafts.delete(draft.key);
+    else { draft.since = Date.now(); draft.timer = setTimeout(() => flush(draft), SAVE_IDLE_MS); }
+  } catch (err) {
+    draft.saving = null;
+    if (err.status === 409) draft.conflict = err.body.current[draft.field];
+    else { draft.error = err.message; toast("not saved: " + err.message); }
+  }
+  renderSaveState();
+}
+
+const flushAll = () => Promise.all([...drafts.values()].map(flush));
+
+const saveText = (draft) => !draft ? "✓ saved" : draft.error ? "✗ not saved — click to retry" : "conflict" in draft ? "⚠ conflict" : draft.saving ? "saving…" : "● unsaved";
+
+// The header reads the state of the most pressing draft; the edited block carries the mark of its own statement.
+function renderSaveState() {
+  const all = [...drafts.values()], el = $("save-state");
+  const lead = all.find((d) => d.error) || all.find((d) => "conflict" in d) || all.find((d) => d.saving) || all[0];
+  el.className = lead?.error ? "failed" : lead ? "unsaved" : "";
+  el.title = lead?.error || "";
+  el.textContent = lead ? saveText(lead) : state.savedAt ? "✓ saved " + state.savedAt.toLocaleTimeString() : "";
+  setHtml($("conflicts"), all.filter((d) => "conflict" in d).map((d) =>
+    `<div class="conflict">⚠ <span class="mono">${esc(d.uid)}</span> ${esc(d.field)} changed on disk while you were editing it`
+    + `<button data-keep="${esc(d.key)}">keep mine</button><button data-take="${esc(d.key)}">take theirs</button></div>`).join(""));
+  $("doc").querySelectorAll(".save-mark").forEach(decorateSaveMark);
+}
+
+function decorateSaveMark(mark) {
+  const draft = drafts.get(draftKey(mark.dataset.uid, "description"));
+  mark.textContent = saveText(draft);
+  mark.title = draft?.error || "";
+  mark.classList.toggle("failed", Boolean(draft?.error));
+}
+
+// ---- tree ----------------------------------------------------------------
+
+function visibleSet() {
+  // An item stays visible when itself or any descendant matches the filters.
+  const m = state.model, needle = state.filter.toLowerCase(), statuses = state.statusFilter;
+  const memo = new Map();
+  const selfMatch = (uid) => {
+    const it = m.items[uid];
+    const text = !needle || uid.toLowerCase().includes(needle) || it.description_raw.toLowerCase().includes(needle);
+    const status = !statuses.size || statuses.has(it.test);
+    return text && status;
+  };
+  const visit = (uid, trail) => {
+    if (memo.has(uid)) return memo.get(uid);
+    if (trail.has(uid)) return false;
+    trail.add(uid);
+    const ok = selfMatch(uid) || m.items[uid].children.some((c) => visit(c, trail));
+    trail.delete(uid);
+    memo.set(uid, ok);
+    return ok;
+  };
+  const visible = new Set();
+  for (const uid of Object.keys(m.items)) if (visit(uid, new Set())) visible.add(uid);
+  return visible;
+}
+
+function flatten(unfolded = false) {
+  const m = state.model, visible = visibleSet(), forced = unfolded || filtersActive(), rows = [];
+  const walk = (uid, parent, trail) => {
+    if (!visible.has(uid)) return;
+    const kids = m.items[uid].children.filter((c) => visible.has(c));
+    const cycle = trail.includes(uid), path = [...trail, uid].join("/");
+    const linking = Boolean(!unfolded && state.adding && state.adding.link && state.adding.path === path);
+    const adding = !linking && Boolean(!unfolded && state.adding && state.adding.path === path);
+    const open = !cycle && (adding || (kids.length > 0 && (forced || state.expanded.has(uid))));
+    rows.push({ uid, parent, path, depth: trail.length, kids: kids.length, open, cycle });
+    if (linking) rows.push({ adding: true, link: true, parent: uid, path: path + "/^", depth: trail.length + 1 });
+    if (!open) return;
+    for (const c of kids) walk(c, uid, [...trail, uid]);
+    if (adding) rows.push({ adding: true, parent: uid, path: path + "/+", depth: trail.length + 1 });
+  };
+  for (const uid of [...m.roots, ...m.unreachable]) walk(uid, null, []);
+  return rows;
+}
+
+// The rows of a pane as nested markup: each deeper run of rows sits in a .kids wrapper, so the depth is the nesting and no row carries a style of its own.
+function nested(rows, html) {
+  let out = "", depth = 0;
+  for (const row of rows) {
+    for (; depth < row.depth; depth++) out += '<div class="kids">';
+    for (; depth > row.depth; depth--) out += "</div>";
+    out += html(row);
+  }
+  return out + "</div>".repeat(depth);
+}
+
+function rowHtml(row) {
+  if (row.link) {
+    return `<div class="row adding" role="row"><span class="twist">⇑</span>`
+      + `<input class="new-uid mono" data-focus-key="adding" list="parent-uids" spellcheck="false" placeholder="PARENT-UID">`
+      + `<datalist id="parent-uids">${parentCandidates(row.parent).map((u) => `<option value="${esc(u)}">`).join("")}</datalist>`
+      + `<span class="note">Enter links as one more parent · Esc cancels</span></div>`;
+  }
+  if (row.adding) {
+    return `<div class="row adding" role="row"><span class="twist">·</span>`
+      + `<input class="new-uid mono" data-focus-key="adding" spellcheck="false" placeholder="NEW-UID">`
+      + `<span class="note">Enter creates · Esc cancels</span></div>`;
+  }
+  const uid = esc(row.uid), path = esc(row.path);
+  return `<div class="row" role="row" tabindex="-1" aria-level="${row.depth + 1}" data-uid="${uid}" data-path="${path}" data-focus-key="row:${path}">`
+    + `<span class="cell-node" role="gridcell"><span class="twist"></span>`
+    + `<span class="handle"><button type="button" class="status"></button><span class="node-uid">${uid}</span></span><button type="button" class="chat-state" hidden></button></span>`
+    + `<span class="cell-title" role="gridcell"><span class="title"></span></span>`
+    + `<span class="tools" role="gridcell"><button data-act="menu" title="add parent · add child · unlink · delete" aria-haspopup="menu">⋯</button></span>`
+    + (row.cycle ? '<span class="dupmark">(cycle)</span>' : "") + "</div>";
+}
+
+// The tree's feature switches (root item `test: enabled` / `review: enabled`): a feature that is off has no affordances on the page.
+const feature = (name) => state.model.features[name];
+
+const TEST_FILL = { test_passed: "green", test_failed: "red" };
+const TEST_LABEL = { test_passed: "passed", test_failed: "failed", unknown: "not run" };
+const REVIEW_MARK = { reviewed: "👀", not_reviewed: "○", review_violated: "⚠" };
+
+// The common status icon of a tree row and of a content panel: a circle filled by the test status wrapping the review eyes, each axis only while
+// its feature is on; it opens the status popup, so it stays, bare, with both off.
+function decorateLabel(el, it) {
+  const mark = el.querySelector(".status"), test = feature("test") && it.test, review = feature("review") && it.review;
+  mark.className = "status " + (test ? TEST_FILL[test] || "gray" : "bare") + (review ? " " + review : "");
+  const axes = [test && "test " + TEST_LABEL[test], review && review.replace(/_/g, " ")].filter(Boolean);
+  mark.title = axes.length ? axes.join(" · ") : "run actions";
+  mark.setAttribute("aria-label", mark.title);
+  setHtml(mark, review && review !== "not_reviewed" ? '<span class="eyes">👀</span>' + (review === "review_violated" ? '<span class="seal">❗</span>' : "") : "");
+}
+
+// The chat state mark of a row: none without a chat or with an idle chat shown, else the phase of the item's chat as this tab knows it.
+const CHAT_PHASE = { running: ['<span class="spinner"></span>', "the AI is answering"], failed: ["⚠", "the last turn failed"], unread: ["●", "a reply waits"], idle: ["▾", "the chat is hidden"] };
+function chatPhase(uid) {
+  const chat = state.chats.get(uid);
+  if (!chat || !(chat.log.length || chat.turn)) return null;
+  if (chat.turn) return "running";
+  if (chat.log.at(-1).role === "error") return "failed";
+  return chatShown(uid) ? null : chat.log.length > (state.seen.get(uid) ?? 0) ? "unread" : "idle";
+}
+const chatShown = (uid) => [...state.views.values()].some((view) => view.uid === uid);
+function decorateChatMark(el, row) {
+  const mark = el.querySelector(".chat-state"), phase = row && !row.adding && chatPhase(row.uid);
+  if (!mark) return;
+  mark.className = "chat-state" + (phase ? " " + phase : "");
+  mark.hidden = !phase;
+  mark.title = phase ? CHAT_PHASE[phase][1] : "";
+  setHtml(mark, phase ? CHAT_PHASE[phase][0] : "");
+}
+function renderChatMarks() { $("tree").querySelectorAll(".row").forEach((el, i) => decorateChatMark(el, state.rows[i])); }
+function persistSeen() { sessionStorage.setItem("assassin-chat-seen", JSON.stringify([...state.seen])); }
+
+function decorateRow(el, row) {
+  if (row.adding) return;
+  const it = item(row.uid), selected = row.uid === state.selected;
+  el.classList.toggle("selected", selected);
+  el.setAttribute("aria-selected", selected);
+  el.tabIndex = selected ? 0 : -1;
+  for (const button of el.querySelectorAll("button")) button.tabIndex = selected ? 0 : -1;
+  if (row.kids) el.setAttribute("aria-expanded", row.open); else el.removeAttribute("aria-expanded");
+  el.querySelector(".twist").textContent = row.kids ? (row.open ? "▾" : "▸") : "·";
+  decorateLabel(el, it);
+  decorateChatMark(el, row);
+  const handle = el.querySelector(".handle");
+  handle.draggable = it.parents.length > 0;
+  handle.title = it.path + (handle.draggable ? " — drag to move, Ctrl+drag to add a parent, Alt+Shift+arrows move by keyboard, ⋯ lists every action" : "");
+  const title = el.querySelector(".title");
+  title.textContent = title.title = it.title;
+  if (state.flash === row.uid) el.classList.add("flash");
+}
+
+function selectedRowEl() {
+  const tree = $("tree");
+  return (state.path && tree.querySelector(`.row[data-path="${CSS.escape(state.path)}"]`))
+    || (state.selected && tree.querySelector(`.row[data-uid="${CSS.escape(state.selected)}"]`)) || null;
+}
+
+function renderTree() {
+  const m = state.model, tree = $("tree");
+  state.rows = flatten();
+  const sig = state.rows.map((r) => r.path + (r.open ? "+" : "")).join("\n");
+  let focus = null;
+  if (sig !== state.treeSig) {
+    const active = document.activeElement;
+    if (tree.contains(active) && active.dataset.focusKey) focus = { key: active.dataset.focusKey, value: active.value, start: active.selectionStart, end: active.selectionEnd };
+    state.rebuilding = true;
+    tree.innerHTML = nested(state.rows, rowHtml) || '<div class="empty">nothing matches the filter</div>';
+    state.rebuilding = false;
+    state.treeSig = sig;
+  }
+  tree.querySelectorAll(".row").forEach((el, i) => decorateRow(el, state.rows[i]));
+  state.flash = null;
+  if (focus) {
+    const el = tree.querySelector(`[data-focus-key="${CSS.escape(focus.key)}"]`);
+    if (el) {
+      if (focus.key === "adding") el.value = focus.value;
+      el.focus({ preventScroll: true });
+      if (el.setSelectionRange && focus.start != null) el.setSelectionRange(focus.start, focus.end);
+    }
+  }
+  const name = m.roots.length ? item(m.roots[0]).title : "";
+  document.querySelector("header h1").textContent = name || "AI Assassin";
+  document.title = name ? `${name} · AI Assassin` : "AI Assassin";
+  setHtml($("counts"), ["test_failed", "unknown", "test_passed"]
+    .filter((s) => m.counts[s])
+    .map((s) => '<button class="chip st-' + s + (state.statusFilter.has(s) ? " on" : "") + '" data-status="' + s + '">'
+      + '<span class="ball"></span>' + m.counts[s] + " " + TEST_LABEL[s] + "</button>").join(""));
+  const gate = $("gate-banner");
+  const problemItems = Object.values(m.items).filter((it) => it.problems.length).length;
+  const troubles = m.load_errors.length + problemItems;
+  gate.hidden = !troubles;
+  gate.title = m.load_errors.join("\n");
+  if (troubles) gate.textContent = "⛔ gate closed: " + [m.load_errors.length && plural(m.load_errors.length, "tree error"), problemItems && plural(problemItems, "item") + " with problems"].filter(Boolean).join(" · ")
+    + (m.load_errors.length ? " — hover for details" : "");
+}
+
+function toggle(uid) {
+  state.expanded.has(uid) ? state.expanded.delete(uid) : state.expanded.add(uid);
+  persistExpanded();
+  renderTree();
+}
+
+function docPath(uid, path) {
+  const rows = flatten(true);
+  return (rows.find((r) => r.path === path) || rows.find((r) => r.uid === uid) || { path: null }).path;
+}
+
+const inView = (el, pane) => {
+  const box = el.getBoundingClientRect(), frame = pane.getBoundingClientRect();
+  return box.top >= frame.top && box.bottom <= frame.bottom;
+};
+// The scroll events of the page's own scrolls land in the next frame; a menu opened with them must not take them for the user's.
+let settling = false;
+function reveal(el, options) {
+  settling = true;
+  el.scrollIntoView(options);
+  requestAnimationFrame(() => { settling = false; });
+}
+
+// origin "tree": the document scrolls the block to its top unless it is already in view; origin "doc": the
+// tree unfolds down to the row and both panes scroll only as far as needed.
+function select(uid, path = null, { focus = null, origin = "tree", smooth = false, panel = true } = {}) {
+  path = docPath(uid, path);
+  if (panel && state.editing !== path) stopEditing();
+  state.selected = uid;
+  state.path = path;
+  state.panel = panel;
+  if (origin === "doc" && path) {
+    for (const above of path.split("/").slice(0, -1)) state.expanded.add(above);
+    persistExpanded();
+  }
+  render();
+  const row = selectedRowEl(), block = panel ? selectedBlockEl() : null;
+  if (row) reveal(row, { block: "nearest" });
+  if (block && !inView(block, $("doc-pane"))) reveal(block, origin === "doc" ? { block: "nearest" } : { block: "start", behavior: smooth && !CALM.matches ? "smooth" : "auto" });
+  if (focus === "row" && row) row.focus({ preventScroll: true });
+  if (focus === "block" && block) block.focus({ preventScroll: true });
+}
+
+// ---- structure edits: add child / delete / unlink / move -----------------
+
+function suggestUid(parent) {
+  const numbered = item(parent).children.map((c) => c.match(/^(.*-)\d+$/)).filter(Boolean);
+  const prefix = numbered.length ? numbered[numbered.length - 1][1] : parent.replace(/-?\d*$/, "-");
+  let max = 0, width = 3;
+  for (const uid of Object.keys(state.model.items)) {
+    if (!uid.startsWith(prefix) || !/^\d+$/.test(uid.slice(prefix.length))) continue;
+    const digits = uid.slice(prefix.length);
+    if (Number(digits) >= max) { max = Number(digits); width = digits.length; }
+  }
+  return prefix + String(max + 1).padStart(width, "0");
+}
+
+function startAdding(row) {
+  state.adding = { parent: row.uid, path: row.path };
+  renderTree();
+  const input = $("tree").querySelector(".new-uid");
+  input.value = suggestUid(row.uid);
+  input.focus();
+  input.select();
+}
+
+// An in-place search row under the item takes the UID of an existing item to link as one more parent.
+function startLinking(row) {
+  state.adding = { parent: row.uid, path: row.path, link: true };
+  renderTree();
+  $("tree").querySelector(".new-uid").focus();
+}
+
+function parentCandidates(uid) {
+  const it = item(uid), under = descendants(uid);
+  return Object.keys(state.model.items).filter((u) => u !== uid && !under.has(u) && !it.parents.includes(u)).sort();
+}
+
+function linkParent(input) {
+  const uid = state.adding.parent, to = input.value.trim();
+  state.adding = null;
+  move(uid, null, to, null, true);
+}
+
+function stopAdding() {
+  if (!state.adding || state.creating || state.rebuilding) return;
+  state.adding = null;
+  renderTree();
+}
+
+async function createChild(input) {
+  const parent = state.adding.parent, uid = input.value.trim(), kids = item(parent).children;
+  const last = kids.length ? item(kids[kids.length - 1]) : null;
+  state.creating = true;
+  try {
+    await api("/api/new", { uid, parents: [parent], dir: (last || item(parent)).folder, kind: "leaf", order: last ? last.order + 10 : 0 });
+    state.adding = null;
+    state.filter = $("filter").value = "";
+    state.statusFilter.clear();
+    state.expanded.add(parent);
+    persistExpanded();
+    await refresh();
+    select(uid, null, { focus: "block" });
+    startEditing();
+  } catch (err) { toast(err.message); input.focus(); }
+  finally { state.creating = false; }
+}
+
+async function deleteItem(uid) {
+  if (!confirm(`Delete ${uid} and its file ${item(uid).path}? This cannot be undone.`)) return;
+  try {
+    await api(`/api/delete/${uid}`, {});
+    for (const key of [...drafts.keys()]) if (key.startsWith(uid + " ")) { clearTimeout(drafts.get(key).timer); drafts.delete(key); }
+    if (state.selected === uid) state.selected = state.path = state.editing = null;
+    renderSaveState();
+    await refresh();
+  } catch (err) { toast(err.message); }
+}
+
+async function unlink(row) {
+  const it = item(row.uid);
+  if (it.reviewed && !confirm(`${row.uid} is reviewed: changing its parents clears its review. Unlink from ${row.parent} anyway?`)) return;
+  try {
+    await api(`/api/item/${row.uid}`, { parents: it.parents.filter((p) => p !== row.parent), base: { parents: it.parents } });
+    state.path = null;
+    await refresh();
+  } catch (err) { toast(err.message); }
+}
+
+function descendants(uid) {
+  const under = new Set(), queue = [...item(uid).children];
+  while (queue.length) {
+    const next = queue.pop();
+    if (under.has(next)) continue;
+    under.add(next);
+    queue.push(...item(next).children);
+  }
+  return under;
+}
+
+async function move(uid, from, to, before, link = false) {
+  if (filtersActive()) { toast("clear the filters to move items", "info"); return; }
+  const it = item(uid), refocus = $("tree").contains(document.activeElement);
+  try {
+    if (!it.parents.includes(to)) {
+      if (it.reviewed && !confirm(`${uid} is reviewed: a new parent clears its review. ${link ? "Link" : "Move"} under ${to} anyway?`)) return;
+    }
+    await api(`/api/move/${uid}`, { from, to, before, link });
+    state.expanded.add(to);
+    persistExpanded();
+    state.flash = uid;
+    await refresh();
+    if (state.selected === uid) select(uid, [...state.rows].find((r) => r.uid === uid && r.parent === to)?.path || null, { focus: refocus ? "row" : null });
+  } catch (err) { toast(err.message); }
+}
+
+const blockEl = (path) => $("doc").querySelector(`.block[data-path="${CSS.escape(path)}"]`);
+
+// Keyboard twin of drag-and-drop: Alt+Shift+arrows move the selected row among
+// its siblings, indent it under the previous sibling or outdent it after its parent.
+function keyboardMove(row, key) {
+  if (!row.parent) return;
+  const sibs = item(row.parent).children, i = sibs.indexOf(row.uid);
+  if (key === "ArrowUp" && i > 0) move(row.uid, row.parent, row.parent, sibs[i - 1]);
+  if (key === "ArrowDown" && i < sibs.length - 1) move(row.uid, row.parent, row.parent, sibs[i + 2] ?? null);
+  if (key === "ArrowRight" && i > 0) move(row.uid, row.parent, sibs[i - 1], null);
+  if (key === "ArrowLeft") {
+    const above = state.rows.find((r) => r.path === row.path.slice(0, row.path.lastIndexOf("/")));
+    if (!above || !above.parent) return;
+    const uncles = item(above.parent).children;
+    move(row.uid, row.parent, above.parent, uncles[uncles.indexOf(above.uid) + 1] ?? null);
+  }
+}
+
+function dropAt(event) {
+  const target = event.target.nodeType === 1 ? event.target : event.target.parentElement;
+  const el = target && target.closest(".row[data-path]"), drag = state.drag;
+  const row = el && state.rows.find((r) => r.path === el.dataset.path);
+  if (!row || row.cycle) return null;
+  const rect = el.getBoundingClientRect(), y = (event.clientY - rect.top) / rect.height;
+  const zone = !row.parent ? "inside" : y < 0.25 ? "before" : y > 0.75 ? "after" : "inside";
+  const into = zone === "inside" || (zone === "after" && row.open);
+  const to = into ? row.uid : row.parent;
+  if (row.uid === drag.uid || to === drag.uid || drag.under.has(to)) return null;
+  const sibs = item(to).children.filter((c) => c !== drag.uid);
+  const before = zone === "inside" ? null : zone === "before" ? row.uid : (into ? sibs[0] : sibs[sibs.indexOf(row.uid) + 1]) ?? null;
+  return { el, row, zone, to, before };
+}
+
+function markDrop(drop) {
+  const marked = $("tree").querySelector("[data-drop]");
+  if (marked && (!drop || marked !== drop.el)) delete marked.dataset.drop;
+  if (drop) drop.el.dataset.drop = drop.zone;
+  const hover = drop && drop.zone === "inside" && drop.row.kids && !drop.row.open ? drop.row.uid : null;
+  if (hover === state.hover) return;
+  clearTimeout(state.hoverTimer);
+  state.hover = hover;
+  if (hover) state.hoverTimer = setTimeout(() => { state.expanded.add(hover); persistExpanded(); renderTree(); }, HOVER_EXPAND_MS);
+}
+
+function endDrag() {
+  state.drag = null;
+  markDrop(null);
+  $("tree").querySelectorAll(".dragging").forEach((el) => el.classList.remove("dragging"));
+}
+
+// ---- document: every item a titled block; the selected one edits in place --
+
+// ---- markdown: escape first, then a small CommonMark subset over the escaped text; never raw HTML --
+
+// A known item's UID written `@UID` (or the older `[UID]`) is a jump link to its block; the text is left as written, escaped already.
+const UID_TAG_RE = /\[([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\]|@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)(?![\w-])/g;
+const jumps = (html) => html.replace(UID_TAG_RE, (m, tagged, at) => state.model.items[tagged || at] ? `<a class="jump" data-uid="${tagged || at}">${tagged || m}</a>` : m);
+const dirname = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+const slug = (text) => text.toLowerCase().replace(/<[^>]*>/g, "").replace(/&[a-z#0-9]+;/g, "").replace(/[^\w\- ]/g, "").trim().replace(/\s+/g, "-");
+
+function resolvePath(base, rel) {
+  const parts = rel.startsWith("/") || !base ? [] : base.split("/");
+  for (const seg of rel.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") parts.pop(); else parts.push(seg);
+  }
+  return parts.join("/");
+}
+
+// Links point into the project unless they carry an allowed scheme; other schemes degrade to text.
+function linkHtml(label, href, base) {
+  if (/^(https?:|mailto:)/i.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return esc(label);
+  const [target, frag] = href.split("#"), path = target ? resolvePath(base, target) : "";
+  return `<a class="filelink" data-file="${esc(path)}" data-frag="${esc(frag || "")}" title="${esc(path)}">${esc(label)}</a>`;
+}
+
+function inline(raw, base) {
+  const parts = [], hold = (html) => { parts.push(html); return `\u0000${parts.length - 1}\u0000`; };
+  const text = raw.replace(/`([^`\n]+)`/g, (_, code) => hold(`<code>${esc(code)}</code>`))
+    .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (_, label, href) => hold(linkHtml(label, href, base)))
+    .replace(/(^|[\s(])(https?:\/\/[^\s<>)]+)/g, (_, pre, url) => pre + hold(linkHtml(url, url, base)));
+  return jumps(esc(text)).replace(/\*\*(\S(?:.*?\S)?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^\w*])\*(\S(?:[^*\n]*?\S)?)\*(?![\w*])/g, "$1<em>$2</em>")
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => parts[i]);
+}
+
+function md(text, base) {
+  const lines = text.split("\n"), out = [];
+  const listAt = (line) => /^(\s*)([-*]|\d+[.)])\s+(.*)$/.exec(line);
+  const blockStart = (line) => /^(```|#{1,6}\s|>|\||(-{3,}|\*{3,})\s*$)/.test(line) || listAt(line);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*$/.test(line)) { i++; continue; }
+    if (line.startsWith("```")) {
+      const buf = [];
+      for (i++; i < lines.length && !lines[i].startsWith("```"); i++) buf.push(lines[i]);
+      i++;
+      out.push(`<pre><code>${esc(buf.join("\n"))}</code></pre>`);
+      continue;
+    }
+    const heading = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+    if (heading) { const html = inline(heading[2], base); out.push(`<h${heading[1].length} data-slug="${esc(slug(html))}">${html}</h${heading[1].length}>`); i++; continue; }
+    if (/^(-{3,}|\*{3,})\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
+    if (line.startsWith(">")) {
+      const buf = [];
+      for (; i < lines.length && lines[i].startsWith(">"); i++) buf.push(lines[i].replace(/^>\s?/, ""));
+      out.push(`<blockquote>${md(buf.join("\n"), base)}</blockquote>`);
+      continue;
+    }
+    if (line.startsWith("|") && /^\|?\s*:?-+/.test(lines[i + 1] || "")) {
+      const cells = (row) => row.replace(/^\||\|$/g, "").split("|").map((c) => inline(c.trim(), base));
+      out.push(`<table><tr>${cells(line).map((c) => `<th>${c}</th>`).join("")}</tr>`);
+      for (i += 2; i < lines.length && lines[i].startsWith("|"); i++) out.push(`<tr>${cells(lines[i]).map((c) => `<td>${c}</td>`).join("")}</tr>`);
+      out.push("</table>");
+      continue;
+    }
+    if (listAt(line)) {
+      const stack = [];
+      for (; i < lines.length && !/^\s*$/.test(lines[i]); i++) {
+        const at = listAt(lines[i]);
+        if (!at) { out.push(" " + inline(lines[i].trim(), base)); continue; }
+        const indent = at[1].length, tag = /\d/.test(at[2]) ? "ol" : "ul";
+        while (stack.length && indent < stack[stack.length - 1].indent) out.push(`</li></${stack.pop().tag}>`);
+        if (stack.length && indent === stack[stack.length - 1].indent) out.push("</li>");
+        else { stack.push({ indent, tag }); out.push(`<${tag}>`); }
+        out.push(`<li>${inline(at[3], base)}`);
+      }
+      while (stack.length) out.push(`</li></${stack.pop().tag}>`);
+      continue;
+    }
+    const buf = [];
+    for (; i < lines.length && !/^\s*$/.test(lines[i]) && !(buf.length && blockStart(lines[i])); i++) buf.push(lines[i].trim());
+    out.push(`<p>${inline(buf.join(" "), base)}</p>`);
+  }
+  return out.join("");
+}
+
+// An item's block: its statement, the files it links to, its chat, and the controls on its bottom border.
+function blockHtml(row) {
+  const uid = esc(row.uid);
+  return `<fieldset class="block" tabindex="-1" data-uid="${uid}" data-path="${esc(row.path)}">`
+    + `<legend><span class="tag"><button type="button" class="status"></button><span>${uid}</span></span></legend>`
+    + `<div class="block-body"></div><div class="block-files"></div><div class="block-chat"></div>`
+    + `<div class="block-foot"><div class="block-ai"></div></div></fieldset>`;
+}
+
+function fileViewHtml(f, path) {
+  return `<div class="sub file-view" data-file="${esc(f.path)}" data-path="${esc(path)}"><span class="tools"><button data-act="close" title="close ${esc(f.path)}">✕</button></span>`
+    + `<div class="sub-body"></div><div class="sub-files"></div><div class="sub-foot"><span class="pill mono">📄 ${esc(f.path)}</span></div></div>`;
+}
+
+// The items a run addresses below `uid`: those with own tests, or -- with the test feature off -- the childless ones.
+function leavesUnder(uid) { return [uid, ...descendants(uid)].filter((u) => (feature("test") ? item(u).is_leaf : !item(u).children.length)); }
+const where = (l) => `${l.path}:${l.line}` + (l.name.startsWith(l.path + "::") ? " · " + l.name.slice(l.path.length + 2) : "");
+const unbound = (uid, name) => `no test bound yet — tag one with ${uid}${name ? " · " + name : ""}`;
+
+// The status lines of the popup, the axes whose features are on: a leaf by its bindings, a branch by its leaves, the review, then the problems.
+function statusLines(uid, it) {
+  const line = (state, text) => `<div class="tip-${state}">${esc(text)}</div>`, test = feature("test"), review = feature("review");
+  let lines = test ? line(it.test, TEST_LABEL[it.test]) : "";
+  if (test && it.is_leaf) {
+    lines += it.bindings.map((b) => {
+      const runs = it.tests.filter((t) => t.binding === b.name), result = !runs.length ? "unknown" : runs.some((t) => !t.passed) ? "test_failed" : "test_passed";
+      return line(result, `${b.name || "(default)"} · ${TEST_LABEL[result]} · ${b.locations.length ? b.locations.map(where).join(", ") : unbound(uid, b.name)}`);
+    }).join("");
+  }
+  if (test && it.children.length) {
+    const below = leavesUnder(uid).filter((u) => u !== uid), tally = new Map();
+    for (const u of below) tally.set(item(u).test, (tally.get(item(u).test) || 0) + 1);
+    lines += [...tally].map(([state, n]) => line(state, `${plural(n, "item")} below ${TEST_LABEL[state]}`)).join("");
+  }
+  if (review) lines += line(it.review, `${REVIEW_MARK[it.review]} ${it.review.replace(/_/g, " ")}`);
+  return lines + it.problems.map((p) => line("review_violated", p)).join("");
+}
+
+// The popup: the status lines, the binding editor and test runs of a childless item, then the run actions.
+function popupHtml(uid, it) {
+  const n = leavesUnder(uid).length, own = leavesUnder(uid).includes(uid), below = descendants(uid).size;
+  return `<div class="status-lines">${statusLines(uid, it)}</div>` + (feature("test") && !it.children.length ? testsHtml(uid, it) : "")
+    + '<div class="section-label">run</div><div class="run-actions">'
+    + `<button data-run="test" ${n ? "" : "disabled"}>▶ ${own ? "Run test" : `Run tests of ${plural(n, "leaf item")}`}</button>`
+    + (feature("review") ? `<button data-run="review">👀 ${below ? `Mark reviewed with ${plural(below, "item")} below` : "Mark reviewed"}</button>` : "")
+    + (feature("review") && it.reviewed ? '<button data-run="clear" class="danger">✕ Clear review</button>' : "") + "</div>";
+}
+
+// The statement, then the key source files as links opening inside the block like any linked file, then the item's validation problems.
+function viewHtml(uid, it) {
+  const sources = it.sources.length ? `<div class="block-sources md">📎 ${it.sources.map((path) => linkHtml(path, path, "")).join("")}</div>` : "";
+  const problems = it.problems.length ? `<div class="block-problems">${it.problems.map((p) => `<div>${esc(p)}</div>`).join("")}</div>` : "";
+  return `<div class="block-text md">${md(currentText(uid, "description"), "")}</div>${sources}${problems}`;
+}
+
+function testsHtml(uid, it) {
+  let body = `<label class="leaf-toggle"><input type="checkbox" id="f-isleaf" ${it.is_leaf ? "checked" : ""}> <span>tested on its own</span></label>`;
+  if (it.is_leaf) {
+    body += it.bindings.map((b, i) => {
+      const locHtml = b.locations.length
+        ? b.locations.map((l) => '<span class="loc mono" title="' + esc(l.name) + '">' + esc(l.path) + ":" + l.line + "</span>").join(" ")
+        : '<span class="miss">' + esc(unbound(uid, b.name)) + "</span>";
+      const sha = b.sha ? '<span class="sha" title="frozen at ' + esc(b.sha.slice(0, 12)) + '… — the test routine as it was reviewed; a change of it reads as review violated">frozen by review</span>' : '<span class="sha" title="frozen by the next review">not frozen</span>';
+      const records = b.records ? '<span class="note">' + plural(b.records, "run") + "</span>" : "";
+      return '<div class="binding-row"><span class="name">' + (b.name ? esc(b.name) : "(default)") + "</span>" + sha + locHtml + records
+        + `<button class="unbind" data-unbind="${i}" title="remove binding">✕</button></div>`;
+    }).join("");
+    body += `<div class="binding-row"><input type="text" id="f-add-binding" placeholder="Binding name (default if empty)" class="new-uid mono" spellcheck="false"><button id="add-binding-btn">add binding</button></div>`;
+  }
+  const runs = it.tests.length ? '<div class="section-label">test runs</div>' + it.tests.map((t) =>
+    '<details class="testrec"><summary><span class="chip st-' + (t.passed ? "test_passed" : "test_failed") + '"><span class="ball"></span>' + (t.passed ? "passed" : "failed")
+    + "</span> <span class='mono'>" + esc(t.name) + "</span></summary><pre>" + esc(t.log || "(no captured output)") + "</pre></details>").join("") : "";
+  return '<div class="section-label">' + esc(uid) + " tests</div>" + body + runs;
+}
+
+function renderEditor(body, uid, field, readOnly, why) {
+  if (body.dataset.mode !== "edit") {
+    body.dataset.mode = "edit";
+    body._html = null;
+    body.innerHTML = `<textarea class="block-text" spellcheck="${field !== "file" || uid.endsWith(".md")}" placeholder="${field === "file" ? "" : "Subject on the first line, then what it does — one testable statement"}" data-uid="${esc(uid)}" data-field="${field}"></textarea>`;
+  }
+  const text = body.firstChild;
+  text.readOnly = readOnly;
+  text.title = readOnly ? why : "";
+  syncText(text);
+  autoGrow(text);
+}
+
+// The files opened from links in `anchor` -- an item block or a file view -- each a view inside it, in the order they were opened.
+function decorateFiles(container, anchor) {
+  const views = [...state.files.values()].filter((f) => f.anchor === anchor), sig = views.map((f) => f.path).join("\n");
+  if (container.dataset.sig !== sig) {
+    const old = new Map([...container.children].map((el) => [el.dataset.file, el])), maker = document.createElement("template");
+    container.replaceChildren(...views.map((f) => {
+      if (old.has(f.path)) return old.get(f.path);
+      maker.innerHTML = fileViewHtml(f, anchor + "#" + f.path);
+      return maker.content.firstChild;
+    }));
+    container.dataset.sig = sig;
+  }
+  for (const el of container.children) decorateFileView(el, state.files.get(el.dataset.file));
+}
+
+function decorateFileView(el, f) {
+  const path = el.dataset.path, editing = state.editing === path, body = el.querySelector(":scope > .sub-body");
+  el.classList.toggle("editing", editing);
+  if (editing && f.text != null) renderEditor(body, f.path, "file", !f.writable, "only markdown files are edited here");
+  else {
+    body.dataset.mode = "view";
+    setHtml(body, f.error ? `<div class="block-problems">${esc(f.error)}</div>` : f.text == null ? '<div class="note">loading…</div>'
+      : `<div class="block-text md">${md(currentText(f.path, "file"), dirname(f.path))}</div>`);
+  }
+  decorateFiles(el.querySelector(":scope > .sub-files"), path);
+}
+
+// The AI chat lives inside its item's block: log and input under the description, controls on the bottom-left border.
+// An item has one chat, held by the server and shared by every block and every browser tab showing the item; a tab only keeps where it shows it.
+function persistViews() { sessionStorage.setItem("assassin-chat-views", JSON.stringify([...state.views].filter(([, view]) => !view.byEdit))); }
+function chatOf(uid) {
+  const chat = { uid, log: [], session: null, turn: null, ...chatSetup(Object.keys(state.model.connectors)[0]), ...(state.chats.get(uid) || {}) };
+  return state.model.connectors[chat.connector] ? chat : { ...chat, ...chatSetup(Object.keys(state.model.connectors)[0]) };
+}
+function chatAt(row) { return state.views.has(row.path) ? chatOf(row.uid) : null; }
+const busy = (chat) => Boolean(chat.turn);
+const chatInput = (path) => $("doc").querySelector(`.block[data-path="${CSS.escape(path)}"] .chat-input`);
+
+function takeChats({ version, chats }) {
+  if (version < state.chatsVersion) return;  // overtaken by a later read
+  state.chatsVersion = version;
+  state.chats = new Map(Object.entries(chats));
+  settleStops();
+  watchChats();
+}
+// One chat's record as a reply to this tab's own request, stamped with the chats version it made; a later read of all chats overtakes it.
+function takeChat({ version, ...chat }) {
+  if (version < state.chatsVersion) return;
+  state.chats.set(chat.uid, chat);
+  settleStops();
+  renderDoc();
+}
+function settleStops() {
+  const live = new Set([...state.chats.values()].map((chat) => chat.turn));
+  for (const turn of state.stopping) if (!live.has(turn)) state.stopping.delete(turn);
+}
+async function reloadChats() { takeChats(await api("/api/chats")); }
+
+// A turn runs on the server until its connector's process exits -- a subagent or workflow it launched included -- and its reply lands in the
+// chat the server holds. While any turn runs, this tab keeps one long poll out for the next change of the chats, whichever tab started the
+// turn, a reloaded page included; one connection serves every chat, so the page's other requests are never starved by many open chats.
+const anyRunning = () => [...state.chats.values()].some((chat) => chat.turn);
+async function watchChats() {
+  if (state.watching || !anyRunning()) return;
+  state.watching = true;
+  try {
+    while (anyRunning()) {
+      try { takeChats(await api(`/api/chats?since=${state.chatsVersion}&wait=20`)); renderDoc(); }
+      catch (err) { if (err.status) return; await new Promise((wake) => setTimeout(wake, 1000)); }  // a dropped poll (reload, sleep) is not the turn's end
+    }
+  } finally { state.watching = false; }
+}
+
+// Every message but the first (the content) carries its marks on the block's border lines; the glyphs are SVG paths, so the text of a
+// message is its own. The text is shown in parts -- the kept ones as the role has them, each cut as its first line -- every part with its
+// fold mark; the right marks extract the kept text, or on a failed turn's message retry and remove it; a stopped turn's has the folds only.
+function messageHtml(m, index, busy, last) {
+  const out = keptText(m).trim() === "";
+  const right = out || m.role === "stopped" ? "" : m.role === "error"
+    ? (last ? `<button type="button" class="msg-retry" title="retry — send the last message again in the same session">${MARK.retry}</button>` : "")
+      + `<button type="button" class="msg-drop" title="remove the failed turn from the log">${MARK.remove}</button>`
+    : `<button type="button" class="msg-child" title="make the kept text a child item">${MARK.child}</button><button type="button" class="msg-sibling" title="make the kept text the next sibling item">${MARK.sibling}</button>`;
+  const [agent, turn] = String(m.agent || "").split(":");
+  const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>` : "";
+  return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${out ? " dropped" : ""}" data-index="${index}">`
+    + `<div class="msg-body">${from}${partsHtml(m, busy)}</div>` + (right ? `<span class="msg-tools right">${right}</span>` : "") + "</div>";
+}
+function foldMark(folded, exchange, frozen) {
+  const title = exchange ? (folded ? "expand — the text rejoins the exchange" : "fold — the text leaves the exchange") : folded ? "expand" : "fold to the first line";
+  return `<span class="msg-tools left"><button type="button" class="msg-fold" aria-expanded="${!folded}" aria-disabled="${frozen}" title="${title}">${folded ? MARK.expand : MARK.fold}</button></span>`;
+}
+// The glyphs of the marks, each a path centred in the 16-unit box.
+const MARK = {
+  fold: '<svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.5 5.25h9L8 10.75z"/></svg>', expand: '<svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M5.25 3.5v9L10.75 8z"/></svg>',
+  child: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v6.5h7M9 7.5l2.5 2.5L9 12.5"/></svg>', sibling: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg>',
+  retry: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 8.5a4.5 4.5 0 1 1-1.32-3.18M11.3 2.6v3h-3"/></svg>', remove: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+};
+function partsHtml(m, busy) {
+  const exchange = m.role !== "error" && m.role !== "stopped", render = m.role === "ai" ? (text) => md(text, "") : (text) => jumps(esc(text));
+  const part = (from, to, cut) => `<div class="${cut ? "msg-cut" : m.role === "ai" ? "msg-part md" : "msg-part"}" data-from="${from}" data-to="${to}">`
+    + foldMark(cut, exchange, busy) + (cut ? esc(cutLabel(m.text.slice(from, to))) : render(m.text.slice(from, to))) + "</div>";
+  let at = 0, html = "";
+  for (const [from, to] of m.cuts || []) { if (from > at) html += part(at, from, false); html += part(from, to, true); at = to; }
+  return html + (at < m.text.length || !html ? part(at, m.text.length, false) : "");
+}
+const cutLabel = (text) => firstLine(text).replace(/^(#+|[-*]|\d+[.)])\s+/, "");
+const keptText = (m) => { let at = 0, kept = ""; for (const [from, to] of m.cuts || []) { kept += m.text.slice(at, from); at = to; } return kept + m.text.slice(at); };
+// Cuts are kept sorted, merged where they touch and clipped to the text.
+function mergeCuts(cuts, length) {
+  const out = [];
+  for (const [a, b] of cuts.map(([a, b]) => [Math.max(0, a), Math.min(length, b)]).sort((x, y) => x[0] - y[0])) {
+    if (a >= b) continue;
+    if (out.length && a <= out[out.length - 1][1]) out[out.length - 1][1] = Math.max(out[out.length - 1][1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+// A turn's steps ride on its reply: the activity header summarises them and unfolds to one line per step, each unfolding to its content,
+// an agent step to its own steps the same way. What is unfolded is this tab's, keyed by the reply's place in the log, which the running
+// turn's reply takes when it lands.
+const seconds = (s) => (s < 10 ? Math.round(s * 10) / 10 : Math.round(s)) + " s";
+const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+const firstLine = (text) => String(text ?? "").trim().split("\n")[0];
+const brief = (value) => firstLine(value && typeof value === "object" ? Object.values(value).find((v) => typeof v === "string") ?? JSON.stringify(value) : value);
+const pending = (value) => (value == null ? " …" : "");
+const kilo = (n) => (n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+const READS = ["query", "context", "skill"];
+const FILE_STATUS = { A: "added", M: "changed", D: "deleted" };
+
+// The header line: the tally of the steps, the wall time, then the cost and tokens when the connector's closing usage step names them.
+function activitySummary(steps) {
+  const count = (kind) => steps.filter((s) => s.kind === kind).length, usage = steps.find((s) => s.kind === "usage"), shown = steps.length - (usage ? 1 : 0);
+  const files = new Set(steps.filter((s) => s.kind === "diff").flatMap((s) => s.files.map((f) => f.path))).size;
+  const end = usage?.seconds ?? Math.max(0, ...steps.map((s) => (s.at || 0) + (s.seconds || 0)));
+  const parts = [[count("tool"), "tool call"], [count("agent"), "subagent"], [count("workflow"), "workflow"], [files, "file changed", "files changed"]]
+    .filter(([n]) => n).map((part) => plural(...part));
+  const line = [...(parts.length ? parts : shown ? [plural(shown, "step")] : []), ...(end ? [seconds(end)] : []),
+    ...(usage?.cost_usd != null ? ["$" + usage.cost_usd.toFixed(2)] : []),
+    ...(usage && usage.input_tokens != null && usage.output_tokens != null ? [`${kilo(usage.input_tokens)} in / ${kilo(usage.output_tokens)} out`] : [])];
+  return line.length ? line.join(" · ") : "no steps";
+}
+
+function foldHtml(key, line, detail) {
+  const open = state.unfolded.has(key);
+  return `<div class="turn-step"><button type="button" class="step-line" aria-expanded="${open}" data-fold="${esc(key)}">${line}</button>`
+    + (open ? `<div class="step-detail">${detail()}</div>` : "") + "</div>";
+}
+
+const partHtml = (label, value) => (value == null ? ""
+  : `<div class="step-label">${label}</div><pre>${esc(typeof value === "string" ? value : JSON.stringify(value, null, 2))}</pre>`);
+
+function stepHtml(step, key) {
+  const kind = (label) => `<span class="step-kind">${esc(label)}</span>`;
+  switch (step.kind) {
+    case "tool": return foldHtml(key, kind(step.name) + esc(brief(step.input)) + (step.result == null ? " …" : step.seconds == null ? "" : " · " + seconds(step.seconds)),
+      () => partHtml("input", step.input) + partHtml("result", step.result));
+    case "message": return foldHtml(key, kind("message") + esc(firstLine(step.text)), () => `<div class="md">${md(step.text, "")}</div>`);
+    case "reasoning": return foldHtml(key, kind("reasoning") + esc(firstLine(step.text)), () => `<div class="step-text">${esc(step.text)}</div>`);
+    case "calls": return foldHtml(key, kind("calls") + esc(step.tools ? step.tools.join(", ") : plural(step.lines.length, "line")),
+      () => partHtml(step.tools?.every((tool) => READS.includes(tool)) ? "read" : "applied", step.lines.join("\n")));
+    case "usage": return "";
+    case "diff": return foldHtml(key, kind("diff") + plural(step.files.length, "file changed", "files changed"),
+      () => step.files.map((f, i) => foldHtml(`${key}/${i}`, kind(FILE_STATUS[f.status] || f.status) + esc(f.path), () => `<pre>${esc(f.hunks)}</pre>`)).join(""));
+    case "agent": return foldHtml(key, kind("agent" + (step.uid ? " @" + step.uid : "")) + esc(firstLine(step.prompt)) + pending(step.report),
+      () => partHtml("prompt", step.prompt) + partHtml("report", step.report) + (step.steps?.length ? `<div class="turn-steps">${stepsHtml(step.steps, key)}</div>` : ""));
+    case "workflow": return foldHtml(key, kind("workflow") + esc(brief(step.input)) + pending(step.result), () => partHtml("input", step.input) + partHtml("result", step.result));
+    default: return foldHtml(key, kind(step.kind), () => partHtml(step.kind, step));
+  }
+}
+const stepsHtml = (steps, key) => steps.map((step, i) => stepHtml(step, `${key}/${i}`)).join("");
+
+// Every reply closes with its activity header; the header unfolds to the steps only when the turn had some beyond the answer.
+function activityHtml(steps = [], key, running = false) {
+  const open = state.unfolded.has(key), listed = steps.some((s) => s.kind !== "usage");
+  const summary = (running ? '<span class="spinner"></span> ' : "") + esc(activitySummary(steps));
+  return '<div class="turn-activity">' + (listed
+    ? `<button type="button" class="turn-head" aria-expanded="${open}" data-fold="${esc(key)}" title="${open ? "fold" : "unfold"} the turn's steps">${summary}</button>`
+      + (open ? `<div class="turn-steps">${stepsHtml(steps, key)}</div>` : "")
+    : `<span class="turn-head bare">${summary}</span>`) + "</div>";
+}
+
+function toggleFold(key) {
+  if (!state.unfolded.delete(key)) state.unfolded.add(key);
+  renderDoc();
+}
+
+// Every block holds the reply line under its description; the log and the controls come with the open chat. The strip's first pill
+// follows the state: ■ stop while a turn runs, ✓ done while the block is edited, ▴ done for the open chat, ▾ for a hidden one with history.
+function decorateChat(el, row) {
+  const chat = chatAt(row), box = el.querySelector(".block-chat"), tools = el.querySelector(".block-ai"), kept = state.chats.get(row.uid), editing = state.editing === row.path;
+  el.classList.toggle("chatting", Boolean(chat));
+  el.classList.toggle("busy", Boolean(chat && busy(chat)));
+  if (kept?.turn) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
+  if (chat && state.seen.get(row.uid) !== chat.log.length) { state.seen.set(row.uid, chat.log.length); persistSeen(); }
+  if (!box.firstChild) box.innerHTML = '<div class="chat-log" role="log" aria-live="polite"></div><span class="reply-wait"><span class="spinner"></span></span><textarea class="block-text chat-input" spellcheck="true"></textarea>';
+  box.lastChild.placeholder = kept?.turn ? "Waiting AI response" : chat ? "Type message · Ctrl/⌘+Enter sends" : "Type a message to start new chat";
+  box.lastChild.tabIndex = chat || editing ? 0 : -1;
+  if (!chat) {
+    setHtml(box.firstChild, "");
+    const filed = kept?.archive?.length || 0, live = Boolean(kept && (kept.log.length || kept.turn));
+    const count = filed + (live ? 1 : 0);
+    setHtml(tools, count ? `<button type="button" class="pill chat-show" title="pick a conversation of the item — every one is kept">${kept.turn ? '<span class="spinner"></span>' : "▾"}${count > 1 ? ` ${count}` : ""}</button>` : "");
+    return;
+  }
+  const connector = state.model.connectors[chat.connector], advanced = advancedModes(chat.connector), running = busy(chat), several = Object.keys(state.model.connectors).length > 1;
+  setHtml(box.querySelector(".chat-log"), chat.log.map((m, i) => messageHtml(m, i, running, i === chat.log.length - 1) + (m.role === "user" ? "" : activityHtml(m.steps, `${chat.uid}:${i}`))).join("")
+    + (!running ? "" : chat.steps?.length ? activityHtml(chat.steps, `${chat.uid}:${chat.log.length}`, true)
+      : '<div class="chat-msg note"><span class="spinner"></span> waiting for the reply…</div>'));
+  const sendTitle = running ? `a turn of ${chat.uid} is running — wait for it or stop it` : editing
+    ? "save the statement and send it as the first message of a new conversation — the previous one is kept, ▾ lists it (Ctrl/⌘+Enter)" : "send the message (Ctrl/⌘+Enter)";
+  const statePill = running ? (state.stopping.has(chat.turn) ? '<button type="button" class="pill chat-stop" disabled><span class="spinner"></span> stopping…</button>'
+      : '<button type="button" class="pill chat-stop" title="stop the turn now — nothing more of it is applied">■ stop</button>')
+    : editing ? '<button type="button" class="pill chat-done" title="done — the statement is saved, the editor closed (Esc)">✓ done</button>'
+    : '<button type="button" class="pill chat-hide" title="hide the chat here — ▾ lists it again, nothing is lost">▴ done</button>';
+  setHtml(tools, statePill + (editing ? `<span class="pill save-mark" data-uid="${esc(row.uid)}"></span>` : "")
+    + `<span class="pill chat-pill${running ? " busy" : ""}">`
+    + `<button type="button" class="chat-send" title="${sendTitle}">➤ send</button>`
+    + `<button type="button" class="rev chat-setup" title="${several ? "connector" : esc(connector.label)} · model · effort — click to change">`
+    + [several && connector.label, connector.models.find((m) => m.id === chat.model)?.name ?? chat.model, effortsOf(chat.connector, chat.model).includes(chat.effort) && chat.effort]
+      .filter(Boolean).map(esc).join(" · ") + " ▾</button></span>"
+    + connector.modes.filter((m) => !m.advanced).map((m) => { const on = chat.modes.includes(m.id);
+      return `<button type="button" class="pill chat-mode${on ? " on" : ""}" role="switch" aria-checked="${on}" data-chat-mode="${esc(m.id)}" `
+        + `title="${esc(m.label)}: ${esc(m.hint)} — ${on ? "allowed" : "not allowed"} in this chat, click to switch"><span class="ball"></span>${esc(m.label)}</button>`; }).join("")
+    + (advanced.length ? `<button type="button" class="pill chat-advanced${advanced.some((m) => chat.modes.includes(m.id)) ? " on" : ""}" `
+      + `title="advanced permissions — ${advanced.map((m) => `${esc(m.label)}: ${chat.modes.includes(m.id) ? "allowed" : "not allowed"}`).join(", ")}; click to switch">advanced ▾</button>` : ""));
+  if (editing) decorateSaveMark(tools.querySelector(".save-mark"));
+}
+
+// The switches a connector marks advanced are not pills of the strip but the entries of one drop-down list, each switching its mode.
+function advancedModes(connector) {
+  return state.model.connectors[connector].modes.filter((m) => m.advanced);
+}
+function openAdvancedMenu(chat, anchor) {
+  openMenu('<div class="menu-label">advanced permissions</div>'
+    + advancedModes(chat.connector).map((m) => { const on = chat.modes.includes(m.id);
+      return `<button role="menuitemcheckbox" aria-checked="${on}" data-chat-mode="${esc(m.id)}" title="${esc(m.hint)} — ${on ? "allowed" : "not allowed"} in this chat, click to switch">`
+        + `${on ? "● " : "○ "}${esc(m.label)}</button>`; }).join(""), anchor, { chat });
+}
+
+// A model offers only its own effort levels, those of the connector when it lists none of its own; a model without any takes no effort.
+function effortsOf(connector, model) {
+  const setup = state.model.connectors[connector];
+  return setup.models.find((m) => m.id === model)?.efforts ?? setup.efforts;
+}
+function modelSetup(connector, model, effort = null) {
+  const efforts = effortsOf(connector, model);
+  return { model, effort: efforts.includes(effort) ? effort : efforts.includes("medium") ? "medium" : efforts[0] ?? null };
+}
+function chatSetup(connector) {
+  const setup = state.model.connectors[connector];
+  return { connector, ...modelSetup(connector, setup.models[0].id), modes: setup.modes.filter((m) => m.default).map((m) => m.id) };
+}
+
+// Showing the chat in a block: wherever the item is shown, in this tab or another, it is the same chat.
+function showChat(row, byEdit = false) {
+  if (!state.views.has(row.path)) state.views.set(row.path, { uid: row.uid, byEdit });
+  persistViews();
+  return chatOf(row.uid);
+}
+
+function focusChat(path) {
+  const input = chatInput(path);
+  if (input) { input.focus({ preventScroll: true }); input.scrollIntoView({ block: "nearest" }); }
+}
+
+function openChat(row) {
+  showChat(row);
+  select(row.uid, row.path, { origin: "doc" });
+  renderDoc();
+  focusChat(row.path);
+}
+
+// The ▾ of a hidden chat lists the item's conversations, even a single one, the live one marked; only a pick shows one.
+function showHidden(row, anchor) {
+  const kept = state.chats.get(row.uid);
+  if (kept) openConversationMenu(row, kept, Boolean(kept.log.length || kept.turn), anchor);
+}
+const logTitle = (log) => firstLine(log.find((m) => m.text)?.text).slice(0, 120);
+function startedLabel(started) {
+  if (!started) return "";
+  const at = new Date(started * 1000), time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return at.toDateString() === new Date().toDateString() ? time : `${at.toLocaleDateString()} ${time}`;
+}
+const conversationLabel = (c) => [c.title || "(no text yet)", plural(c.messages, "message"), startedLabel(c.started)].filter(Boolean).join(" · ");
+function openConversationMenu(row, kept, live, anchor) {
+  openMenu('<div class="menu-label">conversations</div>'
+    + (live ? `<button role="menuitem" data-chat-resume="live">● ${esc(conversationLabel({ title: logTitle(kept.log), messages: kept.log.length, started: kept.started }))}</button>` : "")
+    + kept.archive.map((c, i) => `<button role="menuitem" data-chat-resume="${i}">○ ${esc(conversationLabel(c))}</button>`).join(""), anchor, { row });
+}
+async function resumeConversation(row, index) {
+  await updateChat(row.uid, { resume: index });
+  openChat(row);
+}
+
+// Hiding is refused while a message waits in the reply line: nothing typed is lost unseen.
+function hideChat(path) {
+  const input = chatInput(path);
+  if (input && input.value.trim()) { toast("send or clear the message first", "info"); input.focus({ preventScroll: true }); return false; }
+  state.views.delete(path);
+  persistViews();
+  renderDoc();
+  return true;
+}
+
+// A change to the chat shows at once and is then stored by the server, whose record every tab reads back; of changes in flight
+// together only the last one's record is taken, the earlier being already behind it. A refused change is read back from the server.
+const chatUpdates = new Map();
+async function updateChat(uid, patch) {
+  const local = chatOf(uid), { message, erase, reset, begin, resume, ...setup } = patch, seq = (chatUpdates.get(uid) || 0) + 1;
+  chatUpdates.set(uid, seq);
+  if (message) {
+    const { index, remove, ...marks } = message;
+    if (!local.log[index]) return reloadChats().then(renderDoc);
+    remove ? local.log.splice(index, 1) : Object.assign(local.log[index], marks);
+  }
+  if (erase || begin) Object.assign(local, { log: [], session: null, started: null });
+  if (reset) local.session = null;
+  state.chats.set(uid, Object.assign(local, setup));
+  renderDoc();
+  try {
+    const stored = await api(`/api/chat/${uid}`, patch);
+    if (chatUpdates.get(uid) === seq) takeChat(stored);
+  } catch (err) { toast(err.message); reloadChats().then(renderDoc, () => {}); }
+}
+
+function toggleChatMode(chat, mode) {
+  updateChat(chat.uid, { modes: chat.modes.includes(mode) ? chat.modes.filter((m) => m !== mode) : [...chat.modes, mode] });
+}
+
+// A turn: the typed text joins the log as the user's message; a statement sent from the editor is the content itself, not repeated,
+// and starts the item's chat anew, the old one erased first; a retry sends the last message again without logging it twice.
+async function sendChat(row, statement = null, retry = false) {
+  const chat = row && chatAt(row), input = chat && chatInput(row.path);
+  const text = retry ? chat?.log.findLast((m) => m.role === "user")?.text ?? "" : statement ?? (input ? input.value.trim() : "");
+  if (!chat) return;
+  if (busy(chat)) { toast(`a turn of ${chat.uid} is running — wait for it or stop it`, "info"); return; }
+  if (!text) { toast("type a message first", "info"); return; }
+  if (input && statement === null && !retry) input.value = "";
+  state.views.get(row.path).byEdit = false;
+  persistViews();
+  if (statement !== null) for (const key of state.unfolded) if (key.startsWith(chat.uid + ":")) state.unfolded.delete(key);
+  const { uid, connector, model, effort, modes } = chat;
+  try {
+    const started = await api("/api/turn", { uid, connector, model, effort, modes, text, statement: statement !== null, fresh: statement !== null, retry });
+    takeChat(started.chat);
+    watchChats();
+  } catch (err) { toast(err.message); }
+}
+
+// One press stops the turn; the pill reads as stopping until the outcome lands.
+function stopTurn(chat) {
+  if (!chat?.turn || state.stopping.has(chat.turn)) return;
+  state.stopping.add(chat.turn);
+  renderDoc();
+  api(`/api/turn/${chat.turn}/stop`, {}).catch((err) => { state.stopping.delete(chat.turn); renderDoc(); toast(err.message); });
+}
+
+// The marks of one message: a fold mark cuts its part out of the exchange or lets a cut back in (either rebuilds the exchange from the kept
+// text on the next turn), the extraction marks make the kept text an item, and a failed turn's message is retried or removed.
+function messageTool(chat, row, msg, tool) {
+  const index = Number(msg.dataset.index), m = chat.log[index];
+  if (!m) return reloadChats().then(renderDoc);
+  if (tool.classList.contains("msg-fold") && tool.getAttribute("aria-disabled") !== "true") {
+    const part = tool.closest(".msg-part, .msg-cut"), from = Number(part.dataset.from), to = Number(part.dataset.to);
+    const cuts = part.classList.contains("msg-cut") ? (m.cuts || []).filter(([a, b]) => a !== from || b !== to) : mergeCuts([...(m.cuts || []), [from, to]], m.text.length);
+    updateChat(chat.uid, { message: { index, cuts } });
+  }
+  if (tool.classList.contains("msg-child")) extractItem(row, keptText(m), row.uid, null);
+  if (tool.classList.contains("msg-sibling")) extractItem(row, keptText(m), row.parent, row.uid);
+  if (tool.classList.contains("msg-retry")) sendChat(row, null, true);
+  if (tool.classList.contains("msg-drop")) updateChat(chat.uid, { message: { index, remove: true } });
+}
+
+// A message becomes an item through the editor's own scaffold: its text is the body, a heading mark stripped off the first line.
+async function extractItem(row, text, parent, after) {
+  if (!parent) { toast("the root has no siblings"); return; }
+  const description = text.trim().replace(/^#+\s*/, "");
+  const kids = item(parent).children, anchor = after ? item(after) : kids.length ? item(kids[kids.length - 1]) : null, uid = suggestUid(parent);
+  const next = after ? kids[kids.indexOf(after) + 1] : null;
+  try {
+    await api("/api/new", { uid, parents: [parent], dir: (anchor || item(parent)).folder, kind: "leaf", description, order: anchor ? anchor.order + 10 : 0 });
+    if (next) await api(`/api/move/${uid}`, { from: parent, to: parent, before: next });
+    state.expanded.add(parent);
+    persistExpanded();
+    state.flash = uid;
+    await refresh();
+    toast(`${uid} added under ${parent}`, "info");
+  } catch (err) { toast(err.message); }
+}
+
+// The editor's send: the item is saved first and its stored statement is the user's text of the turn; a chat with messages is erased
+// only after a confirmation, and nothing is sent while a turn runs or the statement is empty.
+async function sendEdited(row) {
+  if (busy(chatOf(row.uid))) { toast(`a turn of ${row.uid} is running — wait for it or stop it`, "info"); return; }
+  showChat(row);
+  await flushAll();
+  if (drafts.size) { toast("resolve the unsaved edits first"); return; }
+  const statement = item(row.uid).description_raw.trim();
+  if (!statement) { toast("the statement is empty — nothing to send", "info"); return; }
+  state.editing = null;
+  renderDoc();
+  await sendChat(row, statement);
+}
+
+// Entering the reply field in the editor saves the item and waits for a message; nothing goes to the AI yet.
+async function finishEditing(row) {
+  showChat(row);
+  state.views.get(row.path).byEdit = false;
+  persistViews();
+  state.editing = null;
+  renderDoc();
+  focusChat(row.path);
+  await flushAll();
+}
+
+// The reply field is entered by click or by focus: in the editor it ends the edit, at rest it opens the chat — a new conversation when the
+// item's chat holds messages and is shown nowhere in this tab, the old one filed behind ▾; a running turn is joined instead.
+function enterReply(el) {
+  const row = { uid: el.dataset.uid, path: el.dataset.path };
+  if (state.editing === row.path) finishEditing(row);
+  else if (!chatAt(row)) {
+    const kept = state.chats.get(row.uid);
+    if (kept && kept.log.length && !kept.turn && !chatShown(row.uid)) updateChat(row.uid, { begin: true });
+    openChat(row);
+  }
+}
+
+function openChatMenu(chat, anchor) {
+  const connector = state.model.connectors[chat.connector], efforts = effortsOf(chat.connector, chat.model);
+  const mark = (on) => (on ? "● " : "○ "), off = busy(chat) ? "disabled" : "";
+  openMenu('<div class="menu-label">connector</div>'
+    + Object.entries(state.model.connectors).map(([id, c]) => `<button role="menuitem" data-chat-connector="${esc(id)}">${mark(id === chat.connector)}${esc(c.label)}</button>`).join("")
+    + '<div class="menu-label">model</div>'
+    + connector.models.map((m) => `<button role="menuitem" data-chat-model="${esc(m.id)}">${mark(m.id === chat.model)}${esc(m.name)}</button>`).join("")
+    + (efforts.length ? '<div class="menu-label">effort</div>' : "")
+    + efforts.map((e) => `<button role="menuitem" data-chat-effort="${esc(e)}">${mark(e === chat.effort)}${esc(e)}</button>`).join("")
+    + '<div class="menu-label">chat</div>'
+    + `<button role="menuitem" data-chat-reset="session" ${off} title="keep the messages, start a new connector session with them as the transcript">↺ New session</button>`
+    + `<button role="menuitem" data-chat-reset="begin" ${off} title="start a new conversation — this one is kept, ▾ lists it">＋ New chat</button>`
+    + `<button role="menuitem" data-chat-reset="chat" class="danger" ${off} title="erase the messages and the session of this conversation">✕ Delete chat</button>`, anchor, { chat });
+}
+
+function resetChat(chat, strength) {
+  if (strength === "chat" && !confirm(`Delete this chat of ${chat.uid}? Its ${plural(chat.log.length, "message")} and session are erased.`)) return;
+  updateChat(chat.uid, strength === "chat" ? { erase: true } : strength === "begin" ? { begin: true } : { reset: true });
+}
+
+function decorateBlock(el, row) {
+  const it = item(row.uid), selected = state.panel && row.path === state.path, editing = state.editing === row.path;
+  el.tabIndex = el.querySelector("legend .status").tabIndex = selected ? 0 : -1;
+  el.classList.toggle("selected", selected);
+  el.classList.toggle("in-sel", selected || Boolean(state.path && row.path.startsWith(state.path + "/")));
+  el.classList.toggle("editing", editing);
+  el.classList.toggle("branch", it.children.length > 0);
+  decorateLabel(el, it);
+  const body = el.querySelector(".block-body");
+  if (editing) renderEditor(body, row.uid, "description", false, "");
+  else {
+    body.dataset.mode = "view";
+    setHtml(body, viewHtml(row.uid, it));
+  }
+  decorateFiles(el.querySelector(".block-files"), row.path);
+  decorateChat(el, row);
+}
+
+const selectedBlockEl = () => (state.path ? $("doc").querySelector(`.block[data-path="${CSS.escape(state.path)}"]`) : null);
+
+function renderDoc() {
+  const doc = $("doc");
+  state.docRows = flatten(true);
+  const sig = state.docRows.map((r) => r.path).join("\n");
+  if (sig !== state.docSig) {
+    // Blocks are reused by path, so a block being edited keeps its fields (and, restored below, its caret) across a restructure.
+    const active = document.activeElement, keep = doc.contains(active) ? { el: active, start: active.selectionStart, end: active.selectionEnd } : null;
+    const old = new Map([...doc.querySelectorAll(".block")].map((el) => [el.dataset.path, el])), maker = document.createElement("template");
+    const levels = [document.createDocumentFragment()];
+    state.rebuilding = true;
+    for (const row of state.docRows) {
+      while (levels.length - 1 < row.depth) { const kids = document.createElement("div"); kids.className = "kids"; levels.at(-1).append(kids); levels.push(kids); }
+      levels.length = row.depth + 1;
+      if (!old.has(row.path)) { maker.innerHTML = blockHtml(row); old.set(row.path, maker.content.firstChild); }
+      levels.at(-1).append(old.get(row.path));
+    }
+    doc.replaceChildren(levels[0]);
+    if (!state.docRows.length) doc.innerHTML = '<div class="empty">nothing matches the filter</div>';
+    if (keep && doc.contains(keep.el)) {
+      keep.el.focus({ preventScroll: true });
+      if (keep.el.setSelectionRange && keep.start != null) keep.el.setSelectionRange(keep.start, keep.end);
+    }
+    state.rebuilding = false;
+    state.docSig = sig;
+  }
+  doc.querySelectorAll(".block").forEach((el, i) => decorateBlock(el, state.docRows[i]));
+  renderChatMarks();
+}
+
+// ---- status popup, opened from the label's icon in either pane -------------------
+
+function renderTests() {
+  const pop = $("tests-pop");
+  if (!pop.matches(":popover-open")) return;
+  const uid = pop.dataset.uid, adding = $("f-add-binding");
+  if (uid !== state.selected || !item(uid)) { pop.hidePopover(); return; }
+  if (!(adding && adding === document.activeElement && adding.value)) setHtml(pop, popupHtml(uid, item(uid)));
+}
+
+function placeBy(pop, anchor) {
+  const at = anchor.getBoundingClientRect(), below = at.bottom + 6 + pop.offsetHeight <= innerHeight;
+  pop.style.left = Math.max(8, Math.min(at.left, innerWidth - pop.offsetWidth - 8)) + "px";
+  pop.style.top = Math.max(8, below ? at.bottom + 6 : at.top - 6 - pop.offsetHeight) + "px";
+}
+
+// The popup follows the selected item; the icon that opened it anchors it.
+function openStatusPopup(row, anchor) {
+  const pop = $("tests-pop");
+  if (pop.matches(":popover-open")) pop.hidePopover();
+  pop.dataset.uid = row.uid;
+  pop.setAttribute("aria-label", `status, tests and review of ${row.uid}`);
+  pop.showPopover();
+  renderTests();
+  placeBy(pop, anchor);
+}
+
+// The one drop-down menu: whoever opens it names its entries and what they act on; the first entry takes the focus, Escape gives it back.
+function openMenu(html, anchor, props = {}) {
+  const menu = $("status-menu");
+  if (menu.matches(":popover-open")) menu.hidePopover();
+  Object.assign(menu, { chat: null, row: null, anchor }, props);
+  menu.innerHTML = html;
+  menu.showPopover();
+  placeBy(menu, anchor);
+  menu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+}
+
+function hideMenus() {
+  for (const id of ["status-menu", "tests-pop", "help-pop"]) if ($(id).matches(":popover-open")) $(id).hidePopover();
+  syncSelection();
+}
+
+// Structure edits sit behind an explicit menu, apart from the row's one-click buttons.
+function openRowMenu(row, anchor) {
+  const it = item(row.uid);
+  openMenu((row.parent ? '<button role="menuitem" data-row-act="add-parent">⇑ Add parent</button>' : "")
+    + '<button role="menuitem" data-row-act="add">+ Add child</button>'
+    + (row.parent && it.parents.length > 1 ? `<button role="menuitem" data-row-act="unlink">⊖ Unlink from ${esc(row.parent)}</button>` : "")
+    + (it.children.length ? "" : '<button role="menuitem" data-row-act="delete" class="danger">✕ Delete item</button>'), anchor, { row });
+}
+
+function startRun(action, uid) {
+  if (action === "review" && descendants(uid).size && !confirm(feature("test") ? `Run the tests of the ${plural(leavesUnder(uid).length, "leaf item")} under ${uid} and mark ${uid} and every item below it reviewed?` : `Mark ${uid} and every item below it reviewed?`)) return;
+  if (action === "clear" && !confirm(`Clear the review of ${uid}? Its frozen test routines are released as well.`)) return;
+  run(action, [uid]);
+}
+
+function toggleHelp() {
+  const pop = $("help-pop");
+  if (pop.matches(":popover-open")) { pop.hidePopover(); return; }
+  pop.showPopover();
+  placeBy(pop, $("help"));
+}
+
+function render() { renderTree(); renderDoc(); renderTests(); }
+
+// Editing the description starts a chat: the AI controls appear with the editor, and the saved statement is the first turn when sent.
+// The editor belongs to the block: a row-only selection is activated first, and an edit elsewhere ends.
+function startEditing(path = state.path) {
+  if (!path || state.editing === path) return;
+  if (state.editing) stopEditing();
+  if (path === state.path && !state.panel) select(state.selected, path, { focus: "block" });
+  state.editing = path;
+  const row = state.docRows.find((r) => r.path === path);
+  if (row) showChat(row, true);
+  renderDoc();
+  const host = $("doc").querySelector(`[data-path="${CSS.escape(path)}"]`), text = host && host.querySelector(":scope > .block-body textarea, :scope > .sub-body textarea");
+  if (!text) return;
+  text.focus({ preventScroll: true });
+  text.setSelectionRange(text.value.length, text.value.length);
+  host.scrollIntoView({ block: "nearest" });
+}
+
+// ---- linked project files: a view inside the block of the item (or the file view) whose link opened it ----
+
+async function openFile(path, anchor, frag) {
+  const known = state.files.get(path), f = known || { path, anchor, text: null };
+  f.anchor = anchor;
+  state.files.set(path, f);
+  renderDoc();
+  if (!known) {
+    try { Object.assign(f, await api(`/api/file?path=${encodeURIComponent(path)}`), { error: null }); }
+    catch (err) { f.error = err.message; }
+    renderDoc();
+  }
+  const view = $("doc").querySelector(`.file-view[data-path="${CSS.escape(anchor + "#" + path)}"]`);
+  if (!view) return;
+  const heading = frag && view.querySelector(`[data-slug="${CSS.escape(frag.toLowerCase())}"]`);
+  (heading || view).scrollIntoView({ block: heading ? "start" : "nearest" });
+}
+
+async function closeFile(path) {
+  const draft = drafts.get(draftKey(path, "file"));
+  if (draft) await flush(draft);
+  if (drafts.has(draftKey(path, "file")) && !confirm(`${path} has unsaved changes that could not be stored. Close anyway?`)) return;
+  drafts.delete(draftKey(path, "file"));
+  shown.delete(draftKey(path, "file"));
+  for (const f of state.files.values()) if (f.anchor.startsWith(state.files.get(path).anchor + "#" + path)) state.files.delete(f.path);
+  state.files.delete(path);
+  if (state.editing && state.editing.endsWith("#" + path)) state.editing = null;
+  renderSaveState();
+  renderDoc();
+}
+
+async function reloadFiles() {
+  await Promise.all([...state.files.values()].map(async (f) => {
+    try { Object.assign(f, await api(`/api/file?path=${encodeURIComponent(f.path)}`), { error: null }); }
+    catch (err) { f.error = err.message; }
+  }));
+}
+
+// The edit ends with its text kept; a chat this edit opened hides again unless it holds a message or runs a turn.
+function stopEditing() {
+  if (!state.editing) return;
+  const row = state.docRows.find((r) => r.path === state.editing), view = row && state.views.get(row.path);
+  state.editing = null;
+  if (view && view.byEdit) {
+    const chat = chatOf(row.uid);
+    if (busy(chat) || chat.log.length || !hideChat(row.path)) { view.byEdit = false; persistViews(); }
+  }
+  flushAll();
+}
+
+// The done mark, Esc being its keyboard twin: an open edit ends, else the chat hides here; the block takes the focus back.
+function closeChat(row) {
+  if (state.editing === row.path) stopEditing();
+  else if (!hideChat(row.path)) return;
+  renderDoc();
+  blockEl(row.path)?.focus({ preventScroll: true });
+}
+
+async function saveTests(uid, names) {
+  const it = item(uid);
+  try { await api(`/api/item/${uid}`, { tests: names, base: { tests: it.is_leaf ? it.bindings.map((b) => b.name) : null } }); }
+  catch (err) { toast(err.message); }
+  await refresh();
+}
+
+function addBinding(uid) {
+  const names = item(uid).bindings.map((b) => b.name), name = $("f-add-binding").value.trim();
+  if (names.includes(name)) { toast(`binding '${name || "(default)"}' already present`); return; }
+  if (name && !/^[a-z0-9_]+$/.test(name)) { toast("binding names are lowercase letters, digits and underscores"); return; }
+  if ((name === "" && names.length) || names.includes("")) { toast("the default binding stands alone; name all bindings to have several"); return; }
+  $("f-add-binding").value = "";
+  saveTests(uid, [...names, name]);
+}
+
+// ---- runs (review / clear) ----------------------------------------------
+
+async function run(action, uids) {
+  await flushAll();
+  if (drafts.size) { toast("resolve the unsaved edits first"); return; }
+  try {
+    const { job } = await api("/api/run", { action, uids });
+    attachJob(job, `${action} ${uids.join(" ")}`);
+  } catch (err) { toast(err.message); }
+}
+
+// The console follows a run from its first line: the one this tab started, or the one found live after a reload, named from its argv.
+const RUN_ACTIONS = ["test", "review", "clear"];
+function attachJob(id, label = null) {
+  $("console").classList.add("open");
+  $("console-stop").hidden = false;
+  $("job-out").textContent = "";
+  $("job-argv").textContent = label ?? "";
+  if (label === null) api(`/api/job/${id}`).then(({ argv }) => { $("job-argv").textContent = argv.slice(argv.findIndex((a) => RUN_ACTIONS.includes(a))).join(" "); }).catch(() => {});
+  $("job-state").innerHTML = '<span class="spinner"></span> <span class="status-run">running…</span>';
+  state.job?.es.close();
+  const es = new EventSource(`/api/job/${id}/events?token=${encodeURIComponent(TOKEN)}`);
+  state.job = { id, es };
+  const end = (html) => { es.close(); state.job = null; $("console-stop").hidden = true; $("job-state").innerHTML = html; };
+  es.onmessage = (event) => {
+    const out = $("job-out");
+    out.textContent += event.data + "\n";
+    out.scrollTop = out.scrollHeight;
+  };
+  es.addEventListener("done", async (event) => {
+    const rc = event.data, stopped = state.job?.stopping || Number(rc) < 0;
+    end(rc === "0" ? '<span class="status-ok">✓ done</span>' : stopped ? '<span class="status-run">■ stopped</span>' : `<span class="status-fail">✗ failed (exit ${esc(rc)})</span>`);
+    await refresh();
+  });
+  es.onerror = () => { if (state.job && state.job.id === id) end('<span class="status-fail">output lost — the run goes on; the statuses recolor when it ends</span>'); };
+}
+
+function stopJob() {
+  if (!state.job) return;
+  state.job.stopping = true;
+  api(`/api/job/${state.job.id}/cancel`, {}).catch((err) => toast(err.message));
+}
+
+// ---- refresh loop --------------------------------------------------------
+
+let refreshSeq = 0;
+async function refresh() {
+  const seq = ++refreshSeq;
+  let model;
+  try { model = await api("/api/tree"); } catch (err) { toast(err.message); return; }
+  if (seq !== refreshSeq) return;
+  const booting = !state.model;
+  state.model = model;
+  try { await reloadChats(); } catch (err) { toast(err.message); return; }
+  if (seq !== refreshSeq) return;
+  for (const [path, view] of state.views) {
+    const chat = state.chats.get(view.uid), uids = path.split("/");
+    if (uids.at(-1) !== view.uid || uids.some((u) => !model.items[u]) || (booting && !(chat && (chat.log.length || chat.turn)))) state.views.delete(path);
+  }
+  persistViews();
+  if (state.selected && !model.items[state.selected]) state.selected = null;
+  state.path = state.selected && docPath(state.selected, state.path);
+  if (state.editing && !flatten(true).some((r) => r.path === state.editing) && ![...state.files.values()].some((f) => f.anchor + "#" + f.path === state.editing)) stopEditing();
+  if (state.adding && !model.items[state.adding.parent]) state.adding = null;
+  if (model.job && state.job?.id !== model.job) attachJob(model.job);
+  await reloadFiles();
+  render();
+}
+
+async function poll() {
+  if (document.hidden || !state.model || state.drag) return;
+  try {
+    const open = [...state.files.values()].filter((f) => f.text != null);
+    const { fingerprint, files, chats, job } = await api("/api/fingerprint" + (open.length ? "?" + open.map((f) => "file=" + encodeURIComponent(f.path)).join("&") : ""));
+    if (job && state.job?.id !== job) attachJob(job);
+    const stale = chats !== state.chatsVersion;
+    if (stale) await reloadChats();
+    if (fingerprint !== state.model.fingerprint || open.some((f) => files[f.path] !== f.sha)) await refresh();
+    else if (stale) renderDoc();
+  } catch (err) { /* server gone; the next interaction reports it */ }
+}
+
+// ---- events --------------------------------------------------------------
+
+const tree = $("tree");
+const rowOf = (el) => state.rows.find((r) => r.path === el.dataset.path);
+
+tree.addEventListener("click", (event) => {
+  const el = event.target.closest(".row[data-path]");
+  if (!el) return;
+  const row = rowOf(el), act = event.target.closest("[data-act]"), icon = event.target.closest(".status");
+  if (event.target.closest(".twist")) { if (row.kids) toggle(row.uid); return; }
+  if (icon) { select(row.uid, row.path, { panel: false }); openStatusPopup(row, icon); }
+  else if (event.target.closest(".chat-state")) openChat(row);
+  else if (act && act.dataset.act === "menu") openRowMenu(row, act);
+  else if (!act) select(row.uid, row.path, { panel: false });
+});
+// A single click selects the row and leaves the content pane alone: the double click activates the row's panel.
+tree.addEventListener("dblclick", (event) => {
+  const el = event.target.closest(".row[data-path]");
+  if (!el || event.target.closest("[data-act], .twist")) return;
+  const row = rowOf(el);
+  select(row.uid, row.path, { smooth: true });
+});
+tree.addEventListener("keydown", (event) => {
+  if (!event.target.classList.contains("new-uid")) return;
+  if (event.key === "Enter") state.adding.link ? linkParent(event.target) : createChild(event.target);
+  if (event.key === "Escape") { event.target.blur(); }
+  event.stopPropagation();
+});
+tree.addEventListener("focusout", (event) => { if (event.target.classList.contains("new-uid")) stopAdding(); });
+
+tree.addEventListener("dragstart", (event) => {
+  const handle = event.target.nodeType === 1 && event.target.closest(".handle");
+  if (!handle) return;
+  if (filtersActive()) { event.preventDefault(); toast("clear the filters to move items", "info"); return; }
+  const el = handle.closest(".row"), row = rowOf(el);
+  state.drag = { uid: row.uid, from: row.parent, under: descendants(row.uid) };
+  event.dataTransfer.effectAllowed = "copyMove";
+  event.dataTransfer.setData("text/plain", row.uid);
+  event.dataTransfer.setDragImage(el, 12, 12);
+  el.classList.add("dragging");
+  handle.addEventListener("dragend", endDrag, { once: true });
+});
+tree.addEventListener("dragover", (event) => {
+  const drop = state.drag && dropAt(event);
+  markDrop(drop);
+  if (!drop) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = event.ctrlKey ? "copy" : "move";
+});
+tree.addEventListener("dragleave", (event) => { if (!tree.contains(event.relatedTarget)) markDrop(null); });
+tree.addEventListener("drop", (event) => {
+  const drag = state.drag, drop = drag && dropAt(event);
+  endDrag();
+  if (!drop) return;
+  event.preventDefault();
+  move(drag.uid, drag.from, drop.to, drop.before, event.ctrlKey);
+});
+// A rebuilt tree detaches the drag source, and its dragend may then never reach
+// us; a pressed button is proof that no drag is in progress any more.
+document.addEventListener("mousedown", () => { if (state.drag) endDrag(); });
+
+document.addEventListener("input", (event) => {
+  const el = event.target;
+  if (el.tagName === "TEXTAREA") autoGrow(el);
+  if (!el.dataset || !el.dataset.field) return;
+  edit(el.dataset.uid, el.dataset.field, el.value);
+});
+document.addEventListener("focusout", (event) => {
+  const el = event.target;
+  if (state.rebuilding || !el.dataset || !el.dataset.field) return;
+  const draft = drafts.get(draftKey(el.dataset.uid, el.dataset.field));
+  if (draft) flush(draft);
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) flushAll(); else poll(); });
+window.addEventListener("pagehide", flushAll);
+
+$("save-state").addEventListener("click", flushAll);
+$("conflicts").addEventListener("click", (event) => {
+  const keep = event.target.dataset.keep, take = event.target.dataset.take, draft = drafts.get(keep || take);
+  if (!draft) return;
+  if (keep) { draft.base = draft.conflict; delete draft.conflict; flush(draft); return; }
+  drafts.delete(take);
+  if (document.activeElement && document.activeElement.dataset.field) document.activeElement.blur();
+  renderSaveState();
+  refresh();
+});
+
+const doc = $("doc");
+// In the reply line Esc is the done mark while the line is empty; with text in it, or a turn running, it only returns the focus to the block.
+doc.addEventListener("keydown", (event) => {
+  if (!event.target.classList.contains("chat-input")) return;
+  const block = event.target.closest(".block"), row = state.docRows.find((r) => r.path === block.dataset.path);
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendChat(row); }
+  if (stopKey(event)) { event.preventDefault(); stopTurn(chatOf(row.uid)); }
+  if (event.key === "Escape") { event.preventDefault(); !event.target.value.trim() && !busy(chatOf(row.uid)) ? closeChat(row) : block.focus({ preventScroll: true }); }
+  event.stopPropagation();
+});
+doc.addEventListener("click", (event) => {
+  const el = event.target.closest(".block"), view = event.target.closest(".file-view"), target = event.target;
+  if (!el) return;
+  const link = target.closest("a.filelink, a.jump");
+  if (link) {
+    event.preventDefault();
+    if (link.dataset.uid) select(link.dataset.uid, null, { origin: "doc", focus: "block", smooth: true });
+    else openFile(link.dataset.file, (view || el).dataset.path, link.dataset.frag);
+    return;
+  }
+  if (view) { if (target.closest('[data-act="close"]')) closeFile(view.dataset.file); return; }  // a file view is edited on double click only
+  const uid = el.dataset.uid;
+  const path = el.dataset.path;
+  if (target.closest(".block-ai, .block-chat")) {
+    const row = state.docRows.find((r) => r.path === path), chat = chatAt(row), tool = target.closest(".msg-tools button"), fold = target.closest("[data-fold]");
+    if (fold) toggleFold(fold.dataset.fold);
+    else if (target.closest(".chat-input")) enterReply(el);
+    else if (target.closest(".chat-show")) showHidden(row, target.closest(".chat-show"));
+    else if (target.closest(".chat-hide, .chat-done")) closeChat(row);
+    else if (target.closest(".chat-stop")) stopTurn(chat);
+    else if (target.closest(".chat-send")) state.editing === path ? sendEdited(row) : sendChat(row);
+    else if (target.closest(".chat-setup")) openChatMenu(chat, target.closest(".chat-setup"));
+    else if (target.closest(".chat-advanced")) openAdvancedMenu(chat, target.closest(".chat-advanced"));
+    else if (target.closest(".chat-mode")) toggleChatMode(chat, target.closest(".chat-mode").dataset.chatMode);
+    else if (target.closest(".save-mark")) { const draft = drafts.get(draftKey(uid, "description")); if (draft) flush(draft); }
+    else if (tool) messageTool(chat, row, tool.closest(".chat-msg"), tool);
+    return;
+  }
+  if (target.closest("legend .status")) {
+    if (state.editing !== path) select(uid, path, { origin: "doc", focus: "block" });
+    openStatusPopup(state.docRows.find((r) => r.path === path), target.closest(".status"));
+    return;
+  }
+  if (!getSelection().isCollapsed) return;
+  if (state.path !== path || !state.panel) select(uid, path, { origin: "doc" });
+  startEditing(path);
+});
+doc.addEventListener("focusin", (event) => {
+  if (!state.rebuilding && event.target.classList.contains("chat-input")) enterReply(event.target.closest(".block"));
+});
+const statusMenu = $("status-menu");
+// The focus goes back to the anchor, or to its row or block when the anchor is a revealed-on-hover tool.
+const closeMenu = () => {
+  const { anchor } = statusMenu;
+  statusMenu.hidePopover();
+  anchor?.focus({ preventScroll: true });
+  if (anchor && document.activeElement !== anchor) anchor.closest(".row, .block")?.focus({ preventScroll: true });
+};
+statusMenu.addEventListener("click", (event) => {
+  const { chatModel, chatEffort, chatConnector, chatReset, chatMode, chatResume, rowAct } = event.target.dataset, chat = statusMenu.chat, row = statusMenu.row;
+  if (!event.target.closest("[role^=menuitem]")) return;
+  closeMenu();
+  if (chat && chatReset) resetChat(chat, chatReset);
+  else if (row && chatResume !== undefined) chatResume === "live" ? openChat(row) : resumeConversation(row, Number(chatResume));
+  else if (chat && chatMode) toggleChatMode(chat, chatMode);
+  else if (row && rowAct === "add") startAdding(row);
+  else if (row && rowAct === "add-parent") startLinking(row);
+  else if (row && rowAct === "unlink") unlink(row);
+  else if (row && rowAct === "delete") deleteItem(row.uid);
+  else if (chat && chatConnector && chatConnector !== chat.connector) updateChat(chat.uid, chatSetup(chatConnector));
+  else if (chat && (chatModel || chatEffort)) updateChat(chat.uid, chatModel ? modelSetup(chat.connector, chatModel, chat.effort) : { effort: chatEffort });
+});
+statusMenu.addEventListener("keydown", (event) => {
+  const entries = [...statusMenu.querySelectorAll("[role^=menuitem]:not(:disabled)")], at = entries.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); entries.at((at + (event.key === "ArrowDown" ? 1 : -1)) % entries.length)?.focus({ preventScroll: true }); }
+  if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
+});
+const onPaneScroll = () => { if (!settling) hideMenus(); };
+$("doc-pane").addEventListener("scroll", onPaneScroll, { passive: true });
+$("tree-pane").addEventListener("scroll", onPaneScroll, { passive: true });
+addEventListener("resize", hideMenus);
+const testsPop = $("tests-pop");
+testsPop.addEventListener("click", (event) => {
+  const uid = state.selected, target = event.target;
+  if (target.id === "add-binding-btn") addBinding(uid);
+  if (target.dataset.run) { testsPop.hidePopover(); startRun(target.dataset.run, uid); }
+  if (target.dataset.unbind !== undefined) {
+    const bindings = item(uid).bindings, gone = bindings[Number(target.dataset.unbind)];
+    if (gone.sha && !confirm(`Binding '${gone.name || "(default)"}' was frozen by a review; removing it releases that. Remove?`)) return;
+    saveTests(uid, bindings.filter((b) => b !== gone).map((b) => b.name));
+  }
+});
+// Text selected inside one message gets the marks of the selected text on the border lines in place of that message's own. A boundary of the
+// selection inside a kept part is found by counting the alphanumerics shown before it and matching them in the part's source -- exact for
+// the user's text as typed, stepping over the markup of a reply -- and a boundary inside a cut is the cut's edge.
+const WORD = /[\p{L}\p{N}]/u;
+const words = (s) => { let n = 0; for (let i = 0; i < s.length; i++) if (WORD.test(s[i])) n++; return n; };
+function shownWords(text, from, to, markdown) {
+  const at = [];
+  for (let i = from; i < to; i++) {
+    if (markdown && text[i] === "]" && text[i + 1] === "(") { const close = text.indexOf(")", i); if (close >= 0 && close < to) { i = close; continue; } }
+    if (markdown && text.startsWith("```", i) && (i === 0 || text[i - 1] === "\n")) { const eol = text.indexOf("\n", i); if (eol < 0 || eol >= to) break; i = eol; continue; }
+    if (WORD.test(text[i])) at.push(i);
+  }
+  return at;
+}
+function selectedSpan(m, msg, range) {
+  const parts = [...msg.querySelectorAll(".msg-part, .msg-cut")].filter((part) => range.intersectsNode(part));
+  if (!parts.length) return null;
+  const edge = (part, node, offset, end) => {
+    const from = Number(part.dataset.from), to = Number(part.dataset.to);
+    if (part.classList.contains("msg-cut")) return end ? to : from;
+    const before = document.createRange();
+    before.setStart(part, 0);
+    before.setEnd(node, offset);
+    const n = words(before.toString()), shown = shownWords(m.text, from, to, m.role === "ai");
+    return end ? (n ? shown[Math.min(n, shown.length) - 1] + 1 : from) : n < shown.length ? shown[n] : to;
+  };
+  const start = edge(parts[0], range.startContainer, range.startOffset, false), end = edge(parts[parts.length - 1], range.endContainer, range.endOffset, true);
+  return start < end ? [start, end] : null;
+}
+const selTools = $("sel-tools");
+function syncSelection() {
+  const sel = getSelection(), range = !sel.isCollapsed && sel.rangeCount ? sel.getRangeAt(0) : null;
+  const common = range && range.commonAncestorContainer, host = common && (common.nodeType === 1 ? common : common.parentElement);
+  const msg = host && host.closest(".chat-msg .msg-body")?.closest(".chat-msg");
+  for (const marked of doc.querySelectorAll(".chat-msg.has-selection")) if (marked !== msg) marked.classList.remove("has-selection");
+  if (!msg) { if (selTools.matches(":popover-open")) selTools.hidePopover(); return; }
+  msg.classList.add("has-selection");
+  const row = state.docRows.find((r) => r.path === msg.closest(".block").dataset.path), chat = chatAt(row), index = Number(msg.dataset.index), m = chat?.log[index];
+  const span = m && m.role !== "error" && m.role !== "stopped" && !busy(chat) ? selectedSpan(m, msg, range) : null;
+  Object.assign(selTools, { text: sel.toString(), row, index, span });
+  selTools.querySelector(".msg-fold").hidden = !span;
+  if (!selTools.matches(":popover-open")) selTools.showPopover();
+  const rects = range.getClientRects(), first = rects[0] || range.getBoundingClientRect(), last = rects[rects.length - 1] || first;
+  const block = msg.closest(".block").getBoundingClientRect(), mark = selTools.querySelector(".msg-child").offsetHeight, top = first.top + first.height / 2;
+  const place = (button, x, y) => { button.style.left = `${x}px`; button.style.top = `${y}px`; };
+  place(selTools.querySelector(".msg-fold"), block.left + 0.5, top);
+  place(selTools.querySelector(".msg-child"), block.right - 0.5, top);
+  place(selTools.querySelector(".msg-sibling"), block.right - 0.5, Math.max(last.top + last.height / 2, top + mark + 5));
+}
+document.addEventListener("selectionchange", syncSelection);
+$("doc-pane").addEventListener("scroll", () => { if (selTools.matches(":popover-open")) syncSelection(); }, { passive: true });
+selTools.addEventListener("mousedown", (event) => event.preventDefault());
+selTools.addEventListener("click", (event) => {
+  const { row, text, index, span } = selTools, tool = event.target.closest("button");
+  if (!row || !tool) return;
+  if (tool.classList.contains("msg-fold")) {
+    const chat = chatAt(row), m = chat?.log[index];
+    if (span && m) updateChat(chat.uid, { message: { index, cuts: mergeCuts([...(m.cuts || []), span], m.text.length) } });
+  } else tool.classList.contains("msg-child") ? extractItem(row, text, row.uid, null) : extractItem(row, text, row.parent, row.uid);
+  getSelection().removeAllRanges();
+});
+$("help").addEventListener("click", toggleHelp);
+$("console-stop").addEventListener("click", stopJob);
+doc.addEventListener("dblclick", (event) => {
+  const view = event.target.closest(".file-view");
+  if (view && !event.target.closest("[data-act], a")) startEditing(view.dataset.path);
+});
+testsPop.addEventListener("change", (event) => {
+  if (event.target.id !== "f-isleaf") return;
+  const uid = state.selected, frozen = item(uid).bindings && item(uid).bindings.filter((b) => b.sha).length;
+  if (!event.target.checked && frozen && !confirm(`${uid} stops being tested on its own: ${plural(frozen, "frozen test")} released. Continue?`)) { event.target.checked = true; return; }
+  saveTests(uid, event.target.checked ? [""] : null);
+});
+testsPop.addEventListener("keydown", (event) => { if (event.target.id === "f-add-binding" && event.key === "Enter") addBinding(state.selected); });
+
+$("counts").addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-status]");
+  if (!chip) return;
+  const s = chip.dataset.status;
+  state.statusFilter.has(s) ? state.statusFilter.delete(s) : state.statusFilter.add(s);
+  $("counts")._html = null;
+  render();
+});
+$("filter").addEventListener("input", () => { state.filter = $("filter").value.trim(); render(); });
+$("console-close").addEventListener("click", () => $("console").classList.remove("open"));
+
+// One screenful along `pane`, never less than one row.
+function pageTarget(rows, index, dir, pane) {
+  const top = (r) => pane.querySelector(`[data-path="${CSS.escape(r.path)}"]`).getBoundingClientRect().top;
+  const base = top(rows[index]), span = pane.parentElement.clientHeight * 0.9;
+  let i = index;
+  while (rows[i + dir] && Math.abs(top(rows[i + dir]) - base) < span) i += dir;
+  return rows[i === index ? Math.max(0, Math.min(rows.length - 1, index + dir)) : i];
+}
+
+const stopKey = (event) => event.key === "." && (event.ctrlKey || event.metaKey);
+
+// The pane holding the focus owns the keys: tree rows walk the folded outline, document blocks every item.
+document.addEventListener("keydown", (event) => {
+  const el = document.activeElement, typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA"), inDoc = Boolean(el && el.closest("#doc"));
+  if (el && el.closest("[popover]")) return;
+  if (event.key === "/" && !typing) { event.preventDefault(); $("filter").focus(); return; }
+  if (event.key === "?" && !typing) { event.preventDefault(); toggleHelp(); return; }
+  if (!state.model) return;
+  if (typing && inDoc && el.dataset.field) {
+    const block = el.closest(".block"), row = { uid: el.dataset.uid, path: block.dataset.path };
+    if (event.key === "Escape") { event.preventDefault(); el.dataset.field === "description" ? closeChat(row) : (stopEditing(), render(), block.focus({ preventScroll: true })); }
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && el.dataset.field === "description") { event.preventDefault(); sendEdited(row); }
+    if (stopKey(event)) { event.preventDefault(); stopTurn(chatOf(row.uid)); }
+    return;
+  }
+  if (typing) return;
+  const rows = inDoc ? state.docRows : state.rows.filter((r) => !r.adding), pane = inDoc ? doc : tree;
+  const index = rows.findIndex((r) => (state.path ? r.path === state.path : r.uid === state.selected)), row = rows[index];
+  if (event.key === "Escape" && inDoc && row && state.views.has(row.path) && !busy(chatOf(row.uid))) { closeChat(row); return; }
+  if (stopKey(event)) { event.preventDefault(); if (row) stopTurn(chatOf(row.uid)); return; }
+  if (event.altKey && event.shiftKey && event.key.startsWith("Arrow")) { event.preventDefault(); if (row && !inDoc) keyboardMove(row, event.key); return; }
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !rows.length || el === document.body) return;
+  if ((event.key === "m" || event.key === "s") && row) {
+    const host = pane.querySelector(`[data-path="${CSS.escape(row.path)}"]`);
+    event.preventDefault();
+    if (event.key === "m") openRowMenu(row, host.querySelector(inDoc ? "legend .tag" : "[data-act=menu]"));
+    else openStatusPopup(row, host.querySelector(".status"));
+    return;
+  }
+  let target = null;
+  if (event.key === "ArrowDown") target = rows[Math.min(rows.length - 1, index + 1)];
+  else if (event.key === "ArrowUp") target = rows[Math.max(0, index - 1)];
+  else if (event.key === "PageDown" || event.key === "PageUp") target = row ? pageTarget(rows, index, event.key === "PageDown" ? 1 : -1, pane) : rows[0];
+  else if (!row) return;
+  else if (event.key === "Home") target = rows[0];
+  else if (event.key === "End") target = rows[rows.length - 1];
+  else if (event.key === "Enter") { if (el.tagName === "BUTTON" || el.tagName === "SUMMARY") return; startEditing(); }
+  else if (inDoc) return;
+  else if (event.key === "ArrowRight") { if (row.kids && !row.open) toggle(row.uid); else if (row.open) target = rows[index + 1]; }
+  else if (event.key === "ArrowLeft") { if (row.open) toggle(row.uid); else target = rows.find((r) => r.path === row.path.slice(0, row.path.lastIndexOf("/"))); }
+  else return;
+  event.preventDefault();
+  if (target) select(target.uid, target.path, { origin: inDoc ? "doc" : "tree", focus: inDoc ? "block" : "row" });
+});
+
+function setTreeWidth(px) {
+  $("tree-pane").style.width = px ? px + "px" : "";
+  px ? sessionStorage.setItem("assassin-tree-width", px) : sessionStorage.removeItem("assassin-tree-width");
+}
+
+$("splitter").addEventListener("pointerdown", (event) => {
+  const splitter = event.currentTarget, left = $("tree-pane").getBoundingClientRect().left;
+  const drag = (move) => setTreeWidth(Math.round(move.clientX - left));
+  splitter.setPointerCapture(event.pointerId);
+  splitter.classList.add("dragging");
+  splitter.addEventListener("pointermove", drag);
+  splitter.addEventListener("pointerup", () => {
+    splitter.removeEventListener("pointermove", drag);
+    splitter.classList.remove("dragging");
+  }, { once: true });
+  event.preventDefault();
+});
+$("splitter").addEventListener("dblclick", () => setTreeWidth(0));
+$("splitter").addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  event.stopPropagation();
+  setTreeWidth(Math.round($("tree-pane").getBoundingClientRect().width) + (event.key === "ArrowRight" ? 16 : -16));
+});
+setTreeWidth(Number(sessionStorage.getItem("assassin-tree-width")) || 0);
+
+if (!TOKEN) {
+  document.body.innerHTML = '<div class="empty"><h2>Missing session token</h2><p>Open the exact URL printed by <code>assassin</code> (it carries <code>?token=…</code>).</p></div>';
+} else {
+  refresh().then(() => {
+    if (state.model) for (const uid of state.model.roots) state.expanded.add(uid);
+    render();
+  });
+  setInterval(poll, 2000);
+}
+</script>
+</body>
+</html>

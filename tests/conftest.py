@@ -2,7 +2,7 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""Shared fixtures for the syngate-tooling suite + coverage JSONL emitter.
+"""Shared fixtures for the AI Assassin suite + coverage JSONL emitter.
 
 Tests bind to items with @pytest.mark.syngate("UID"[, "binding_name"]).
 When SYNGATE_COVERAGE_FILE is set, each executed syngate-marked test appends a
@@ -19,7 +19,7 @@ import pytest
 import yaml
 
 # The bound (frozen) routines import the toolkit modules by their bare names from the pre-package era; alias them so those spans stay byte-identical.
-for _name in ("syngatelib", "syngate", "syngate_ui", "synthetic", "check_self_approval", "render_syngate_report"):
+for _name in ("syngatelib", "syngate", "assassin_ui", "synthetic", "check_self_approval", "render_syngate_report"):
     sys.modules.setdefault(_name, importlib.import_module(f"ai_scratcher.{_name}"))
 
 

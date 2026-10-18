@@ -2,7 +2,7 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""Tag-only binding discovery and coverage join -- [INFRA-031] [INFRA-032]."""
+"""Tag-only binding discovery and coverage join -- [SYNGATE-TEST-BINDING] [SYNGATE-COVERAGE-CHECK]."""
 
 import json
 
@@ -53,7 +53,7 @@ def test_bindings_from_tags_name_must_immediately_follow_its_uid():
     assert syngatelib.bindings_from_tags(["INFRA-100", "smoke", "extra"]) == [("INFRA-100", "smoke")]
 
 
-@pytest.mark.syngate("INFRA-031")
+@pytest.mark.syngate("SYNGATE-TEST-BINDING")
 def test_discover_bindings_finds_pytest_markers_and_cpp_test_cases(tmp_path, monkeypatch):
     """Routine locations are discovered purely from tags: pytest @syngate markers
     for the default and named binding, and Catch2 TEST_CASE tag pairs."""
@@ -113,7 +113,7 @@ def test_load_coverage_parses_jsonl_and_flags_malformed(tmp_path):
     assert any("coverage report missing" in e for e in missing)
 
 
-@pytest.mark.syngate("INFRA-032")
+@pytest.mark.syngate("SYNGATE-COVERAGE-CHECK")
 def test_check_coverage_joins_records_to_reviewed_leaves_both_directions(syngate_tree):
     """A reviewed leaf binding with no executed record, a record whose UID tag
     is unknown, and a record naming an undeclared binding on a known leaf are

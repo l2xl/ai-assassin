@@ -1,0 +1,8 @@
+---
+parents: [SYNGATE]
+order: 45
+test: ~
+---
+Unapproved changes block the gate
+
+The gate shall fail when a reviewed item's content or frozen test routine changed without a user-approved re-review, and in strict mode while any item in the tree is unreviewed

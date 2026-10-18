@@ -1,0 +1,8 @@
+---
+parents: [SYNGATE]
+order: 37
+test: ~
+---
+Review stamping on approval
+
+On explicit user approval a requirement shall be frozen by recording a transparent fingerprint of the item's content and a per-binding hash of each bound test routine's source span, with the gate failing when a frozen routine changes after review and a single commit never both modifying a frozen item or its bound routine and re-approving it

@@ -1,0 +1,9 @@
+---
+parents: [SYNTHETIC-TOOLS]
+order: 20
+sources: [src/ai_scratcher/prompts/agent.md]
+test: ~
+---
+The agent tool shall run a turn of the named item's chat with the given prompt, every agent call of a batch running in parallel after the batch's other calls and the reports coming back as the next prompt
+
+Fields: `uid` (`@` for the anchored item), `prompt`, optional `model`, `effort` and `modes`. An item already running a turn refuses the call.

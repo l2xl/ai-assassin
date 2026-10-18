@@ -1,0 +1,8 @@
+---
+parents: [ASSASSIN-UI-STATUS-POPUP]
+test: {stream: ~, single_flight: ~, branch: ~, reattach: ~, cancel: ~}
+---
+Run actions
+of the status popup start the test, review or clear command for the item — review and clear only while the review feature is on, clear only on a reviewed item — streaming the output into the console until the command exits, where a run can be stopped and a reloaded page re-attaches to the running one.
+
+On a branch the test run addresses every leaf below and the review, after confirmation, stamps every item below, children first, then the branch; a second run is refused while one is active.

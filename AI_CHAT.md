@@ -146,14 +146,14 @@ last turn failed, a dim mark for a hidden chat; a hidden chat's `▾` carries th
   a `workflow` to its input and result, an `agent` step to a nested transcript rendered by these
   same rules.
 - **Rules and shifts, never boxes.** The header sits on the reply's own bottom rule and the steps
-  are shifted under it, as SYNGATE-UI.md prescribes for every sub-element.
+  are shifted under it, as ASSASSIN_UI.md prescribes for every sub-element.
 - **Subagents reach their items.** A subagent anchored at a child item — explicitly, through the
   `agent` tool, or by the `@UID` convention of an implicit one — is also shown in that item's chat
   as an agent message with its collapsed transcript, an implicit one once the turn ends.
 
 ## History
 
-An item has one chat, held by the server — stored in `syngate_chats.json` next to the tree,
+An item has one chat, held by the server — stored in `assassin_chats.json` next to the tree,
 untracked like the coverage file, so a restart keeps it — and shown as the same chat in every block
 of the item and in every browser tab. The chat is its **live conversation** — the log, session and
 setup the turns address — with the item's earlier conversations **filed** behind it, each with its

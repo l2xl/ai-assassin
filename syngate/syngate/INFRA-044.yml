@@ -1,7 +1,0 @@
----
-parents: [INFRA-042]
-order: 20
-test: 0d91c80c47c4f699aa15820102645d005f809023314a659242f78f32aabe5e64
-review: 040c965c211e5fb8431306f09b4e5af0d35f762342c82d98e6c856cab863dc31
----
-Branch thesis status is recursively computed for every node in the project graph as the superposition of the status of its own tests, if it carries any, and its children's, from the leaves upward through the `parents` DAG.

@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI]
+order: 100
+test: ~
+---
+Outline filter
+narrows both panes to the items whose UID or text contains the typed text and, through the status chips in the header, to the chosen test statuses, an ancestor staying for a matching descendant and the outline unfolding to every match; a move is refused while a filter is on.

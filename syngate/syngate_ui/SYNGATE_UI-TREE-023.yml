@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI-TREE-020]
-order: 30
-test: 37c6426d04b2b804756810d1d5d0f3cc2ff41c5d7d5ab8896236e84736221832
-review: 0f236689ddea590a8768753cc14ab7b897c74b1e38b90686ca61b1ca485811b6
----
-Delete action
-of the menu, offered for a childless item only, unlinks it from every parent and deletes its file after a confirmation that names them.

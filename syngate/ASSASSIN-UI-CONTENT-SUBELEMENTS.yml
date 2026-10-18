@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI-CONTENT]
+order: 30
+test: ~
+---
+Sub-element delimiting
+inside an item's block — a file view, a chat message — is by horizontal lines, a shift and alignment, never by a full rectangle border.
+
+Its tool buttons and indicators sit on its own bottom line or on the item's left or right border line, level with the sub-element.

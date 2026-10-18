@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE-MODEL]
+test: ~
+---
+Requirements tree layout
+
+The repo shall contain a machine-validatable requirements tree under syngate/: every `*.yml` file under any subfolder is one requirement item, its UID is the file stem, folders carry no semantic meaning, and the tree shape is defined entirely inside item files via `parents` links forming a DAG with exactly one root item

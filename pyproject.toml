@@ -5,20 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ai-scratcher"
 version = "0.1.0"
-description = "AI-Scratcher: general-purpose AI assistant synthesizing the dialog into a Synergy Context Gate DAG that constructs the per-replica context"
+description = "AI Assassin: general-purpose AI assistant synthesizing the dialog into a Synergy Context Gate DAG that constructs the per-replica context"
 readme = "README.md"
 license = {file = "LICENSE.md"}
 requires-python = ">=3.10"
 dependencies = ["pyyaml", "jinja2", "pytest"]
 
 [project.scripts]
+assassin = "ai_scratcher.assassin_ui:main"
 syngate = "ai_scratcher.syngate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ai_scratcher = ["syngate_ui.html", "prompts/*.md"]
+ai_scratcher = ["assassin_ui.html", "prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

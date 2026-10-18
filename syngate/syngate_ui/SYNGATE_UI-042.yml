@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI]
-order: 50
-test: {label: e0a15ea2db0dcd5f8a18f5f610f45e9c9d4dc456f5b8a80ab7b5dd95b8421892, row: 8ff8d8f02b251a51d4b70884dac921aa99d4be655da59f2818264047cf6f08f0}
-review: cb0aa486913c61cce9cd15ae98e7b9389f2675a2863881e7bd0e2dd3ea346e6b
----
-Status popup
-opens from the composite status icon of the common label, in the tree row and on the block alike, and details the item's two status axes — a leaf's test status per binding with its routine's location and recorded runs, a branch's tally of the leaves below with its own bindings if any, the review state and the item's validation problems — nothing else on the page showing the status in detail.

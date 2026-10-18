@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-PROMPTS]
+order: 20
+---
+A tool shall define the calls — their names and fields — an answer may carry to have the harness execute a command
+
+Every tool definition is part of the default prompt, and every call the harness accepts is defined by a tool.

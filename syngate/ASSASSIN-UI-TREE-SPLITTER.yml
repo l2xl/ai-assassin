@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI-TREE]
+order: 70
+test: ~
+---
+Outline splitter
+resizes the outline by dragging within its width limits.
+
+The chosen width is kept for the browser session; a double-click restores the default.

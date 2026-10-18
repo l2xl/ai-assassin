@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI]
+order: 80
+test: ~
+---
+Item file management
+by the page creates a new item file under a chosen parent and removes the file of a childless item.

@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC]
+order: 35
+test: ~
+---
+The prompt library shall be the markdown files under the package's `prompts/` folder, each a skill or a tool named by its file stem
+
+A file opens with a front matter giving its `kind` (skill or tool), a `description` and, for a skill, whether it is `default`. The harness adds a prompt to the context by default or on request by name, in the manner of Claude skills.

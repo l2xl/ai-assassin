@@ -1,0 +1,8 @@
+---
+parents: [SYNGATE]
+order: 22
+test: ~
+---
+Coverage check
+
+An automated coverage check shall verify the executed-test reports against the requirements tree in both directions: every reviewed leaf binding has at least one executed coverage record, and every coverage record's UID tag matches a known requirement

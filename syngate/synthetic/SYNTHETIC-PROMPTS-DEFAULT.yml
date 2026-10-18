@@ -1,0 +1,5 @@
+---
+parents: [SYNTHETIC-PROMPTS]
+test: ~
+---
+The default prompt, composed from the library and deliberately not a `CLAUDE.md`, shall head every seed context with the default skills, the list of the skills on request by name and description, and every tool definition

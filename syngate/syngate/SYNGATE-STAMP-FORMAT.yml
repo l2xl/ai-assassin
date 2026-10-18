@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE-REVIEW-FREEZE]
+test: ~
+---
+Wrong review stamp  not error
+
+Wrong review stamp format should be treated as its abcense not error

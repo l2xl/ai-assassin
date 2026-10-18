@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI]
+order: 70
+test: ~
+---
+Review clearing
+follows an edit of a reviewed item's statement, parents or bindings in the page, dropping its stamp and reverting its routine shas.
+
+A change of its order alone leaves the review intact.

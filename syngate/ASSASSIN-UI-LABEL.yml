@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI]
+order: 30
+test: ~
+---
+Common item label
+is one composite status icon followed by the UID, wherever an item is shown.
+
+The icon is a single element: a circle whose fill carries the test status — green passed, red failed, grey not run — with the review glyph over it: the eyes 👀 (U+1F440) for a standing stamp, the eyes with ❗ (U+2757) laid over their right part, outside the circle and as tall as it, for a violated stamp, nothing for no stamp.

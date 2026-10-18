@@ -2,7 +2,7 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""Status rollup over the syngate DAG -- [INFRA-043] [INFRA-044]."""
+"""Status rollup over the syngate DAG -- [SYNGATE-LEAF-STATUS] [SYNGATE-BRANCH-STATUS]."""
 
 import pytest
 
@@ -18,7 +18,7 @@ def _build(syngate_tree, monkeypatch):
     return syngate_dir, make
 
 
-@pytest.mark.syngate("INFRA-043")
+@pytest.mark.syngate("SYNGATE-LEAF-STATUS")
 def test_leaf_status_reflects_coverage_records(syngate_tree, monkeypatch):
     """A leaf's status derives from its bindings' coverage records."""
     syngate_dir, make = _build(syngate_tree, monkeypatch)
@@ -64,7 +64,7 @@ def test_leaf_status_all_bindings_must_be_covered_to_pass(syngate_tree, monkeypa
     assert syngatelib.leaf_status(items["MULTI-1"], one_fails) == syngatelib.TEST_FAILED
 
 
-@pytest.mark.syngate("INFRA-044")
+@pytest.mark.syngate("SYNGATE-BRANCH-STATUS")
 def test_status_rolls_up_through_parents(syngate_tree, monkeypatch):
     """A branch aggregates its descendants' statuses recursively through the DAG."""
     syngate_dir, make = _build(syngate_tree, monkeypatch)
@@ -201,7 +201,7 @@ def test_coverage_gaps_are_not_item_problems(syngate_tree):
     assert syngatelib.item_problems(items) == {}
 
 
-@pytest.mark.syngate("INFRA-052", "supersede")
+@pytest.mark.syngate("SYNGATE-TEST-RUN", "supersede")
 def test_rerun_records_replace_the_previous_records_of_their_bindings(tmp_path):
     target, fresh = tmp_path / "coverage.jsonl", tmp_path / "fresh.jsonl"
     target.write_text('{"tags": ["LEAF-1"], "passed": false}\n{"tags": ["LEAF-2", "a"], "passed": false}\n{"tags": ["LEAF-2", "b"], "passed": true}\n')

@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI-TREE]
+order: 60
+test: {reorder: ~, reparent: ~}
+---
+Row drop
+lands the dragged row at the drop position, re-pointing or adding its parent link without breaking the DAG.
+
+It takes a free order key between its new neighbours, else the family is renumbered.

@@ -1,0 +1,6 @@
+---
+parents: [ASSASSIN-UI]
+order: 140
+---
+Content panel
+shows the whole tree as one document on the right, every item a block of it shifted by its depth.

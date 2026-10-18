@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI]
+order: 40
+test: {label: ~, row: ~}
+---
+Status popup
+opens from the composite status icon of the common label, in the tree row and on the block alike, and details the item's two status axes — a leaf's test status per binding with its routine's location and recorded runs, a branch's tally of the leaves below with its own bindings if any, the review state and the item's validation problems — nothing else on the page showing the status in detail.

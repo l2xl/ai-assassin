@@ -1,7 +1,0 @@
----
-parents: [INFRA-042]
-order: 10
-test: 536b0b50e2806aa322f159cf742341ab49e1877c4deae59ba496e535b3e08085
-review: f0d688cdef663f76dfad84325f499562f8728ed97292b9359daac9b53923436f
----
-Leaf thesis status is computed from whether the automated tests bound to it currently pass in the offline test run.

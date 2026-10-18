@@ -14,7 +14,7 @@ import time
 import pytest
 
 import synthetic
-import syngate_ui
+import assassin_ui
 import syngatelib
 
 # Stub `claude`: answers the result event a non-interactive stream-json turn closes with, echoing its argv, the prompt read from its
@@ -99,7 +99,7 @@ def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(t
     seed = synthetic.seed_context(items, "LEAF-001", root=tmp_path)
     assert seed == prompt + _sections(("ROOT", "Root."), ("SIDE-A", "Side A."), ("LEAF-001", "It shall leaf.")) + root_source + leaf_sources
     assert synthetic.apply_call(items, "ROOT", {"tool": "context", "uid": "LEAF-001"}, syngate_dir=syngate_dir) == f"- context of LEAF-001:\n{seed}"
-    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     app.connectors = {"echo": EchoAnswer()}
     reply = app.chat({"uid": "LEAF-001", "connector": "echo", "model": "model-a", "effort": "low", "modes": ["tree"], "text": "Go."})["reply"]
     assert reply == f"{seed}|Go.|model-a|low||None"
@@ -119,7 +119,7 @@ def _library(folder):
     return synthetic.load_prompts(folder)
 
 
-@pytest.mark.syngate("AI_CHAT-PROMPTS")
+@pytest.mark.syngate("SYNTHETIC-PROMPTS")
 def test_the_prompt_library_is_read_from_front_matter_markdown_files_by_name_as_skills_and_tools(tmp_path, syngate_tree):
     library = _library(tmp_path / "prompts")
     assert library == {
@@ -137,7 +137,7 @@ def test_the_prompt_library_is_read_from_front_matter_markdown_files_by_name_as_
     assert synthetic.seed_context(items, "ROOT") == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n"
 
 
-@pytest.mark.syngate("AI_CHAT-PROMPTS-DEFAULT")
+@pytest.mark.syngate("SYNTHETIC-PROMPTS-DEFAULT")
 def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_request_and_every_tool(tmp_path):
     library = _library(tmp_path / "prompts")
     assert synthetic.default_prompt(library) == ("# Rules\nFollow them.\n\n# Skills on request\nLoad one with the `skill` tool:\n- `brief`: Be brief\n\n"
@@ -149,7 +149,7 @@ def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_requ
     assert all(f'"tool": "{tool}"' in shipped for tool in synthetic.CALLS)
 
 
-@pytest.mark.syngate("AI_CHAT-SKILL-CALL-TOOL")
+@pytest.mark.syngate("SYNTHETIC-SKILL-CALL-TOOL")
 def test_the_tool_call_skill_is_a_default_skill_stating_the_answer_format_and_the_result_round_trip():
     skill = synthetic.SKILLS["call_tool"]
     assert skill.default and skill.text.startswith("# Tool calls\n")
@@ -158,16 +158,17 @@ def test_the_tool_call_skill_is_a_default_skill_stating_the_answer_format_and_th
         assert phrase in skill.text
 
 
-@pytest.mark.syngate("AI_CHAT-SKILL-SYNGATE")
+@pytest.mark.syngate("SYNTHETIC-SKILL-SYNGATE")
 def test_the_syngate_rules_skill_is_a_default_skill_stating_the_dag_rules():
     skill = synthetic.SKILLS["syngate"]
     assert skill.default and skill.text.startswith("# Syngate DAG rules\n")
     for phrase in ("directed acyclic graph", "testable statement", "split into children", "markdown files", "root-relative link",
-                   "tags equal to the item UID", "numbered suffix"):
+                   "tags equal to the item UID", "numbered suffix", "thesis", "never repeats what the design file", "exactly one item",
+                   "A design file is never a `sources` entry"):
         assert phrase in skill.text
 
 
-@pytest.mark.syngate("AI_CHAT-SKILL-DELEGATE")
+@pytest.mark.syngate("SYNTHETIC-SKILL-DELEGATE")
 def test_the_delegation_skill_is_a_default_skill_stating_how_separable_children_are_delegated_and_subagents_anchored():
     skill = synthetic.SKILLS["delegate"]
     assert skill.default and skill.text.startswith("# Delegation\n")
@@ -177,7 +178,7 @@ def test_the_delegation_skill_is_a_default_skill_stating_how_separable_children_
     assert skill.text in shipped and synthetic.LIBRARY["agent"].kind == "tool" and synthetic.LIBRARY["agent"].text in shipped
 
 
-@pytest.mark.syngate("AI_CHAT-SKILL-DELIVER")
+@pytest.mark.syngate("SYNTHETIC-SKILL-DELIVER")
 def test_the_delivery_skill_is_a_default_skill_carrying_reworked_items_into_tests_and_sources_by_the_test_switch_the_seed_states(syngate_tree):
     skill = synthetic.SKILLS["deliver"]
     assert skill.default and skill.text.startswith("# Delivery\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
@@ -195,7 +196,7 @@ def test_the_delivery_skill_is_a_default_skill_carrying_reworked_items_into_test
     assert synthetic.seed_context(items, "LEAF-001").startswith(synthetic.PROMPTS["default"] + TESTS_ON + "\n@ROOT\n")
 
 
-@pytest.mark.syngate("AI_CHAT-TOOL-SKILL")
+@pytest.mark.syngate("SYNTHETIC-TOOL-SKILL")
 def test_the_skill_call_brings_the_named_skill_back_as_the_next_prompt_and_an_unknown_name_is_refused(tmp_path, syngate_tree):
     assert synthetic.parse_reply({"kind": "calls", "calls": [{"tool": "skill", "name": "syngate"}]}) == ("calls", [{"tool": "skill", "name": "syngate"}])
     with pytest.raises(synthetic.protocol_error, match="missing name"):
@@ -207,7 +208,7 @@ def test_the_skill_call_brings_the_named_skill_back_as_the_next_prompt_and_an_un
         synthetic.apply_call({}, "ROOT", {"tool": "skill", "name": "fly"})
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
-    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
     ask = lambda: app.chat({"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "text": "Which rules?"})
     app.connectors = {"scripted": (scripted := ScriptedConnection(calls({"tool": "skill", "name": "call_tool"}), {"kind": "text", "text": "Got it."}))}
@@ -431,7 +432,7 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
-    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
     query, add = {"tool": "query", "uid": "@"}, {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow."}
     agent = {"tool": "agent", "uid": "LEAF-002", "prompt": "Check it."}
@@ -450,7 +451,7 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     assert result["reply"] == "- added LEAF-002 under ROOT\n- agent LEAF-002: Checked.\nDone."  # what was read stays out of the reply
 
     app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}
-    with pytest.raises(syngate_ui.ApiError, match="kept querying") as refused:
+    with pytest.raises(assassin_ui.ApiError, match="kept querying") as refused:
         ask(looping)
     assert len(looping.prompts) == synthetic.QUERY_ROUNDS and refused.value.extra["session"] == f"session-{synthetic.QUERY_ROUNDS}"
 
@@ -478,7 +479,7 @@ with open(argv[argv.index("--coverage-out") + 1], "a") as out:
 """
 
 
-@pytest.mark.syngate("SYNGATE-API-AI")
+@pytest.mark.syngate("SYNTHETIC-TOOL-SYNGATE")
 def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports_the_outcome(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
@@ -486,7 +487,7 @@ def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports
     make_item(syngate_dir, "LEAF-002", "It shall follow.\n", parents=("ROOT",), order=10, tests=None)
     stub = tmp_path / "runner_stub.py"
     stub.write_text(STUB_RUNNER)
-    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir, cli_prefix=[sys.executable, str(stub)])
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir, cli_prefix=[sys.executable, str(stub)])
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
     everything, narrowed = {"tool": "test", "uid": "@"}, {"tool": "test", "uid": "LEAF-001", "name": "two"}
     ask = lambda: app.chat({"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "text": "Run the tests."})
@@ -574,7 +575,7 @@ def test_a_stop_closes_the_turns_gate_so_no_call_run_or_delegation_is_applied_pa
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
-    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     setup = {"connector": "scripted", "model": "model-a", "effort": "low", "modes": ["tree"]}
     batch = {"kind": "calls", "calls": [{"tool": "add", "uid": "LEAF-002", "description": "Late.\n"}, {"tool": "test", "uid": "LEAF-001"},
                                         {"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf"}]}
@@ -599,13 +600,13 @@ def test_a_stop_closes_the_turns_gate_so_no_call_run_or_delegation_is_applied_pa
     assert (stopped["status"], stopped["error"]) == (409, "- agent LEAF-001: turn stopped\nturn stopped")
 
 
-@pytest.mark.syngate("AI_CHAT-TOOL-AGENT")
+@pytest.mark.syngate("SYNTHETIC-TOOL-AGENT")
 def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_and_report_back_as_the_next_prompt(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
     make_item(syngate_dir, "LEAF-002", "It shall follow.\n", parents=("ROOT",), order=10, tests=None)
-    app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
     leaf = {"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf", "model": "model-b"}
     other = {"tool": "agent", "uid": "LEAF-002", "prompt": "Do the other"}

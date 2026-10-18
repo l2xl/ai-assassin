@@ -1,5 +1,5 @@
 ---
-parents: [AI_CHAT]
+parents: [AI-CHAT]
 order: 120
 test: {api: 9297394f365d5c530275646fb480e8fce3dd06c854227b98f9021acb97999b11, retry: a77f040cecb7bbbe97a5f9f55c0e4f71d72101baae57bdd12b057e6287aa20b9}
 review: 1b4b4f2bb5547cab80395023149fe7aaffd349e51e0055f7b39595006b6f284a

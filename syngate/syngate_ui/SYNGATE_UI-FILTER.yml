@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI]
-order: 100
-test: 3b639a0fe88cc1a356ad62fa6eabc386ff1382bc8b6b7578dfaab950b57d0350
-review: 34c407fd8c3ff42e30fea21843fbbd3f84d6e2ce1367e9ff1fb3447ee453de49
----
-Outline filter
-narrows both panes to the items whose UID or text contains the typed text and, through the status chips in the header, to the chosen test statuses, an ancestor staying for a matching descendant and the outline unfolding to every match; a move is refused while a filter is on.

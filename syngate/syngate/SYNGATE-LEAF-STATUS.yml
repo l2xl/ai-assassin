@@ -1,0 +1,5 @@
+---
+parents: [SYNGATE-STATUS]
+test: ~
+---
+Leaf thesis status is computed from whether the automated tests bound to it currently pass in the offline test run.

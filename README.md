@@ -1,11 +1,24 @@
-# AI-Scratcher
+# AI Assassin
 
 A general-purpose AI assistant, built around deep iterative analysis of the
 user–AI dialog and synthesis of its content into a **Synergy Context Gate (syngate)** — a DAG of
 statements about the project of chat subject that then constructs the optimal context for the AI model,
 per replica of the dialog.
 
-A conversation with AI-Scratcher starts as an ordinary AI chat. Iteratively, the dialog is
+AI Assassin is the synergy of three parts:
+
+- **Syngate** (`syngatelib`, the `syngate` CLI, `render_syngate_report`, `check_self_approval`,
+  [SYNGATE.md](SYNGATE.md)) — the subsystem managing the project's DAG, its test coverage and
+  review status as a gate: open while everything passes, closed by anything failed.
+- **Synthetic** (`synthetic`, [SYNTHETIC.md](SYNTHETIC.md)) — the AI harness core: the prompt
+  library under `src/ai_scratcher/prompts/` — whose default skill
+  [syngate.md](src/ai_scratcher/prompts/syngate.md) is the one statement of the rules the items
+  follow — the seed context, the AI connections and the tool call protocol.
+- **AI Assassin UI** (`assassin_ui`, the `assassin` command, [ASSASSIN_UI.md](ASSASSIN_UI.md),
+  [AI_CHAT.md](AI_CHAT.md)) — the application joining both: the outline and document of the DAG
+  with the AI chat anchored at every item.
+
+A conversation with AI Assassin starts as an ordinary AI chat. Iteratively, the dialog is
 transformed into a DAG: a sentence that survived the exchange becomes a node — a short
 statement with the items it follows from as parents — and the chat goes on anchored at items rather
 than at the tail of a transcript. The DAG is then the context engine: a replica anchored at an item
@@ -18,9 +31,9 @@ DAG asserts.
 Both directions of the loop are what the toolkit implements:
 
 - **Dialog → DAG (analysis).** Items are plain text files — a YAML front matter of attributes over
-  a markdown statement — shaped only by `parents` (*Tree Model*). The local editor (`syngate ui`)
-  shows the DAG as an outline and as one structured document, and the AI agent restructures it
-  through *tree calls* — add, remove, move — never by editing files (*Dialog agent*).
+  a markdown statement — shaped only by `parents` (*Tree Model* in [SYNGATE.md](SYNGATE.md)). The
+  AI Assassin UI (`assassin`) shows the DAG as an outline and as one structured document, and the
+  AI agent restructures it through *tree calls* — add, remove, move — never by editing files.
 - **DAG → context (synthesis).** The seed context of an item is the chain of its ancestors'
   statements, root first, then its own, then those of all its descendants in depth, so the root's
   is the whole DAG; every item enters once at its first occurrence (`SYNGATE-010`). That selection,
@@ -28,8 +41,8 @@ Both directions of the loop are what the toolkit implements:
   ([SYNTHETIC.md](SYNTHETIC.md)).
 - **Gate.** Two optional disciplines turn a DAG into a gate: *review* stamps an item as approved by
   the user, so the DAG cannot drift from what was agreed, and *test* binds an item to executable
-  routines, so the DAG cannot drift from what the code does (*Process Rules*). Both are switched on
-  the root item and are off by default.
+  routines, so the DAG cannot drift from what the code does (*Process Rules* in
+  [SYNGATE.md](SYNGATE.md)). Both are switched on the root item and are off by default.
 
 Product architecture definition through AI dialog analysis and synthesis is one use case of this loop:
 with `test` and `review` on, the DAG of a software project is its architecture and contract tree,
@@ -42,11 +55,11 @@ live under `syngate/` and its tests bind to them.
 ```
 pipx install git+https://github.com/l2xl/ai-scratcher.git      # or: uv tool install git+…
 cd <managed project>
-syngate ui
+assassin
 ```
 
-The Python package is `ai_scratcher` (`syngatelib` library, `syngate` CLI, `syngate_ui` local
-editor, `synthetic` agent, `check_self_approval`, `render_syngate_report`); any modern Python
+The Python package is `ai_scratcher` (`syngatelib` library, `syngate` CLI, `assassin_ui`
+application, `synthetic` harness, `check_self_approval`, `render_syngate_report`); any modern Python
 (3.10+) with `pyyaml`, `jinja2` and `pytest` — pytest is a runtime dependency, not a dev extra:
 `syngate test`/`review` run a managed project's pytest bindings with the toolkit's own interpreter.
 Toolkit tests: `pip install -e .` then `pytest`.
@@ -55,276 +68,29 @@ Toolkit tests: `pip install -e .` then `pytest`.
 variable, else the nearest ancestor of the working directory holding a `syngate/` folder. Test
 discovery scans `scripts/tests/` and `tests/` for pytest bindings and `test/` for Catch2 ones.
 
-# Tree Model
-
-- **Any `*.yml` file under any `syngate/` subfolder is one item.** The UID is the file stem
-  (`INFRA-066.yml` → `INFRA-066`), globally unique. Folders are external sorting only — moving a
-  file between folders changes nothing. Other extensions (`.md`, …) are ignored by tooling.
-- **The tree shape lives inside the items** via `parents`. Multi-parent items form a DAG; exactly
-  one item has empty `parents` (the root, `OPEN-TRADER`). No settings files anywhere.
-  A UID is short and semantic (`SYNGATE-REVIEW-STATUS`), composed from its feature's name and
-  what the item adds; a numbered suffix (`INFRA-043`) is used only where many semantically alike
-  items would make their names long.
-- **A branch earns its place by a statement of its own.** An intermediate branch that only groups
-  its children under a heading, adding no independent statement to their seed context, is noise:
-  its children belong directly under its parent. A sure sign of such a branch is a description
-  that repeats what the parent already carries — notably a link to the same design document the
-  parent links to. The link lives on the feature item once; no child restates it.
-- **Leaf vs branch is structural**: a branch has children; a `test` key binds tests to the item
-  that carries it — every implemented leaf, and any branch that has tests of its own. A
-  test-bearing branch passes only when its own bindings and all its children pass, and it is
-  reviewed and frozen exactly as a leaf is. A childless item without `test` is simply not yet
-  implemented — it rolls up as `not_implemented` like any leaf with no coverage.
-- **The root item switches the tree's features.** `test: enabled` turns test binding on and
-  `review: enabled` turns review stamping on; both are **off when absent**, so a project that wants
-  neither the TDD gate nor approval stamps carries plain items only. A root's own binding or stamp
-  switches its feature on as well. With a feature off, an item carrying its key is a layout problem,
-  the commands of that feature refuse to run and the page shows none of its affordances; with the
-  test feature off, `review` stamps childless items as approved text. AI-Scratcher's own root
-  (`AI-SCRATCHER`) and Open Trader's (`OPEN-TRADER`) switch both on.
-
-# Item Schema
-
-An item file is a YAML front matter of attributes over a markdown body:
-
-```markdown
----
-parents: [INFRA-065]
-order: 10
-sources: [ci/build.sh, .github/workflows/validate.yml]
-test: ~
-review: <sha256 hex, present only after user review>
----
-CI build on push
-
-The CI pipeline builds the project on every push to the repository.
-```
-
-- The body is the item's **statement** (`description`), in markdown. The content panel renders the
-  DAG as one document, every statement read under its ancestors and detailed by its children, so
-  the statement is written as a section of that document, never as a heading over a restatement.
-  There is no separate header: the body's **first line is the statement's subject** — a short
-  noun phrase without articles naming the facility the item defines (`Project edit mode`,
-  `Immediate interruption facility`), or a feature's bare name where its children carry the
-  content — and is what the outline shows as the item's **title**, cut with an ellipsis where the
-  row runs out of room. The sentence goes on from the next line, after a single line break, with
-  the behaviour the subject has (`instructs the Claude Code connector to call …`); the content panel
-  joins the two lines into one sentence while the outline shows the subject alone. The subject is
-  what the item introduces, never an object of its behaviour (`Interrupted turn` names what is
-  acted on, `Immediate interruption facility` what acts). The paragraphs past one blank line hold
-  only what the sentence cannot: enumerated cases, limits, exceptions, a link to a design file.
-  They never paraphrase the first sentence, and no statement repeats its parent's or its
-  children's. Whoever adds or rewords an item rereads the whole branch — the parent and every
-  descendant — and strips what the change made redundant, so the compiled text reads seamlessly.
-  No wording is prescribed: the style is the author's, and a new or reworded statement follows the
-  style the tree already uses, so the compiled DAG reads as one concrete document — an article a
-  human reads top to bottom, printable as is.
-- `sources` — optional list of root-relative paths of the item's **key source files**. They enter
-  the seed context of every exchange anchored at the item, above or below it (see [SYNTHETIC.md](SYNTHETIC.md)), each
-  once, so a file listed by an ancestor is not listed again. Outside the reviewed stamp.
-- `order` — optional, presentation-only sibling sort key; siblings sort by `(order, UID)`.
-  Excluded from the reviewed stamp: reordering a report never triggers re-review.
-- `test` forms: `~` → single default test bound by the `[UID]` tag alone (becomes
-  `test: <routine-sha256>` once reviewed); mapping `name: sha|~` → each binding bound by the
-  `[UID][name]` tag pair. Binding names: `[a-z0-9_]+`, unique per item. On the root item,
-  `enabled` / `disabled` is the tree's test feature switch instead.
-- `review` — transparent stamp: sha256 hex over the canonical JSON
-  `{"children":[…],"description":…,"header":…,"parents":[…],"tests":{name:sha}|null}` (`sort_keys`,
-  compact separators, UTF-8; default binding name `""`, unstamped shas `""`). `header` is the body's
-  first line and `description` the rest past one blank line — the two fields the body was before —
-  so the stamps of that time stand. `children` holds the
-  immediate child UIDs and is present only for an item that has any, so a childless item's stamp is
-  unchanged and adding or removing a child moves its parent's. Recompute with
-  `syngatelib.item_stamp(items, uid)`, or `compute_stamp` plus the child set. Stamping is **user-only** — the stamp is the
-  record of user approval. On the root item, `enabled` / `disabled` is the tree's review feature
-  switch instead.
-- A call that moves stamped content settles the stamps it touched one of two ways. With
-  `--clear-review` — the page always passes it, and it is yours to pass from the CLI — the stamp is
-  dropped and the item reads as *not reviewed*. Without it, as when a call is proxied from an AI
-  answer or a file is edited behind the tooling, the stamp is left standing over content that no
-  longer matches it and the item reads as *review violated*, so an unattributed change is loud
-  rather than quietly unapproved.
-- A legacy item is one flat YAML mapping holding `header` and `description` as keys next to the
-  attributes; its header reads as the first line of the body, and the old spellings `tests` and
-  `reviewed` are read as `test` and `review`, so an existing tree keeps loading. The canonical
-  writer emits the front-matter shape with `test` and `review`, so items migrate as they are
-  edited. A front matter carrying `header` or `description` is refused: they are the body.
-
-# Test Binding
-
-Binding identity is the tag pair; the routine's location is *discovered* from tags at check time,
-never declared in items — tests move freely between files without touching `syngate/`.
-
-- **Pytest** (`scripts/tests/`, `tests/`): `@pytest.mark.syngate("INFRA-066")` for the default binding,
-  `@pytest.mark.syngate("INFRA-066", "binding_name")` for a named one. Discovered by an `ast` scan.
-- **Catch2** (`test/`): `TEST_CASE("…", "[INFRA-066]")` or `…[INFRA-066][binding_name]`.
-  Discovered by a source scan for test macros; the binding name is the tag immediately following
-  the UID tag, so place item tags last.
-- Each binding must resolve to **exactly one** routine; 0 or >1 is a gate error on reviewed items.
-- **Routine hash**: sha256 of the routine's raw source span (pytest: decorators through the end of
-  the function; Catch2: the TEST_CASE line to the next test macro or EOF). Shared-fixture changes
-  outside the span are consciously not tracked.
-
-# Coverage JSONL
-
-Test executions self-report which bindings ran: one JSON line
-`{"tags": ["INFRA-066", "binding_name"], "passed": true, "name": …, "log": …}` appended to the
-file named by `SYNGATE_COVERAGE_FILE` (no emission when unset).
-
-- Emitters live in the managed project: a pytest `conftest.py` hook (see `tests/conftest.py` here)
-  and, for Catch2, a listener linked into every test executable (Open Trader's
-  `test/syngate_coverage_listener.cpp`).
-- The gate joins records against `test:` in both directions: every reviewed leaf binding needs ≥1
-  executed record, and every record's UID must match a known item.
-
-# CLI (`syngate`)
-
-The tree calls (`add` / `edit` / `move` / `delete`) are one line each over the core functions in
-`syngatelib`; the browser editor and the AI wrapper drive those same functions, so the command line
-is their genuine spelling rather than a second implementation.
-
-- `syngate add <UID> --parent <UID> [--dir syngate/<folder>] [--order N] [--description D]
-  [--source PATH …] [--branch]` — scaffold an item (with a `test: ~` binding while the tree's test
-  feature is on, which `--branch` withholds).
-- `syngate edit <UID> [--description D] [--source PATH …] [--order N]` — change an item in place,
-  the `--source` list given replacing the item's; with `--clear-review` an edit of anything under
-  the stamp (description, parents, bindings) drops its `review`, without it the stamp is left
-  standing and the review reads as violated.
-- `syngate move <UID> --to <UID> [--before <UID>] [--from <UID>] [--link]` — add and remove parent
-  links and place the item among its siblings: `--from` names the link to re-point when the item
-  has several, `--link` adds `--to` as one more parent instead of re-pointing, and a `--from` that
-  is a parent while `--to` already is another drops the `--from` link.
-- `syngate delete <UID>` — remove a childless item's file.
-- `syngate query <UID>` — print the item as the AI reads it back: description, parents, sources,
-  children in sibling order and kind, as JSON.
-- `syngate context <UID>` — print the seed context an AI exchange anchored at the item is formed from.
-- `syngate test <UID…> [--build-dir DIR] [--coverage-out FILE]` — run the routines bound to leaf
-  items (literals or glob patterns) without stamping: pytest routines by node id in one process,
-  Catch2 cases by an OR of their tag pairs in one run per test binary. With `--coverage-out` the
-  run's records are folded into FILE, **replacing** the previous records of every re-run binding —
-  with "any failed record reddens the leaf", an appended re-run could never turn a leaf green again.
-  Runs whichever way the test feature sits: off only means the tree does not *await* tests of its
-  items, so the routines tagged for them still run and still record coverage — with the switch off
-  the bindings come from the discovered tags, since nothing is declared. Stamping stays `review`'s.
-- `syngate review <UID>` — **user-only**: validates the item, discovers its bindings, runs the bound
-  tests, and stamps routine shas + `review` once every binding resolves to exactly one runnable
-  routine — whether that routine currently passes or fails. A failing routine still freezes and the
-  leaf simply rolls up as `test_failed` (TDD red state) until the implementation lands; only a
-  binding that can't be run at all (ambiguous, unresolved, or not built) blocks stamping. `syngate clear
-  <UID>` removes the stamp (and reverts shas to `~`). Takes `--coverage-out` like `test`. Both are
-  refused while the tree's review feature is off; with the test feature off, `review` stamps
-  childless items without running anything.
-- `syngate validate [--coverage FILE …] [--strict]` — structural validation + frozen-routine checks
-  (+ coverage join when given files; `--strict` requires every item reviewed). CI entry:
-  Open Trader's `ci/gate.sh` (bootstraps `.venv-syngate` with this package; `GATE_STRICT=1` adds `--strict`).
-- `syngate report [--coverage FILE …] [--out syngate_status.json] [--html <dir>]` — recursive status
-  rollup + static HTML site.
-- `syngate ui [--port N] [--coverage FILE …] [--build-dir DIR] [--no-browser]` — serve the local tree
-  editor (`syngate_ui.py` + `syngate_ui.html`, stdlib-only) at `http://127.0.0.1:8712`; `--port 0`
-  picks an ephemeral port and the URL line is flushed for hosts reading it from a pipe.
-  - **The page is specified by the `SYNGATE_UI` subtree** and its design files
-    [SYNGATE-UI.md](SYNGATE-UI.md) and [AI_CHAT.md](AI_CHAT.md): the outline on the left — one row
-    per item occurrence, the common label (a circle filled by the test status with the review eyes
-    over it, then the UID), the chat state mark, the first line of the body as the title, the `⋯`
-    menu for structure edits (add parent, add child, unlink, delete), drag or Alt+Shift+arrows to
-    place — and the document on the right — every item a block edited in place by a click or
-    Enter, its linked files and its AI chat inside the block (one pill on the bottom-left border:
-    `✓ done` while editing, `▴ done` / `▾` for the chat, `■ stop` while a turn runs), `@UID` (and
-    the older `[UID]`) of a known item linking to its block, the status popup from the label's
-    icon in either pane holding the test and review detail, the validation problems, the run
-    actions and the binding editor. Keyboard navigation moves the selection in the pane holding
-    the focus; below 60rem the panes stack; the page re-reads the tree within seconds of any
-    change on disk and saves every field as a compare-and-swap, offering keep mine / take theirs
-    on a conflict.
-  - **Runs** (test / review / clear) shell out to the `syngate.py` code path, so stamping
-    semantics (user-only, test-gated) are the terminal's, and fold their records into
-    `syngate_coverage.jsonl` next to the tree, which the page always reads, so a run recolors the
-    statuses without a CI round trip. Chats are kept in `syngate_chats.json` beside it; both stay
-    untracked.
-  - Loopback-bound; every request needs the per-session token from the printed URL (Jupyter-style
-    defense for localhost tools that execute commands); the page runs under a nonce-only
-    `Content-Security-Policy`, the second fence behind the escape-first markdown renderer.
-
-# Status Rollup
-
-Two independent axes per item (`compute_axes`; what the UI shows):
-
-- **Test**: `unknown` | `test_passed` | `test_failed`. Leaf: any failed record → failed; any binding
-  without a record → unknown; else passed. Branch: the worst of its children and its own bindings,
-  if it carries any — a failed item fails every ancestor, else one unknown item leaves them
-  unknown (the page shows `unknown` as `not run`). The axis reflects the run records alone — a violated review never reddens it. A run that cannot execute a binding (no or several tagged
-  routines, test binary not built) records it as failed — a test that cannot be found is red.
-- **Review**: `not_reviewed` | `reviewed` | `review_violated`. The worst of an item's own stamp and
-  its children's axes: a branch is reviewed when it and everything below it is. An item's own
-  validation problem (stale stamp, drifted frozen routine, malformed item) is a violated review;
-  violated outranks not reviewed, which outranks reviewed. A branch's stamp covers its statement,
-  parents and the list of its children, so editing a branch or adding a child under it clears it.
-  A problem is attributed to the item it names and reaches only that item's ancestors — never the
-  item whose tooling detected it, and never the whole tree: a coverage gap is not an item problem,
-  since one missing coverage file would otherwise redden every reviewed leaf at once.
-
-The single-status rollup below (`compute_status`) is what `syngate report`, the CI summary and the
-check run still publish; INFRA-043/044 define it, so retiring it in favour of the axes is a
-user decision.
-
-Leaf: no executed records → `not_implemented`; any failed record → `test_failed`; all bindings
-covered and passing → `test_passed`; some covered → `partially_implemented`. A childless item
-without a `tests` key has no bindings to cover, so it rolls up as `not_implemented` the same way.
-Branch: aggregate of children (any failed → failed; all not_implemented → not_implemented; all
-passed → passed; else partial).
-
-**Validation problems redden the item they name, never the item that found them.** A stale review
-stamp, a drifted frozen routine or a malformed item is a defect of *that* item: `item_problems`
-attributes it by UID, `compute_status` marks the item `test_failed`, and it rolls up through that
-item's own parents only. An item whose bound test detects such a violation is working, so it
-stays green — the tooling's own tests assert tooling behaviour against fixtures, and where they read
-the live tree (`INFRA-030`) they assert its *layout* (`validate_layout`), not its review state.
-Coverage gaps are deliberately not item problems: an unrun binding already rolls up as
-`not_implemented`, and one missing coverage file would otherwise redden every reviewed leaf at once.
-
-# Process Rules (TDD gate)
-
-- **Test-first, then freeze.** The covering routine is tagged with the leaf's UID before
-  implementation; the user approves via `syngate review`, which freezes the routine by hash while it is
-  still red — approval fixes *which* routine and *what it says*, not whether it already passes.
-- **Frozen routines are immutable.** Editing a reviewed leaf's bound routine reddens the gate until
-  a user-approved `syngate clear` + re-review.
-- **Two-commit re-approval** (`check_self_approval.py`, Open Trader CI `approval` job): a commit that
-  changes an item's approval may neither change the item's substance nor touch any file under the
-  test trees.
-- **CI flow** (Open Trader `.github/workflows/validate.yml`): build → ctest (emits
-  `build-ci/syngate_coverage.jsonl`, uploaded as `syngate-coverage-cpp`) → syngate job: `gate.sh`,
-  pytest (emits `pytest-coverage.jsonl`), coverage join via `gate.sh --coverage …`, `syngate report`,
-  job summary + `Syngate Status` check run.
-- **A red gate never costs the report.** The gate's verdict decides the job's colour, not whether
-  the run is reported: every report step runs on `!cancelled()`, and `gate.sh`'s output (`gate: OK`
-  / `gate: FAILED`) is captured into `syngate_validate.log` and folded into the top of both the job
-  summary and the check run, so the reason for the red is read off the report itself.
-
 # Contributing
 
-The toolkit manages its own tree: `syngate/` in this repository holds AI-Scratcher's requirement
+AI Assassin manages its own tree: `syngate/` in this repository holds its requirement
 items, bound to `tests/` through `@pytest.mark.syngate`. Develop against an editable install, so the
 UI and CLI run the working copy rather than an installed snapshot:
 
 ```
 python3 -m venv .venv
 .venv/bin/pip install -e .
-.venv/bin/syngate ui                  # http://127.0.0.1:8712, tree = this checkout
+.venv/bin/assassin                    # http://127.0.0.1:8712, tree = this checkout
 ```
 
-`syngate` takes the managed project from `--root`, else `SYNGATE_ROOT`, else the nearest ancestor of
-the working directory holding `syngate/` — started from this checkout it edits this tree, started
-from a managed project's checkout the same install edits that project's tree. The rest of the loop:
+`assassin` and `syngate` take the managed project from `--root`, else `SYNGATE_ROOT`, else the nearest
+ancestor of the working directory holding `syngate/` — started from this checkout they edit this tree,
+started from a managed project's checkout the same install edits that project's tree. The rest of the loop:
 
 ```
-.venv/bin/syngate validate            # this tree: structural + frozen-routine checks
-.venv/bin/syngate test 'SYNGATE_UI-*' # bound routines of matching leaves, without stamping
-.venv/bin/pytest                      # the toolkit's whole test suite (tests/)
+.venv/bin/syngate validate             # this tree: structural + frozen-routine checks
+.venv/bin/syngate test 'ASSASSIN-UI-*' # bound routines of matching leaves, without stamping
+.venv/bin/pytest                       # the whole test suite (tests/)
 ```
 
 `review`/`clear` are user-only here as in any managed project. A managed project's own provisioning
-(e.g. Open Trader's `<build dir>/ai-scratcher-venv`) also carries the `syngate` entry point, so
-`<that venv>/bin/syngate ui` run from this checkout works too — against the fetched snapshot of the
-package, not the working copy.
-
+(e.g. Open Trader's `<build dir>/ai-scratcher-venv`) also carries the `assassin` and `syngate` entry
+points, so `<that venv>/bin/assassin` run from this checkout works too — against the fetched snapshot
+of the package, not the working copy.

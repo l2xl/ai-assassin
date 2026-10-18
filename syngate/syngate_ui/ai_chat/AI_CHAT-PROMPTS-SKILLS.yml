@@ -1,6 +1,0 @@
----
-parents: [AI_CHAT-PROMPTS]
-order: 30
-review: 4e9fe873dfa689eea90a363306f32ad44d88b92348db84a47559e047e3b7741a
----
-A skill shall be a named description the harness adds to the context, a default skill as part of the default prompt and any other on request through the skill tool

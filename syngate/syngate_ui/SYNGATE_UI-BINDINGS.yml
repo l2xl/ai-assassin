@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI-042]
-order: 20
-test: 477b6f07f55503079ab1be4a703fc40a473cea4a0cb134f25f6e107c3db63a25
-review: c85d0f5461934b55127a06397dc12fe13d016b3545732a7dda952a9db5a74040
----
-Binding editor
-in the status popup of a childless item switches its `test` key on and off and adds or removes named bindings — names `[a-z0-9_]+`, the default binding standing alone — a frozen one removed only after confirmation, every change saved as a compare-and-swap of the binding list.

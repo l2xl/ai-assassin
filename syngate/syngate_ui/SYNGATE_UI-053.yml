@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI-036]
-order: 10
-test: f33259aef9a221abbf004fb4edc0679b842e0dd5c2fb944865c8a094eaf0f45a
-review: cd9be9219d6745a6bf9ae804173fad143d2f05e91e7eb40b14b93cbe46becf1e
----
-File view placement
-is inside the block of the item holding the link, as the chat is, the block growing to hold it, with no separate file panel beside or under it.

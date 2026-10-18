@@ -1,8 +1,0 @@
----
-parents: [SYNGATE_UI-CONTENT]
-order: 60
-test: 8255042ee0b52545bc14207a7665a9e9781aebca6741d20db18df5518a1300b1
-review: 26ce78c45ea60dc14bf21cc0b88258a2d7e5e23af4ddbe3d8e77b391d6a37e7e
----
-Item reference link
-renders `@UID` — and the older `[UID]` — of a known item, in a statement, a message or a file view, as a link that activates the item's block and unfolds the outline to it.

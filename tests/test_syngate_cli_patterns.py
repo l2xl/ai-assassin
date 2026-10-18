@@ -28,7 +28,7 @@ def _tree(test=True, review=True):
     return items
 
 
-@pytest.mark.syngate("INFRA-051", "leaves_only")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "leaves_only")
 def test_pattern_expands_to_matching_leaves_only():
     items = _tree()
     uids, errors = syngate._expand_uids(items, ["PAT-00?"], lambda item: item.is_leaf, "leaf")
@@ -36,7 +36,7 @@ def test_pattern_expands_to_matching_leaves_only():
     assert errors == []
 
 
-@pytest.mark.syngate("INFRA-051", "branch_skip")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "branch_skip")
 def test_star_pattern_skips_non_selectable_branch():
     items = _tree()
     uids, errors = syngate._expand_uids(items, ["PAT*"], lambda item: item.is_leaf, "leaf")
@@ -44,7 +44,7 @@ def test_star_pattern_skips_non_selectable_branch():
     assert errors == []
 
 
-@pytest.mark.syngate("INFRA-051", "literal_passthrough")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "literal_passthrough")
 def test_literals_pass_through_for_downstream_diagnostics():
     items = _tree()
     uids, errors = syngate._expand_uids(items, ["PAT", "NOPE-001"], lambda item: item.is_leaf, "leaf")
@@ -52,7 +52,7 @@ def test_literals_pass_through_for_downstream_diagnostics():
     assert errors == []
 
 
-@pytest.mark.syngate("INFRA-051", "no_match_error")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "no_match_error")
 def test_unmatched_pattern_is_an_error():
     items = _tree()
     uids, errors = syngate._expand_uids(items, ["ZZZ-*"], lambda item: item.is_leaf, "leaf")
@@ -60,7 +60,7 @@ def test_unmatched_pattern_is_an_error():
     assert errors == ["pattern 'ZZZ-*' matches no leaf item"]
 
 
-@pytest.mark.syngate("INFRA-051", "dedup")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "dedup")
 def test_mixed_literals_and_patterns_deduplicate_preserving_order():
     items = _tree()
     uids, errors = syngate._expand_uids(items, ["PAT-002", "PAT-00?"], lambda item: item.is_leaf, "leaf")
@@ -68,7 +68,7 @@ def test_mixed_literals_and_patterns_deduplicate_preserving_order():
     assert errors == []
 
 
-@pytest.mark.syngate("INFRA-051", "clear_batch")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "clear_batch")
 def test_clear_with_pattern_touches_only_reviewed_items(monkeypatch):
     items = _tree()
     items["PAT-001"] = _leaf("PAT-001", reviewed="a" * 64)
@@ -81,7 +81,7 @@ def test_clear_with_pattern_touches_only_reviewed_items(monkeypatch):
     assert all(item.reviewed is None for item in written)
 
 
-@pytest.mark.syngate("INFRA-051", "clear_unknown_literal")
+@pytest.mark.syngate("SYNGATE-BATCH-REVIEW", "clear_unknown_literal")
 def test_clear_with_unknown_literal_fails_after_processing_the_rest(monkeypatch):
     items = _tree()
     items["PAT-002"] = _leaf("PAT-002", reviewed="c" * 64)
@@ -92,7 +92,7 @@ def test_clear_with_unknown_literal_fails_after_processing_the_rest(monkeypatch)
     assert [item.uid for item in written] == ["PAT-002"]
 
 
-@pytest.mark.syngate("INFRA-052", "selection")
+@pytest.mark.syngate("SYNGATE-TEST-RUN", "selection")
 def test_bound_routines_are_selected_by_node_id_and_by_tag_pairs(monkeypatch, tmp_path):
     items = _tree()
     items["PAT-003"].tests = {"a": None, "b": None}
@@ -113,7 +113,7 @@ def test_bound_routines_are_selected_by_node_id_and_by_tag_pairs(monkeypatch, tm
     assert written == []
 
 
-@pytest.mark.syngate("INFRA-052", "unrun_record")
+@pytest.mark.syngate("SYNGATE-TEST-RUN", "unrun_record")
 def test_a_binding_without_a_routine_is_recorded_as_failed(monkeypatch, tmp_path):
     items = _tree()
     coverage = tmp_path / "coverage.jsonl"

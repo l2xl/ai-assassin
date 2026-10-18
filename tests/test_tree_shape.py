@@ -2,7 +2,7 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""Tests for syngatelib.load_tree + validate_structure tree-shape semantics -- [INFRA-030]."""
+"""Tests for syngatelib.load_tree + validate_structure tree-shape semantics -- [SYNGATE-TREE-LAYOUT]."""
 
 import pytest
 import yaml
@@ -101,7 +101,7 @@ def test_cycle_is_rejected(syngate_tree):
     assert _matching(errors, "cycle")
 
 
-@pytest.mark.syngate("SYNGATE-020")
+@pytest.mark.syngate("SYNGATE-TEST-BEARING-BRANCH")
 def test_a_branch_passes_only_with_its_own_tests_and_its_children(syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT-1", "root shall pass", header="root", tests=None)
@@ -145,7 +145,7 @@ def test_leaf_description_wording_is_unconstrained(syngate_tree):
     assert errors == []
 
 
-@pytest.mark.syngate("INFRA-071")
+@pytest.mark.syngate("SYNGATE-STAMP-FORMAT")
 def test_malformed_reviewed_stamp_reads_as_absent(syngate_tree):
     syngate_dir, make_item = syngate_tree
     _seed_minimal(syngate_dir, make_item)
@@ -186,7 +186,7 @@ def test_review_state_is_attributed_to_the_item_that_carries_it(syngate_tree):
     assert "LEAF-1" not in syngatelib.item_problems(items)
 
 
-@pytest.mark.syngate("INFRA-030")
+@pytest.mark.syngate("SYNGATE-TREE-LAYOUT")
 def test_live_syngate_tree_has_a_valid_layout():
     """The real syngate/ tree loads and satisfies the layout this item
     describes: UIDs are file stems and `parents` forms a DAG with one root.
@@ -194,7 +194,7 @@ def test_live_syngate_tree_has_a_valid_layout():
     Review state is deliberately out of scope here. A stale stamp or a drifted
     frozen routine is the tree's data; the status rollup reddens the item that
     carries it. Detecting such a violation is this item working, so
-    asserting the tree is clean here would redden INFRA for another item's fault.
+    asserting the tree is clean here would redden SYNGATE for another item's fault.
     """
     items, load_errors = syngatelib.load_tree()
     assert load_errors == []
@@ -217,7 +217,7 @@ def test_walk_selects_ancestors_root_first_then_descendants_each_uid_once(syngat
     assert syngatelib.walk(items) == ["ROOT-1", "SIDE-A", "MID-1", "LEAF-1", "LEAF-2", "SIDE-B"]
 
 
-@pytest.mark.syngate("SYNGATE-030")
+@pytest.mark.syngate("SYNGATE-FEATURE-SWITCHES")
 def test_the_root_switches_the_test_and_review_features_both_off_when_absent(syngate_tree):
     syngate_dir, make_item = syngate_tree
     (syngate_dir / "ROOT-1.yml").write_text(yaml.safe_dump({"header": "root", "description": "root shall exist", "parents": []}), encoding="utf-8")
@@ -239,7 +239,7 @@ def test_the_root_switches_the_test_and_review_features_both_off_when_absent(syn
     assert _matching(load_errors, "LEAF-1: 'test: enabled' switches the feature on the root item only")
 
 
-@pytest.mark.syngate("SYNGATE-040")
+@pytest.mark.syngate("SYNGATE-KEY-SPELLING")
 def test_bindings_and_stamp_are_read_from_test_and_review_and_their_old_spellings_and_written_back_new(syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT-1", "root shall exist", header="root")

@@ -1,5 +1,5 @@
 ---
-parents: [AI_CHAT]
+parents: [AI-CHAT]
 order: 20
 test: {send: 332bf7a314ed8383e6af4aea4bac5101e94b00704a5d13f1aec5c7015647964c, done: 2edd0de52d573671b2b900a28616358aeae71e124f0ad25bf46447ea7454d6bf,
   refusal: 2e0fa3533fbf3bd5c4605e3faeda430a275dce8df68ceeda1218356c2807e9a4}

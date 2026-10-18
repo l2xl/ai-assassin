@@ -1,8 +1,10 @@
 ---
-parents: [AI-SCRATCHER]
+parents: [AI-ASSASSIN]
 order: 60
 sources: [src/ai_scratcher/synthetic.py]
 review: 67935cbe9ce964f0ca22c6901bce4ebac7711c269683445068f17f8306d48552
 ---
-Synthetic AI-agent library:
+Synthetic
+is the AI harness core of AI Assassin: the prompt library, the seed context, the AI connections and the tool call protocol of a reply.
+
 [SYNTHETIC.md](SYNTHETIC.md)

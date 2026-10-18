@@ -29,6 +29,13 @@ print(json.dumps({"type": "result", "result": json.dumps({"argv": argv, "prompt"
 """
 
 
+TESTS_ON = "\n# Tree features\ntest: enabled\n"
+
+
+def _sections(*statements):
+    return "".join(f"\n@{uid}\n{text}\n" for uid, text in statements)
+
+
 @pytest.mark.syngate("SYNTHETIC-010")
 def test_seed_context_opens_with_the_default_prompt_then_the_ancestry_the_item_and_its_descendants_each_once(syngate_tree):
     syngate_dir, make_item = syngate_tree
@@ -40,11 +47,38 @@ def test_seed_context_opens_with_the_default_prompt_then_the_ancestry_the_item_a
     make_item(syngate_dir, "DEEP-001", "It shall go deep.\n", parents=("NOTE-001",), tests=None)
     items, errors = syngatelib.load_tree(syngate_dir)
     assert not errors
-    prompt = synthetic.PROMPTS["default"] + "\n"
-    assert synthetic.seed_context(items, "ROOT") == prompt + "Root.\nSide A.\nIt shall leaf.\nSide B.\nA note.\nIt shall go deep.\n"
-    assert synthetic.seed_context(items, "SIDE-B") == prompt + "Root.\nSide B.\nA note.\nIt shall go deep.\nIt shall leaf.\n"
-    assert synthetic.seed_context(items, "NOTE-001") == prompt + "Root.\nSide B.\nA note.\nIt shall go deep.\n"
-    assert synthetic.seed_context(items, "LEAF-001") == prompt + "Root.\nSide A.\nSide B.\nIt shall leaf.\n"
+    prompt = synthetic.PROMPTS["default"] + TESTS_ON
+    root, side_a, side_b = ("ROOT", "Root."), ("SIDE-A", "Side A."), ("SIDE-B", "Side B.")
+    leaf, note, deep = ("LEAF-001", "It shall leaf."), ("NOTE-001", "A note."), ("DEEP-001", "It shall go deep.")
+    assert synthetic.seed_context(items, "ROOT") == prompt + _sections(root, side_a, leaf, side_b, note, deep)
+    assert synthetic.seed_context(items, "SIDE-B") == prompt + _sections(root, side_b, note, deep, leaf)
+    assert synthetic.seed_context(items, "NOTE-001") == prompt + _sections(root, side_b, note, deep)
+    assert synthetic.seed_context(items, "LEAF-001") == prompt + _sections(root, side_a, side_b, leaf)
+
+
+@pytest.mark.syngate("SYNTHETIC-SEED-UID")
+def test_a_referenced_item_the_seed_context_holds_brings_no_second_copy_and_a_missing_one_is_appended_under_its_uid(syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=())
+    make_item(syngate_dir, "SIDE-A", "Side A.\n", parents=("ROOT",), order=10)
+    make_item(syngate_dir, "SIDE-B", "Side B", parents=("ROOT",), order=20)
+    items, _ = syngatelib.load_tree(syngate_dir)
+    seed = synthetic.seed_context(items, "SIDE-A")
+    assert seed.endswith("\n@ROOT\nRoot.\n\n@SIDE-A\nSide A.\n")
+    assert synthetic.seed_context(items, "SIDE-B").endswith("\n@SIDE-B\nSide B\n")
+    contained = syngatelib.walk(items, "SIDE-A", descendants=True)
+    assert synthetic.referenced(items, "See @ROOT and @SIDE-A.", contained) == ""
+    assert synthetic.referenced(items, "See @ROOT, @SIDE-B and @SIDE-B again, not @GONE.", contained) == "\n@SIDE-B\nSide B\n"
+    seen = {}
+
+    class Recorder:
+        models, efforts, modes = ("model-a",), ("low",), ()
+
+        def dispatch(self, context, text, **_):
+            seen["context"] = context
+            return "ok", None
+    synthetic.query({"rec": Recorder()}, items, "SIDE-A", "Compare @ROOT with @SIDE-B.", "rec", "model-a", "low")
+    assert seen["context"] == seed + "\n@SIDE-B\nSide B\n"
 
 
 def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(tmp_path, syngate_tree):
@@ -57,13 +91,13 @@ def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(t
     (syngate_dir / "LEAF-001.yml").write_text("---\nparents: [SIDE-A]\nsources: [src/leaf.py, docs/GONE.md]\ntest: ~\n---\nIt shall leaf.\n")
     items, errors = syngatelib.load_tree(syngate_dir)
     assert not errors and synthetic.item_view(items, "SIDE-A")["sources"] == ["src/leaf.py", "src/root.py"]
-    prompt = synthetic.PROMPTS["default"] + "\n"
+    prompt = synthetic.PROMPTS["default"] + TESTS_ON
     root_source = "\n# Source src/root.py\n````\nROOT = 1\n````\n"
     leaf_sources = "\n# Source src/leaf.py\n````\n```\nLEAF = 2\n````\n" + "\n# Source docs/GONE.md\n(file not found)\n"
-    assert synthetic.seed_context(items, "ROOT", root=tmp_path) == prompt + "Root.\nSide A.\nIt shall leaf.\n" + root_source + leaf_sources
+    assert synthetic.seed_context(items, "ROOT", root=tmp_path) == prompt + _sections(("ROOT", "Root."), ("SIDE-A", "Side A."), ("LEAF-001", "It shall leaf.")) + root_source + leaf_sources
     assert synthetic.seed_context(items, "SIDE-A", root=tmp_path) == synthetic.seed_context(items, "ROOT", root=tmp_path)
     seed = synthetic.seed_context(items, "LEAF-001", root=tmp_path)
-    assert seed == prompt + "Root.\nSide A.\nIt shall leaf.\n" + root_source + leaf_sources
+    assert seed == prompt + _sections(("ROOT", "Root."), ("SIDE-A", "Side A."), ("LEAF-001", "It shall leaf.")) + root_source + leaf_sources
     assert synthetic.apply_call(items, "ROOT", {"tool": "context", "uid": "LEAF-001"}, syngate_dir=syngate_dir) == f"- context of LEAF-001:\n{seed}"
     app = syngate_ui.SyngateUIApp(root=tmp_path, syngate_dir=syngate_dir)
     app.connectors = {"echo": EchoAnswer()}
@@ -100,7 +134,7 @@ def test_the_prompt_library_is_read_from_front_matter_markdown_files_by_name_as_
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     items, _ = syngatelib.load_tree(syngate_dir)
-    assert synthetic.seed_context(items, "ROOT") == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + "\nRoot.\n"
+    assert synthetic.seed_context(items, "ROOT") == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n"
 
 
 @pytest.mark.syngate("AI_CHAT-PROMPTS-DEFAULT")
@@ -141,6 +175,24 @@ def test_the_delegation_skill_is_a_default_skill_stating_how_separable_children_
         assert phrase in skill.text
     shipped = synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
     assert skill.text in shipped and synthetic.LIBRARY["agent"].kind == "tool" and synthetic.LIBRARY["agent"].text in shipped
+
+
+@pytest.mark.syngate("AI_CHAT-SKILL-DELIVER")
+def test_the_delivery_skill_is_a_default_skill_carrying_reworked_items_into_tests_and_sources_by_the_test_switch_the_seed_states(syngate_tree):
+    skill = synthetic.SKILLS["deliver"]
+    assert skill.default and skill.text.startswith("# Delivery\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    for phrase in ("specification", "`test: enabled|disabled` under Tree features", "Enabled:", "tagged with the leaf's UID", "`test` call",
+                   "passes", "Disabled:", "awaits no tests", "your judgement", "list no sources"):
+        assert phrase in skill.text
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=(), features=("review",))
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",))
+    items, _ = syngatelib.load_tree(syngate_dir)
+    assert synthetic.features_section(items) == "\n# Tree features\ntest: disabled\n"
+    assert synthetic.seed_context(items, "LEAF-001") == synthetic.PROMPTS["default"] + "\n# Tree features\ntest: disabled\n" + _sections(("ROOT", "Root."), ("LEAF-001", "It shall leaf."))
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=())
+    items, _ = syngatelib.load_tree(syngate_dir)
+    assert synthetic.seed_context(items, "LEAF-001").startswith(synthetic.PROMPTS["default"] + TESTS_ON + "\n@ROOT\n")
 
 
 @pytest.mark.syngate("AI_CHAT-TOOL-SKILL")
@@ -191,7 +243,7 @@ def test_query_goes_through_the_selected_connection_model_and_effort(syngate_tre
     items, _ = syngatelib.load_tree(syngate_dir)
     connectors = {"echo": EchoConnection(), "other": None}
     reply, session = synthetic.query(connectors, items, "LEAF-001", "What is missing?", "echo", "model-b", "high", modes=["edit"], session="session-0")
-    assert (reply, session) == (synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + "\nRoot.\nIt shall leaf.\n|What is missing?|model-b|high|edit|session-0", "session-1")
+    assert (reply, session) == (synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n\n@LEAF-001\nIt shall leaf.\n|What is missing?|model-b|high|edit|session-0", "session-1")
     with pytest.raises(synthetic.query_error):
         synthetic.query(connectors, items, "LEAF-001", "hi", "echo", "model-a", "low", modes=["fly"])
     for uid, text, connector, model, effort in (("NOPE", "hi", "echo", "model-a", "low"), ("LEAF-001", "hi", "absent", "model-a", "low"),
@@ -303,7 +355,7 @@ def test_the_seed_context_is_the_appended_system_prompt(tmp_path, syngate_tree):
     stub.write_text(STUB_CLAUDE)
     connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
     echoed = json.loads(connector.dispatch(synthetic.seed_context(items, "ROOT"), "Go.")[0])
-    assert echoed["seed"] == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + "\nRoot.\n" and "--append-system-prompt" not in echoed["argv"]
+    assert echoed["seed"] == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n" and "--append-system-prompt" not in echoed["argv"]
     assert synthetic.LIBRARY["syngate_api"].text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
 
 

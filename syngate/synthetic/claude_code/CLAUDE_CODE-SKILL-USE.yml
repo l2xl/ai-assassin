@@ -1,0 +1,9 @@
+---
+parents: [CLAUDE_CODE]
+order: 150
+test: ~
+---
+Native skill use
+shows the underlying model calling a skill that reached the CLI only through the library argument: a turn run in an empty folder, with no project prompt files, whose message asks for what the skill describes calls the `Skill` tool with the skill's name and answers with the marker only the skill's text holds.
+
+The test runs against the installed `claude` CLI and is skipped where there is none.

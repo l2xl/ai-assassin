@@ -1,0 +1,9 @@
+---
+parents: [CLAUDE_CODE]
+order: 140
+test: ~
+---
+Claude Code skill delivery
+writes every skill on request of the library as a Claude Code skill, a `SKILL.md` whose front matter carries the skill's name and description over its text, into a temporary plugin folder given to the CLI with `--plugin-dir`.
+
+The turn's initial system event lists each of them among the skills of the session; the text of such a skill is absent from the seed prompt. Default skills stay in the seed prompt.

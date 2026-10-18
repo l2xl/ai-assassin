@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE]
+order: 130
+test: ~
+---
+Native library delivery
+is the library delivery option the Claude Code connector declares: it hands the skills on request and the tools of the prompt library to the `claude` CLI through the CLI's own skill and tool configuration, so the seed prompt carries only the default prompt of the Synthetic interface, without the list of skills on request and without tool definitions.

@@ -6,14 +6,23 @@ either continues the dialog or condenses it back into the DAG through tree calls
 
 ## Seed context
 
-The seed context of an item is the default prompt (`synthetic.PROMPTS["default"]`), then the seed
+The seed context of an item is the default prompt (`synthetic.PROMPTS["default"]`), then the tree's
+test switch under `# Tree features` (`test: enabled|disabled`, read off the root item), then the seed
 contexts of its parents in order, then its own statement, then those of all its children built
-recursively in depth. Thus the seed context of the root is the whole DAG.
+recursively in depth. Thus the seed context of the root is the whole DAG. The switch is what the
+delivery skill (`deliver.md`) reads to tell a task that reworks items how to carry them into the
+project: tests bound to the changed leaves first and the listed sources until the `test` call
+passes when enabled, the listed sources alone — the need of a test rework being the turn's own
+judgement — when disabled.
 
 - **Every item enters once**, at its first occurrence, and the default prompt once at the head. The
   selection is the walk of `SYNGATE-010` (`syngatelib.walk(items, uid, descendants=True)`): the
   ancestors root first, then the item, then its descendants in sibling order, depth first. A parent
   brings its own ancestry, not its other children.
+- **Every statement is addressable.** Each selected item enters as its own `@<UID>` line followed
+  by its statement, a section opening with a blank line, so a message may name any contained item
+  by `@UID`. A message referencing items the seed context already holds brings no second copy; only
+  the missing ones are appended after it, each in the same `@<UID>` form.
 - **Key sources close the context.** The `sources` of the selected items, each file once in
   selection order, follow as `# Source <path>` sections holding the file's text in a four-backtick
   fence; a missing file says so in place.
@@ -46,6 +55,15 @@ is one non-interactive turn of the chosen connector.
   the library: the default skills, the list of the skills on request by name and description, then
   every tool definition. `{"tool": "skill", "name"}` brings a skill on request back as the next
   prompt, the way a query's result comes back.
+- **Library delivery.** A connection declares `library_delivery`: `text`, the default prompt above
+  merged into the seed context, or `native`, the connection processing the library through the
+  provider's own skill and tool configuration, its dispatch receiving the library as an argument.
+  A tool's front matter lists its `calls` — each with its `required` string fields and `optional`
+  JSON-schema properties — so a tool added to the library needs no change of the connector. The
+  Claude Code connector is `native`: the seed prompt carries the default skills and the item
+  statements only; every skill on request is a `skills/<name>/SKILL.md` of a temporary plugin folder
+  given with `--plugin-dir` (the `Skill` tool allowed for the turn); the calls of the tools make the
+  JSON schema of the structured answer, the tools' texts its description.
 - **One chat per item, several at once.** An item has exactly one chat, held by the server under
   the item's UID (`GET /api/chats`) and shown as the same chat wherever the item is shown — at every
   occurrence of a multi-parent item and in every browser tab, each polling the server for changes.

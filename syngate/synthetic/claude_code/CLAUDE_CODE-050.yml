@@ -6,3 +6,5 @@ review: b81d78d658747d30bf21d17e02ff625f87707dbb4f6fac6c6d6505c872ab6d96
 ---
 Seed context delivery
 by the Claude Code connector goes as the appended system prompt of the turn.
+
+The skills on request and the tools of the prompt library do not travel in it, see the native library delivery.

@@ -29,6 +29,7 @@ WORKFLOW_TOOL = "Workflow"
 ANSWER_TOOL = "StructuredOutput"
 SNAPSHOT_SKIPPED = ("__pycache__", "node_modules")
 SNAPSHOT_LIMIT = 1 << 20
+PLUGIN_NAME = "synthetic"
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 DEFAULT_PROMPT = "default"
@@ -38,12 +39,14 @@ SKILLS_ON_REQUEST = "# Skills on request\nLoad one with the `skill` tool:\n"
 
 class prompt(NamedTuple):
     """One markdown file of the library: its stem is the name, its front matter the `kind` (skill|tool), the `description`
-    listing it and, for a skill, whether it is in the default prompt; the text is the body after the front matter."""
+    listing it and, for a skill, whether it is in the default prompt; the text is the body after the front matter. A tool's `calls`
+    map each call it defines to its `required` string fields and its `optional` JSON-schema properties."""
     name: str
     kind: str
     description: str
     default: bool
     text: str
+    calls: dict | None = None
 
 
 def read_prompt(path):
@@ -52,7 +55,7 @@ def read_prompt(path):
     meta = (yaml.safe_load(match.group(1)) if match else None) or {}
     body = raw[match.end():] if match else raw
     return prompt(path.stem, str(meta.get("kind") or "skill"), str(meta.get("description") or ""), bool(meta.get("default")),
-                  body.strip("\n") + "\n")
+                  body.strip("\n") + "\n", meta.get("calls") or None)
 
 
 def load_prompts(prompts_dir=PROMPTS_DIR):
@@ -67,6 +70,17 @@ def default_prompt(library):
     on_request = "\n".join(f"- `{entry.name}`: {entry.description}" for entry in skills if not entry.default) or "none"
     return "\n".join([*(entry.text for entry in skills if entry.default), SKILLS_ON_REQUEST + on_request + "\n",
                       *(entry.text for entry in library.values() if entry.kind == "tool")])
+
+
+def native_prompt(library):
+    """The head of a seed context for a connection that takes the library natively: the default skills only, the skills on request
+    and the tool definitions reaching the provider through its own configuration."""
+    return "\n".join(entry.text for entry in library.values() if entry.kind == "skill" and entry.default)
+
+
+def library_calls(library):
+    """The calls the tools of `library` define: name -> its required fields."""
+    return {name: tuple(spec.get("required") or ()) for entry in library.values() if entry.kind == "tool" for name, spec in (entry.calls or {}).items()}
 
 
 LIBRARY = load_prompts()
@@ -85,51 +99,52 @@ RESULTS_PREAMBLE = "Results of the calls in your last answer:\n"
 # A message names an item the way a file is named: `@UID` brings the item's statement into the turn.
 REFERENCE_RE = re.compile(r"@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\b")
 HISTORY_PREAMBLE = "The exchange so far, as kept by the user:\n"
+TREE_FEATURES = "\n# Tree features\ntest: {}\n"
 
 STRING = {"type": "string"}
-PATHS = {"type": "array", "items": STRING}
 SOURCE_FENCE = "````"
 
 
-def _call_schema(tool, **optional):
-    return {"type": "object", "properties": {"tool": {"const": tool}, **{field: STRING for field in CALLS[tool]}, **optional},
-            "required": ["tool", *CALLS[tool]], "additionalProperties": False}
+def _call_schema(tool, spec):
+    required = list(spec.get("required") or ())
+    return {"type": "object", "properties": {"tool": {"const": tool}, **{field: STRING for field in required}, **(spec.get("optional") or {})},
+            "required": ["tool", *required], "additionalProperties": False}
 
 
-# The structured answer: the tools of the Syngate API an answer may carry, as the JSON schema a
-# connection hands its model, so the shape of a call is enforced by the model side rather than by the parser alone.
-ANSWER_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "kind": {"enum": ["text", "calls"]},
-        "text": STRING,
-        "calls": {"type": "array", "minItems": 1, "items": {"anyOf": [
-            _call_schema("add", parent=STRING, description=STRING, sources=PATHS, kind={"enum": ["leaf", "branch"]}),
-            _call_schema("edit", description=STRING, sources=PATHS, tests={"type": "array", "items": STRING}),
-            _call_schema("remove"),
-            _call_schema("move", to=STRING, before=STRING, link={"type": "boolean"}, **{"from": STRING}),
-            _call_schema("query"),
-            _call_schema("context"),
-            _call_schema("skill"),
-            _call_schema("test", name=STRING),
-            _call_schema("agent", model=STRING, effort=STRING, modes={"type": "array", "items": STRING}),
-        ]}},
-    },
-    "required": ["kind"],
-    "additionalProperties": False,
-}
+def answer_schema(library):
+    """The structured answer as the JSON schema a connection hands its model, built from the call definitions of the library's tools --
+    their texts as the description of the answer -- so the shape of a call is enforced by the model side rather than by the parser alone."""
+    tools = [entry for entry in library.values() if entry.kind == "tool"]
+    shapes = [_call_schema(name, spec) for entry in tools for name, spec in (entry.calls or {}).items()]
+    return {"type": "object", "description": "\n".join(entry.text for entry in tools),
+            "properties": {"kind": {"enum": ["text", "calls"] if shapes else ["text"]}, "text": STRING,
+                           **({"calls": {"type": "array", "minItems": 1, "items": {"anyOf": shapes}}} if shapes else {})},
+            "required": ["kind"], "additionalProperties": False}
 
 
-def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None):
-    """The named prompt of the library, then the statements of every ancestor, parents first, the item's own and those of all
-    its descendants in sibling order -- an item reached twice enters once, at its first occurrence -- then the key source files
-    those items list, each once, read from `root`."""
+ANSWER_SCHEMA = answer_schema(LIBRARY)
+
+
+def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None):
+    """The named prompt of the library -- or the `head` text given in its place -- then the tree's test switch, then the statements of every
+    ancestor, parents first, the item's own and those of all its descendants in sibling order -- an item reached twice enters once, at its
+    first occurrence -- then the key source files those items list, each once, read from `root`."""
     if uid not in items:
         raise syngatelib.unknown_uid(f"unknown UID '{uid}'")
     selection = syngatelib.walk(items, uid, descendants=True)
-    statements = "".join(items[selected].description for selected in selection)
+    statements = "".join(statement_section(selected, items[selected].description) for selected in selection)
     sources = dict.fromkeys(rel for selected in selection for rel in items[selected].sources)
-    return PROMPTS[prompt] + "\n" + statements + "".join(source_section(rel, root) for rel in sources)
+    return (PROMPTS[prompt] if head is None else head) + features_section(items) + statements + "".join(source_section(rel, root) for rel in sources)
+
+
+def features_section(items):
+    """The tree's test switch as a section of the seed context, which tells the delivery skill whether the items await tests."""
+    return TREE_FEATURES.format("enabled" if syngatelib.features(items)["test"] else "disabled")
+
+
+def statement_section(uid, description):
+    """One item's statement as a section of the seed context: its `@UID` line over its text, ending in a line break."""
+    return f"\n@{uid}\n{description}" + ("" if description.endswith("\n") else "\n")
 
 
 def source_section(rel, root=None):
@@ -144,10 +159,11 @@ def source_section(rel, root=None):
     return f"\n# Source {rel}\n{SOURCE_FENCE}\n{text}{SOURCE_FENCE}\n"
 
 
-def referenced(items, text):
-    """The statements of the items named `@UID` in `text`, each as one more section after the seed context."""
-    found = [uid for uid in dict.fromkeys(REFERENCE_RE.findall(text)) if uid in items]
-    return "".join(f"\n@{uid}\n{items[uid].description}" for uid in found)
+def referenced(items, text, contained=()):
+    """The statements of the items named `@UID` in `text` that the seed context lacks -- `contained` being the UIDs it holds --
+    each as one more section after the seed context."""
+    found = [uid for uid in dict.fromkeys(REFERENCE_RE.findall(text)) if uid in items and uid not in contained]
+    return "".join(statement_section(uid, items[uid].description) for uid in found)
 
 
 def transcript(history, text):
@@ -220,9 +236,10 @@ def call_target(anchor, call):
     return anchor if call["uid"] == "@" else call["uid"]
 
 
-def parse_reply(reply):
+def parse_reply(reply, known=CALLS):
     """("chat", text) for a plain answer, ("calls", [call, ...]) for one batch of tool calls: a structured answer
-    shaped by `ANSWER_SCHEMA`, or text holding exactly one ```syngate block; anything mixed or malformed is refused."""
+    shaped by `ANSWER_SCHEMA`, or text holding exactly one ```syngate block; anything mixed or malformed is refused.
+    `known` maps the calls the answer may carry to their required fields, those of the tool library by default."""
     if isinstance(reply, dict):
         calls = reply.get("calls")
         if reply.get("kind") == "text" and not calls:
@@ -243,9 +260,9 @@ def parse_reply(reply):
         raise protocol_error("tree calls must be a non-empty JSON list of objects")
     for call in calls:
         tool = call.get("tool")
-        if tool not in CALLS:
+        if tool not in known:
             raise protocol_error(f"unknown tree call {tool!r}")
-        missing = [name for name in CALLS[tool] if not (isinstance(call.get(name), str) and call[name].strip())]
+        missing = [name for name in known[tool] if not (isinstance(call.get(name), str) and call[name].strip())]
         if missing:
             raise protocol_error(f"{tool}: missing {', '.join(missing)}")
         if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip())
@@ -288,6 +305,8 @@ def apply_call(items, anchor, call, syngate_dir=None):
     if tool == "remove":
         syngatelib.delete_item(items, uid)
         return f"- removed {uid}"
+    if tool != "move":
+        raise syngatelib.tree_error(f"{tool} is not a call of the tree")
     source, target, link = at(call.get("from")), at(call["to"]), bool(call.get("link"))
     if source is None and uid in items and len(items[uid].parents) == 1:
         source = items[uid].parents[0]
@@ -297,11 +316,13 @@ def apply_call(items, anchor, call, syngate_dir=None):
     return f"- moved {uid} under {target}"
 
 
-def query(connectors, items, uid, text, connector, model, effort, modes=(), session=None, history=(), root=None, on_step=None, stopped=None):
+def query(connectors, items, uid, text, connector, model, effort, modes=(), session=None, history=(), root=None, on_step=None, stopped=None,
+          library=None):
     """(reply text, session id) of one exchange anchored at `uid`, sent through the named connection with the exact model, effort and call modes,
     every step of the turn reaching `on_step` as it happens; `stopped` tells the connection whether the turn was stopped meanwhile.
     The seed context -- its key sources read from `root` -- grows by the statements the text references; without a session to resume,
-    the kept `history` heads the text."""
+    the kept `history` heads the text. The prompt `library` (the shipped one by default) heads the seed context as the default prompt, or,
+    for a connection with native library delivery, only by its default skills and is handed to the connection's dispatch."""
     connection = connectors.get(connector)
     if uid not in items:
         raise query_error(f"unknown UID '{uid}'")
@@ -313,9 +334,12 @@ def query(connectors, items, uid, text, connector, model, effort, modes=(), sess
         raise query_error(f"unknown mode in {sorted(modes)}")
     if not text.strip():
         raise query_error("empty input")
-    context = seed_context(items, uid, root=root) + referenced(items, text)
+    library = LIBRARY if library is None else library
+    native = getattr(connection, "library_delivery", "text") == "native"
+    head = native_prompt(library) if native else default_prompt(library)
+    context = seed_context(items, uid, root=root, head=head) + referenced(items, text, syngatelib.walk(items, uid, descendants=True))
     return connection.dispatch(context, text if session else transcript(history, text), model=model, effort=effort, modes=modes, session=session,
-                              on_step=on_step, **({"stopped": stopped} if stopped else {}))
+                              on_step=on_step, **({"stopped": stopped} if stopped else {}), **({"library": library} if native else {}))
 
 
 def result_text(content):
@@ -529,12 +553,27 @@ def close(proc):
         pass
 
 
+def write_skill_plugin(folder, library):
+    """Write the skills on request of `library` into `folder` as a Claude Code plugin, each a `skills/<name>/SKILL.md` whose front matter
+    carries the skill's name and description over its text. -> whether there is any skill to hand to the CLI."""
+    skills = [entry for entry in library.values() if entry.kind == "skill" and not entry.default]
+    if skills:
+        (Path(folder) / ".claude-plugin").mkdir()
+        (Path(folder) / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": PLUGIN_NAME, "description": "Skills on request of the prompt library"}))
+    for entry in skills:
+        (Path(folder) / "skills" / entry.name).mkdir(parents=True)
+        (Path(folder) / "skills" / entry.name / "SKILL.md").write_text(
+            f"---\nname: {entry.name}\ndescription: {json.dumps(entry.description)}\n---\n{entry.text}", encoding="utf-8")
+    return bool(skills)
+
+
 class claude_code_connector:
     label = "Claude Code"
     models = CLAUDE_MODELS
     efforts = CLAUDE_EFFORTS
     model_efforts = CLAUDE_MODEL_EFFORTS
     always_allowed = ("Agent",)
+    library_delivery = "native"
     # The tree files are closed to the turn in every mode, to read as to write: the tree is read and changed only through tree calls.
     denied = ("Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)")
     # Call modes: what a turn may do without prompting, as (label, hint, on by default, advanced, permission mode, allowed tools);
@@ -576,16 +615,17 @@ class claude_code_connector:
         threading.Thread(target=kill, daemon=True).start()
 
     def settings(self):
-        return {"label": self.label,
+        return {"label": self.label, "library": self.library_delivery,
                 "models": [{"id": model, "name": model.removeprefix("claude-"), "efforts": list(self.model_efforts.get(model, ()))} for model in self.models],
                 "efforts": list(self.efforts),
                 "modes": [{"id": mode, "label": label, "hint": hint, "default": default, "advanced": advanced}
                           for mode, (label, hint, default, advanced, _, _) in self.modes.items()]}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None):
         """(answer, session id) of one non-interactive `claude -p` turn, the answer being the structured output shaped by
-        `ANSWER_SCHEMA`, else the reply text; the seed context, headed by the default prompt, is the appended system prompt
-        and `session` continues an earlier one. The text goes in on stdin as the user message of a stream-json input, which
+        the `answer_schema` of the prompt `library` (the shipped one by default), else the reply text; the seed context is the
+        appended system prompt and `session` continues an earlier one. The library's skills on request go to the CLI as the
+        skills of a plugin folder, its tools as the calls of the answer schema; neither is in the seed context. The text goes in on stdin as the user message of a stream-json input, which
         keeps the stdin open for an `interrupt`. The turn lasts until the process exits: a subagent or workflow launched in
         it is awaited by the CLI, which answers again on its report, and the answer of the turn is that last one.
         Its events stream into `on_step` as steps while it runs; once it exits, the subagents' own turns are read from the
@@ -600,12 +640,17 @@ class claude_code_connector:
         permission = next((self.modes[mode][4] for mode in modes if self.modes[mode][4]), None)
         tools = list(dict.fromkeys([*self.always_allowed, *(tool for mode in modes for tool in self.modes[mode][5])]))
         effort = effort if effort in self.model_efforts.get(model, self.efforts) else None
-        with tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as seed, tempfile.TemporaryFile("w+", encoding="utf-8") as errors:
+        library = LIBRARY if library is None else library
+        with (tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as seed, tempfile.TemporaryFile("w+", encoding="utf-8") as errors,
+              tempfile.TemporaryDirectory() as plugin):
             seed.write(context)
             seed.flush()
             argv = [*self.cli, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--forward-subagent-text",
-                    "--json-schema", json.dumps(ANSWER_SCHEMA),
+                    "--json-schema", json.dumps(answer_schema(library)),
                     "--append-system-prompt-file", seed.name, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']
+            if write_skill_plugin(plugin, library):
+                argv += ["--plugin-dir", plugin]
+                tools.append("Skill")
             for flag, value in (("--model", model), ("--effort", effort), ("--resume", session), ("--permission-mode", permission),
                                 ("--allowedTools", ",".join(tools)), ("--disallowedTools", ",".join(self.denied))):
                 if value:

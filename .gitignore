@@ -5,3 +5,5 @@ syngate_coverage.jsonl
 pytest-coverage.jsonl
 syngate_status.json
 site/
+syngate_chats.json
+syngate_chats.json.tmp

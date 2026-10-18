@@ -229,7 +229,7 @@ is their genuine spelling rather than a second implementation.
     menu for structure edits (add parent, add child, unlink, delete), drag or Alt+Shift+arrows to
     place — and the document on the right — every item a block edited in place by a click or
     Enter, its linked files and its AI chat inside the block (one pill on the bottom-left border:
-    `✓ done` while editing, `▴ hide` / `▾` for the chat, `■ stop` while a turn runs), `@UID` (and
+    `✓ done` while editing, `▴ done` / `▾` for the chat, `■ stop` while a turn runs), `@UID` (and
     the older `[UID]`) of a known item linking to its block, the status popup from the label's
     icon in either pane holding the test and review detail, the validation problems, the run
     actions and the binding editor. Keyboard navigation moves the selection in the pane holding

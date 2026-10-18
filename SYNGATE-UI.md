@@ -24,7 +24,7 @@ A block's border and all its border-mounted controls appear while the mouse poin
 
 Below 60rem of viewport width the panes stack: the outline on top within 38vh of height, without a splitter and ignoring the remembered width; the document at full width with the depth shift halved; the filter spanning the header. Above it the outline opens at `clamp(18rem, 30vw, 40rem)` and the splitter resizes it (a double-click restores the default, arrows move it from the keyboard).
 
-The chat strip on the block's bottom-left border is one pill whose glyph names its state: `✓ done` while the block is being edited (saves the statement and leaves the editor; Esc is its keyboard twin), `▴ hide` while the chat is open and idle, `■ stop` (red) while a turn runs, `▾` on a block whose chat is hidden with history. Next to it, while editing, the save mark reads `● unsaved` / `saving…` / `✓ saved` / `✗ not saved — click to retry` / `⚠ conflict`.
+The chat strip on the block's bottom-left border is one pill whose glyph names its state: `✓ done` while the block is being edited (saves the statement and leaves the editor; Esc is its keyboard twin), `▴ done` while the chat is open and idle, `■ stop` (red) while a turn runs, `▾` on a block whose chat is hidden with history. Next to it, while editing, the save mark reads `● unsaved` / `saving…` / `✓ saved` / `✗ not saved — click to retry` / `⚠ conflict`.
 
 ## Sub-elements inside the item's content border
 

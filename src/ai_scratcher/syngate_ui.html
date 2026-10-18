@@ -1307,7 +1307,7 @@ function toggleFold(key) {
 }
 
 // Every block holds the reply line under its description; the log and the controls come with the open chat. The strip's first pill
-// follows the state: ■ stop while a turn runs, ✓ done while the block is edited, ▴ hide for the open chat, ▾ for a hidden one with history.
+// follows the state: ■ stop while a turn runs, ✓ done while the block is edited, ▴ done for the open chat, ▾ for a hidden one with history.
 function decorateChat(el, row) {
   const chat = chatAt(row), box = el.querySelector(".block-chat"), tools = el.querySelector(".block-ai"), kept = state.chats.get(row.uid), editing = state.editing === row.path;
   el.classList.toggle("chatting", Boolean(chat));
@@ -1333,7 +1333,7 @@ function decorateChat(el, row) {
   const statePill = running ? (state.stopping.has(chat.turn) ? '<button type="button" class="pill chat-stop" disabled><span class="spinner"></span> stopping…</button>'
       : '<button type="button" class="pill chat-stop" title="stop the turn now — nothing more of it is applied">■ stop</button>')
     : editing ? '<button type="button" class="pill chat-done" title="done — the statement is saved, the editor closed (Esc)">✓ done</button>'
-    : '<button type="button" class="pill chat-hide" title="hide the chat here — ▾ lists it again, nothing is lost">▴ hide</button>';
+    : '<button type="button" class="pill chat-hide" title="hide the chat here — ▾ lists it again, nothing is lost">▴ done</button>';
   setHtml(tools, statePill + (editing ? `<span class="pill save-mark" data-uid="${esc(row.uid)}"></span>` : "")
     + `<span class="pill chat-pill${running ? " busy" : ""}">`
     + `<button type="button" class="chat-send" title="${sendTitle}">➤ send</button>`

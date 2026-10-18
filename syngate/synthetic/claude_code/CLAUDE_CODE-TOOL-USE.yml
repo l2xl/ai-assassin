@@ -1,0 +1,9 @@
+---
+parents: [CLAUDE_CODE]
+order: 170
+test: ~
+---
+Native tool use
+shows the underlying model answering with a call of a tool that reached the CLI only through the library argument: a turn run in an empty folder, with no project prompt files, whose message asks for what the tool defines answers with a call that names the tool and carries its fields, and the reply parser accepts the call.
+
+The test runs against the installed `claude` CLI and is skipped where there is none.

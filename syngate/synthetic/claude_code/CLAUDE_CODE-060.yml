@@ -6,3 +6,5 @@ review: 186f5433133df7bbcee7de1e89f189cfc90423a763e216053013a1943640b359
 ---
 Answer schema
 of the Claude Code connector hands the calls of the tool library to the turn as the JSON schema of its structured answer, that structured output returned in place of the reply text.
+
+The schema is built from the library's tool definitions, see the tool delivery.

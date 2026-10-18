@@ -842,7 +842,7 @@ def test_the_done_pill_ends_the_edit_with_the_text_saved_and_hides_only_a_chat_t
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     edit_leaf(page, "It shall leaf, done twice.")
     page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-done').click()")
-    assert page.eval(after) == [None, False, True, True] and page.eval(strip)[0] == "chat-hide:▴ hide"  # the chat holds messages: it stays
+    assert page.eval(after) == [None, False, True, True] and page.eval(strip)[0] == "chat-hide:▴ done"  # the chat holds messages: it stays
     page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
     edit_leaf(page, "It shall leaf, done thrice.")
     assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent)") == ["Kept"]  # the editor shows the hidden history again
@@ -978,13 +978,16 @@ def test_a_selection_inside_a_message_gets_the_three_marks_on_the_border_lines_c
 
 
 @pytest.mark.syngate("AI_CHAT-050")
-def test_an_at_reference_brings_the_named_item_into_the_turn(server, chrome):
+def test_an_at_reference_brings_the_named_item_into_the_turn(server, chrome, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "SIDE-001", "Beside it.\n", parents=("ROOT",), order=30, tests=None)
     page = open_chat(server, chrome)
-    send(page, "LEAF-001", "Compare with @ROOT please")
+    send(page, "LEAF-001", "Compare with @SIDE-001 and @ROOT please")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     reply = page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent")
-    assert reply.endswith("|Compare with @ROOT please|model-a|low|edit,internet|None")  # the text stays as typed
-    assert "Root branch" in reply.split("|Compare with")[0].split("It shall leaf.")[-1]  # the referenced statement follows the seed context
+    assert reply.endswith("|Compare with @SIDE-001 and @ROOT please|model-a|low|edit,internet|None")  # the text stays as typed
+    assert reply.split("|Compare with")[0].endswith("@LEAF-001 It shall leaf.@SIDE-001 Beside it.")  # the missing statement follows the seed context
+    assert reply.split("|Compare with")[0].count("@ROOT") == 1  # the contained one brings no second copy
 
 
 def pick(page, attribute, value):
@@ -1095,7 +1098,7 @@ def test_the_hide_pill_hides_the_chat_and_becomes_the_drop_down_showing_it_again
     send(page, "LEAF-001", "Kept")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     closer = f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide')"
-    assert page.eval(f"[{closer}.textContent, {closer}.tagName, getComputedStyle({closer}).color]") == ["▴ hide", "BUTTON", css_color(page, "--dim")]
+    assert page.eval(f"[{closer}.textContent, {closer}.tagName, getComputedStyle({closer}).color]") == ["▴ done", "BUTTON", css_color(page, "--dim")]
     page.eval(f"{closer}.click()")
     hidden = f"[{LEAF_BLOCK}.querySelectorAll('.chat-msg').length, {LEAF_BLOCK}.querySelector('.chat-input').placeholder, Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-hide')), Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-show'))]"
     assert page.eval(hidden) == [0, REST_HINT, False, True]  # the reply line stays, at rest
@@ -1172,7 +1175,7 @@ def test_the_chat_window_opens_under_the_item_and_sends_through_the_chosen_setup
     page.wait("document.querySelector('.chat-msg.ai')")
     user, ai = page.eval("[...document.querySelectorAll('.chat-msg')].map((el) => el.textContent.trim())")
     assert user == "What is missing?"
-    assert ai.startswith("Tool calls") and ai.endswith("Root branch It shall leaf.|What is missing?|model-b|high|edit,internet|None")  # the default prompt heads the seed
+    assert ai.startswith("Tool calls") and ai.endswith("@ROOT Root branch@LEAF-001 It shall leaf.|What is missing?|model-b|high|edit,internet|None")  # the default prompt heads the seed
     send(page, "LEAF-001", "And next?")
     page.wait("document.querySelectorAll('.chat-msg.ai').length === 2")
     assert page.eval("document.querySelectorAll('.chat-msg.ai')[1].textContent").endswith("|And next?|model-b|high|edit,internet|session-1")

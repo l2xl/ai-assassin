@@ -1,0 +1,9 @@
+---
+parents: [SYNTHETIC]
+order: 60
+test: ~
+---
+Seed context item addressing
+heads the statement of every item in the seed context with its own line `@UID`, so each contained item is addressable by its UID.
+
+A chat message that references an item already contained in the seed context brings no second copy of its statement; only the referenced items the seed context lacks are appended, each under its `@UID` line.

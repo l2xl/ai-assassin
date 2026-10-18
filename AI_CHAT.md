@@ -121,7 +121,7 @@ and is never a permission.
 ## Waiting and the turn's activity
 
 While a turn runs — a single answer, or one with tool calls, subagents or a workflow — the log ends
-with the turn's **activity header** (`.turn-activity`) growing live, and the `▴ hide` pill is a
+with the turn's **activity header** (`.turn-activity`) growing live, and the `▴ done` pill is a
 `■ stop` button (`.chat-stop`, red, `AI_CHAT-STOP-BUTTON`; Ctrl/⌘+. is its keyboard twin): the chat
 can be neither hidden nor its fold marks switched until the turn ends. One press turns it into
 `stopping…`, disabled, until the outcome lands.
@@ -162,7 +162,7 @@ own log, session and setup, in start order; the page reads them as summaries (`a
 filed, never erased, by whatever begins a new one: the reply line entered on a hidden chat, the
 editor's send, `＋ New chat`. A conversation without messages is not kept.
 
-The `▴ hide` pill (`.chat-hide`, dim, never green, titled `hide the chat here — ▾ lists it again,
+The `▴ done` pill (`.chat-hide`, dim, never green, titled `hide the chat here — ▾ lists it again,
 nothing is lost`) hides the chat in that block and becomes `▾` (`.chat-show`) on the bottom-left
 border; while the editor is open the same place holds `✓ done`. `▾` is the way back to what was
 said: it always opens the drop-down of the item's conversations, even when it holds a single one

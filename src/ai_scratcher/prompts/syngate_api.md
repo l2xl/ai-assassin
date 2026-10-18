@@ -1,6 +1,35 @@
 ---
 kind: tool
 description: Read and change the syngate tree and run the tests bound to its items
+calls:
+  add:
+    required: [uid, description]
+    optional:
+      parent: {type: string}
+      sources: {type: array, items: {type: string}}
+      kind: {enum: [leaf, branch]}
+  edit:
+    required: [uid]
+    optional:
+      description: {type: string}
+      sources: {type: array, items: {type: string}}
+      tests: {type: array, items: {type: string}}
+  remove:
+    required: [uid]
+  move:
+    required: [uid, to]
+    optional:
+      before: {type: string}
+      from: {type: string}
+      link: {type: boolean}
+  query:
+    required: [uid]
+  context:
+    required: [uid]
+  test:
+    required: [uid]
+    optional:
+      name: {type: string}
 ---
 # Syngate API
 The files under syngate/ are closed to you, to read as to write: the tree is read and changed only through these calls.

@@ -1,0 +1,10 @@
+---
+parents: [AI_CONNECTION]
+order: 20
+sources: [src/ai_scratcher/synthetic.py]
+test: ~
+---
+Library delivery option
+of an AI connection declares how the connection takes the prompt library: `text`, the skills on request and the tool definitions merged into the seed context as text, or `native`, the connection processing them through the skill and tool configuration of its provider.
+
+The connection reports the option in its settings and receives the library as an argument of its dispatch, so a dispatch is told the skills and tools it carries rather than reading them from the project.

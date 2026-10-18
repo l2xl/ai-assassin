@@ -4,6 +4,6 @@ order: 100
 test: {hide: ~, history: ~, esc: ~}
 ---
 Chat hide mark
-is the `▴ hide` pill on the block's bottom-left border that hides the chat in that block and becomes `▾` there, which always opens the drop down list of the item's conversations — even a single one — the live one marked first unless it is empty, and shows none until one is picked; hiding is refused while the reply line holds text.
+is the `▴ done` pill on the block's bottom-left border that hides the chat in that block and becomes `▾` there, which always opens the drop down list of the item's conversations — even a single one — the live one marked first unless it is empty, and shows none until one is picked; hiding is refused while the reply line holds text.
 
 A hidden chat keeps its history and session.

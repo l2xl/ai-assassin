@@ -1,7 +1,8 @@
 ---
 parents: [AI_CONNECTION]
 order: 30
-test: {settings: ~, page: ~}
+test: {settings: f1356ef9d5e0f98f0aa0aaefa29b9f8b557b9b31509ca1296e29fa882855206a, page: ea7a6591fc7e7158579fb1dfefe498d1e36477aaa4c2165c6a1922b26ffb8f56}
+review: 27fe55d7ee710a6cc1a994d44d8f200e8f307767400c7978d057547b021acf10
 ---
 Default setup
 of an AI connection is reported in its settings next to the lists of its models and call modes: the model and effort a chat starts with, the effort being one the model supports or none.

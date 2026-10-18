@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 180
-test: ~
+test: efa5a8bceecad5ac379c13f4016e16e880ba02fbf3edd92b78dc2a3fc29d0df5
+review: 8c50d59eb391b9aeef4b70f590ac3b1727e96751754c4057980c03902fae0050
 ---
 Claude default setup
 of the Claude Code connector is the model `sonnet` with the effort `high`.

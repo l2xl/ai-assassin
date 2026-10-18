@@ -1,8 +1,8 @@
 ---
 parents: [AI_CHAT-CONTROLS]
 order: 30
-test: 3d69c487381d2312ee529a244620abb54992af6cdc4508757c9a4cddf32ed70a
-review: 82ef9c25a004118fee37183a76fb0c1b1a8e631c34f0a749173453960e725d6e
+test: 7dcc0775da929634c21637fe250bcd9bf2f7c4ce2e7fdd6481bf9462ba8e5a89
+review: a445e27a994bd7a0169063b1dc8f5731e98715ce624a3021b34775719771594e
 ---
 Selection marks
 replace the message's own while text inside it is selected: the same three marks on the border lines level with the selection, whose fold mark cuts the selected text out of the message — shown folded in its place with a mark of its own that expands it back into the text — and whose extraction marks send the selected text alone.

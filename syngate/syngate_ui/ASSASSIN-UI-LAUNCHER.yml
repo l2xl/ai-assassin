@@ -2,7 +2,8 @@
 parents: [ASSASSIN-UI]
 order: -10
 sources: [bin/assassin]
-test: ~
+test: 5e193cbc55178a82eda490e167a51912ef208d19efa8cf625c68f6dda1c11d5f
+review: 4367661afba15646718a9cf4d01a9061262ab3ec41dfb7a249cfa9c01a668940
 ---
 Launcher script
 `bin/assassin` starts the `assassin` command with the arguments given from the checkout's own virtual environment, creating the environment and installing the package editable on first use, so no Python setup is needed beforehand.

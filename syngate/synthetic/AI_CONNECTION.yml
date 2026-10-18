@@ -1,6 +1,6 @@
 ---
 parents: [SYNTHETIC]
 order: 30
-review: ef25e95d242a5d2bf2664a7ea93b439623675b9e381a80e273ac71babf57b86c
+review: 810e4b27970f31bad32e58718d6a721db6ee5f1ca4c6c49eb88bf53587be8153
 ---
 AI connection: provider-neutral connectors carrying a prompt to an AI provider and its reply back

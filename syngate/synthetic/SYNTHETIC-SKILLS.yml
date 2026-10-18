@@ -1,6 +1,6 @@
 ---
 parents: [SYNTHETIC-PROMPTS]
 order: 10
-review: 32a8c1709d826a3c31d36638ddb33aeaeb89bf968230fffa92736c9334468dd9
+review: 3f9b76a96b4e4fc4f4a1912f7363a93c76694048bcf71ec917ed8674abe229fc
 ---
 A skill shall be a named description the harness adds to the context, a default skill as part of the default prompt and any other on request through the skill tool

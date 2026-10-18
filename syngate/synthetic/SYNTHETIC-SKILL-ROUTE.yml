@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 25
 sources: [src/ai_scratcher/prompts/route.md]
-test: ~
+test: 0a01d69ba4f301f4b303d866c942b854fb8141342a4f894667247275dba842dc
+review: 4346411a61c00ff7ab314c65bd995c5d4bb0378e98b7bd9cd306470a5761ffa7
 ---
 Task routing skill
 is a default skill telling the turn to carry a request for a change to the item whose context fits it best — the anchored item, an item of its seed context or one the exchange names by `@UID` — adding a new item for it first where no item states it yet, and to hand the task on to that item with an agent call, keeping it only when the fit is the anchored item itself.

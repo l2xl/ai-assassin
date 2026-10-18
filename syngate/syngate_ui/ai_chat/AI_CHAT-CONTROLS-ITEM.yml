@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-CONTROLS]
 order: 20
-test: {marks: ~, selection: ~}
+test: {marks: 342c3036bf0e39d0b9db3d7285958e0db3861796a440f95fc791e2a9e6372dbf, selection: 3d69c487381d2312ee529a244620abb54992af6cdc4508757c9a4cddf32ed70a}
+review: fa327396ddf442c9d1f0a0f3aa7371597ee89fe7e0090952fe54d5d833890c0d
 ---
 Item extraction marks
 of a message make its kept text a new child of the anchored item or its next sibling through the editor's own add, a leading heading mark stripped, the chat staying as it is and the outline flashing the new row.

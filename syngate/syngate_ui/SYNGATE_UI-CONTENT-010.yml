@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-CONTENT]
 order: 10
-test: ~
+test: c11b277277e91809443df4fa03af37a39d1a1f064ddf55a4a681a7eaa45c6459
+review: 2d64168911c38c3606ef02525f39362f8e2843b36f7650279bfed92c57173e89
 ---
 Block label
 is the common item label at the left end of the block's top border, as the section's heading, without a title and without a menu.

@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 55
-test: ~
+test: 3a42233dc162eb99ffed1c6e4243c68d042fc37b69c4ca951a409bbeadca0d70
+review: 68ae350efb30d18569ebeb69a30a8964494374787ef33182e11bcf9f6e50801c
 ---
 Tree file denial
 by the Claude Code connector disallows `Read`, `Edit` and `Write` under syngate/ in every call mode, a shell command reading there refused the same way, so a turn reads and changes the tree only through tree calls.

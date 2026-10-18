@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-CONTENT]
 order: 50
-test: {read: ~, save: ~}
+test: {read: 1ac1690d01a56e1a3a9b7b7fcea642782d5baf4422062718579703dbe7edbffa, save: 71f4e74c51452a2be7b08c22f0ed646988fe571813b0922a2a12910bbc469f05}
+review: 0af21575cd6aa226a45a54537e0a40fb216a4ba9ef10005109efab7f53f03789
 ---
 File view
 opens a file linked from an item inline, served only from inside the project.

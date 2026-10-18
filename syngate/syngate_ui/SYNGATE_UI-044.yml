@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI]
 order: 60
-test: ~
+test: b1cd686d3705247cf78a4efc0769282fa3a6b9e2a8f14d7b318a036ab680bf17
+review: 2c05e59e9c2aeea143b1d3f93c7be853ac0b7c8ab3a571d80ee01a9b2286caeb
 ---
 Feature-off affordances
 are none: with the test feature off the page shows no test fill in the status icon, no test details and no binding editor in the status popup; with the review feature off no review glyph and no review or clear run — while a test run stays offered whichever way the switches sit.

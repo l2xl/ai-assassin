@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-TREE]
 order: 50
-test: ~
+test: a481fb75a6f64bc3c7824883378ac705e2cd88808d1eac11edc337ed27e4120d
+review: e097048270b52b9dcdbc8bdb845cac25b4ba71faa473d4f9b7e6dbc740e8121e
 ---
 Row double click
 activates the row's content block and scrolls to it unless it is already in view.

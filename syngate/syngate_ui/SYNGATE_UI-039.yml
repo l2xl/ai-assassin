@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI]
 order: 80
-test: ~
+test: 035036b55f6140fe6d3f94a1ac82b1099ae6b5c0290ebc6ce87e2815de06230b
+review: 6bf4a7e8c24cc2e484a89d4ab6aacc3b6cefe344cbb422903b1afddc4ac21036
 ---
 Review clearing
 follows an edit of a reviewed item's statement, parents or bindings in the page, dropping its stamp and reverting its routine shas.

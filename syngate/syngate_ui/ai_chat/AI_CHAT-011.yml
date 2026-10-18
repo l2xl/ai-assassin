@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT]
 order: 50
-test: ~
+test: 33ac95bc7e424fe47e2d7662235f2983640f6241b8ee930641ac83deeb1f3ce9
+review: 46f8631536bb9624ff413b7aae51bea815a948e665c6a48938deba96305536eb
 ---
 Permission switches
 of the chat follow the setup pill on the block's border: the harness's own Tree edit permission first, then the call modes the chosen connector lists, each with its label, hint and default state, the ones a connector marks advanced gathered in the drop down list; the switched-on ones go with every turn of the chat.

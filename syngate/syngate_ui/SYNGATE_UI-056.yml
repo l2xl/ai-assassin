@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-CONTENT]
 order: 30
-test: {click: ~, enter: ~}
+test: {click: 7c4bdb382ceca62b9d5c5f0517a9e1874d23604bc0cdb7ae1ca237cd57ab6247, enter: c9b81b3adb093252dd2c0bf1c3fcda27dc11d43b8df9176212b1422a0eb5034c}
+review: 623ca0a14bfda2c666db6c210d69d8edc7c3bcb21fbf2e69a122c29e879c408c
 ---
 Block click
 turns the block into its description editor, as Enter does on the selected block or row; a click that ends a text selection leaves the rendered view as it is.

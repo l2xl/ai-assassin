@@ -1,7 +1,10 @@
 ---
 parents: [SYNGATE_UI-042]
 order: 10
-test: {stream: ~, single_flight: ~, branch: ~, reattach: ~, cancel: ~}
+test: {stream: 6012329e8b930175cd6b11a3d7a63e2536bbe9e05b895b596c5caa3ff8e12a57, single_flight: efb399b59bf5b8f31b9480acb6df3a89a0c814fc20fa3ddfbc03eeadae395d26,
+  branch: 9e80c54fc3ce62ce5320610b7bf4c859edd17eae4e8600d8004d057679cc3bb0, reattach: b54edfbc3fb2efb6548f817a56fdf0c321f4bc9e223f3c83a8806b27896f9160,
+  cancel: 59ab9248b4a496e62d0084f79378b93826840f20b9d784f2ecc9843ae039ca53}
+review: 131b43b08bf4435b26fb781ae6024913121efe1feded99bd6065f043baa1dfb2
 ---
 Run actions
 of the status popup start the test, review or clear command for the item — review and clear only while the review feature is on, clear only on a reviewed item — streaming the output into the console until the command exits, where a run can be stopped and a reloaded page re-attaches to the running one.

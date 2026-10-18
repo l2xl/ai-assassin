@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI]
 order: 85
-test: ~
+test: 743bdd69bf62e537884f63db565e89e1225598c8a52e818ac90258bb737fc323
+review: 7397e5339a7bbe03de1cc1189df7ba20ba0e5a4b70da6b5a7dfc5eb190ff79be
 ---
 Item file management
 by the page creates a new item file under a chosen parent and removes the file of a childless item.

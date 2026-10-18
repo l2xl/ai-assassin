@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-TREE-020]
 order: 20
-test: ~
+test: 7a65b3e0444dbadae13879aefdf9207d22324b1cf5a0e042874dea2fd8f6fa6d
+review: 88da94b4627b83a30beb14f1ef69327a4d4a5501f0a6d694d404a235cce6430c
 ---
 Add child action
 opens the new-UID row under the item with a UID suggested from its siblings; Enter creates the item and opens its editor, Esc cancels.

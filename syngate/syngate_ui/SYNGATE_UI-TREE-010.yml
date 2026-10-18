@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-TREE]
 order: 10
-test: ~
+test: cef4028dedfc3292fb62bd8aa59c37ae04d399d0a2ac2cb31d53dcae91d0f7c5
+review: f6f81500ba6dd13a93c4f55dc9b02e7d77103184a752c06b0d8e1e8cfba2821b
 ---
 Row composition
 is, left to right: the collapse mark of a branch or the dot of a leaf, the common item label, the chat state mark, the title and the ⋯ menu button, nothing else.

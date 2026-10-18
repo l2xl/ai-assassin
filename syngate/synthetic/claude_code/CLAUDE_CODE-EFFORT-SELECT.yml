@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-010]
 order: 10
-test: ~
+test: 88308e60d8797b99667403e997a578cac92df43e5cdf0d005b853dd9f5a47ae3
+review: 806a175756cb46f215b1dffa1a765cd707a93800524353de9377d912dd6bae7f
 ---
 Claude effort selection
 offers every model the effort levels `low`, `medium`, `high`, `xhigh` and `max`

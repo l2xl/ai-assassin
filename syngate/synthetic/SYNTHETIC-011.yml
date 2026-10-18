@@ -1,7 +1,7 @@
 ---
 parents: [SYNTHETIC]
 order: 20
-test: dd18e495034f4628f89995f6af6bc9d34d234dbf98f8eb1b0a2f18c80c6e8d30
-review: 53a74a1d006d523f73aa366a17072747d6aaa43ce4a74e9bdeb107bcbb593ef2
+test: 4e5b31ecd1f96c9d0ff52e2099b0e2e69f9cdcb83f9da902af7495e10a652ca6
+review: 0c0473e4423448f977d7ed4b4fbf4b9718d8a43098857bf04be9645e0131a1db
 ---
 An AI query shall select the connection, the exact model and the effort

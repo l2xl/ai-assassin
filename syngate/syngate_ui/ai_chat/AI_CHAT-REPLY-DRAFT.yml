@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-070]
 order: 20
-test: ~
+test: 522f6e596b2e327a2af14e9511e4504065117accc6ad29f97dc80c32abc9f4a1
+review: d630bb729bbe2e5a3974ec9b15be8092ae3d995a96fdc51d08084e11227ee249
 ---
 Draft during a turn
 stays editable in the reply line while the AI answers, its send refused until the turn ends.

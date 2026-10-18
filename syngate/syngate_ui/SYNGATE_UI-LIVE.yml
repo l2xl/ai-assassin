@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI]
 order: 90
-test: ~
+test: 9b70c6b490b8cc1ed96403e5198a74cf3c6b878d0c5bc42c1e4829e457883fe4
+review: 52ba910dd7204433f0d4cc07e19bd64e9d1e2aa68dd06019940c3b692944fe9c
 ---
 Live tree
 is re-read by the page within a couple of seconds of any change to an item file, a coverage file or an opened project file on disk — by the agent's tree calls, git, an IDE or another tab — the selection, the open editor, the shown chats and the typed drafts surviving the re-read.

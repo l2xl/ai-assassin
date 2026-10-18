@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE, AI_CHAT-PERMISSION-EDIT]
 order: 20
 test: 32c372545b714b6b60e29d227e12bb5964d455073724c6f2f8c8ef0b94d3e1a5
-review: 15bd0d0ca930434b4aa925eb1dec713cd03e85231230606292f96617afae5cd1
+review: 75d05fc23411069635d554dc13d43d9bd07365540e16e4a34ecaa3b465ad4920
 ---
 Project edit mode
 instructs the Claude Code connector to call `claude` with permission to edit the project's files without prompting.

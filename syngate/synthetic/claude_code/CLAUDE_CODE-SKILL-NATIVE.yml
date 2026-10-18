@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 140
-test: ~
+test: cafd0c24177e75bed5de7c6ed105aa0f8389fc531a115191e9c90acfb517f373
+review: 00a2679051865a45f5087bdaf52a60e1117612cd21dfdb24abb37fd905e30b77
 ---
 Claude Code skill delivery
 writes every skill on request of the library as a Claude Code skill, a `SKILL.md` whose front matter carries the skill's name and description over its text, into a temporary plugin folder given to the CLI with `--plugin-dir`.

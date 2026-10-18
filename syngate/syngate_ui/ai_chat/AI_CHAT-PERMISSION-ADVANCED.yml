@@ -1,6 +1,7 @@
 ---
 parents: [AI_CHAT-011]
 order: 70
+review: 8a0f586d850032167a8c4c06353334cbee091f46e9a2cf580908c3ae29305984
 ---
 Advanced permission drop down list
 of the chat is one `advanced` pill gathering the switches a connector marks advanced, each listed only while the chosen connector lists its mode, the pill lit while any of them is on and absent for a connector listing none.

@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-PROMPTS-SKILLS]
 order: 30
-test: ~
+test: e8b7fb87b726e3c9e96652c4fe259ea899448723f304f82407669865305a1d61
+review: 42e94aba426a48efffe1c016bb8566489d67eabe817217f0c1d3d57a178ed494
 ---
 Delivery skill
 is a default skill telling the turn that a task adding or rewording items is a task on the project, carried into it in the same turn the way the tree's test switch sets.

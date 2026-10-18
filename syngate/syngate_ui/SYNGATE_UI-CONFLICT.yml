@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-032]
 order: 10
-test: ~
+test: 2f96474a3458983b82d1fad96a77c270d9837a6f90b4a77314fa18ab5108f55d
+review: 8b6011d3ffdeb131d9e8bad94feab8798de23f5536947e43e037b62d7a5fac81
 ---
 Edit conflict bar
 appears under the header when a save is refused for a value changed on disk and offers keep mine, which stores the typed text over the disk value, and take theirs, which drops the draft and shows the disk value; the header meanwhile reads the save state — unsaved, saving, saved at a time, or failed with a click to retry — and the edited block carries the same mark.

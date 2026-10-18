@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI-TREE]
 order: 40
-test: ~
+test: 475479d865e589af4742e0478959fb9be43306c517a55f63222c358ea1e9c364
+review: 65e349cb85d6352526610b0686e4d632adf0cd735c3c49b4a25e02282f479f30
 ---
 Row single click
 selects the row without activating or scrolling to its content block, an editor open elsewhere staying open.

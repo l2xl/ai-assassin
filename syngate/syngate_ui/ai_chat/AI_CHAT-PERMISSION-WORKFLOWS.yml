@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-PERMISSION-ADVANCED]
 order: 30
-test: ~
+test: 474734e5faf7a42290583cccff69e06eed653e4393067662ab2052694201ddbb
+review: e03ee148a57f502c86a6e4004aced7158b11805fdc817455734213286761456b
 ---
 Workflows permission
 switch of the chat is off by default and lets the connector run workflow scripts.

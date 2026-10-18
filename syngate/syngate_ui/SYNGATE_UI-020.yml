@@ -1,7 +1,9 @@
 ---
 parents: [SYNGATE_UI]
 order: 20
-test: {csp: ~, render: ~, problems: ~}
+test: {csp: 698205a8dce4dd7b2abb59b65648d64bd21dc441f44f4b908dff0ca493997dc3, render: c49d2026f0aa9157463a1203cf8a98da9209d914e866826562d75c0bd71908f4,
+  problems: 843960a8025e468b47d52d9e77467ec00167072cfbf810623b52e265e91bccfc}
+review: abe4530535138201f2df98cb4058b2157701f73147e2151cd83aa96aab568ff4
 ---
 Browser rendering
 builds the whole item tree in the page from the served tree model, the page running only its own nonced script.

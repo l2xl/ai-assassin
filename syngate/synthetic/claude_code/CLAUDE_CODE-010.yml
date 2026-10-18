@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 10
-test: 5fd4de5c64749516501f81d94f35b164b5592cc825d3fa2595f71d0ab5b474e8
-review: 7276f8b42858c8166ba45c9bd805c3acfd95fd6db9847dbb96b5b33bdc95d4dc
+test: c929197d5f8c9a6f98be61cc75f7c53d77013b6dc5168b25cab1652f9fe129e3
+review: 37ba47fb993345d446af116afd38447d20952138e130dd1173d18c21bdfa1713
 ---
 Model and mode listing
 of the Claude Code connector answers a query for its available models and call modes

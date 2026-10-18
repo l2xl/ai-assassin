@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-060]
 order: 10
-test: {api: ~, header: ~}
+test: {api: 9bfa4565b461e73e3da505a4d751afca498d3b6a1e92896d11dde773a32dfd73, header: d4b15fa5f0f86ce304f21048e63e9f85065d737a7289fd62b240cb53a56c4f6d}
+review: a1d306d67396d63ea4a4cdd54d081ef6b023844ae5557a63eaf0d6224906056e
 ---
 Turn cost line
 closes the activity header of every reply with the turn's wall time and, when the connector reports them, its cost and token counts; a turn without steps still shows the line.

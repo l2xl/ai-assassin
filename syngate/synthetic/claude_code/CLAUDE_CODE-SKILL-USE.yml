@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 150
-test: ~
+test: c7a12dd0d3550cd1417d74fb835d1d6ad5be85526926fc6d9ec31d00739d0ddd
+review: 3edec3b19f6d42939be67f78a920604b9a9b3a00f48a831582139b9f5623b11d
 ---
 Native skill use
 shows the underlying model calling a skill that reached the CLI only through the library argument: a turn run in an empty folder, with no project prompt files, whose message asks for what the skill describes calls the `Skill` tool with the skill's name and answers with the marker only the skill's text holds.

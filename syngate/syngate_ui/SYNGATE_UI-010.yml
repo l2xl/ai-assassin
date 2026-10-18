@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE_UI]
 order: 10
-test: ~
+test: f943e902042aec12eb948ae9c1b699110204d5e2c806c57da8db5528d1c48088
+review: 2620c592a0dbef5e227afc7b98d76b88d4f6ebb185bcd49286f14a397a61b087
 ---
 Local UI server
 is the ui command serving the page and its API on a loopback port, refusing every request without the session token or with a non-loopback host.

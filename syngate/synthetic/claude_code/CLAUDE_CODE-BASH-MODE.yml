@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE, AI_CHAT-PERMISSION-BASH]
 order: 45
-test: ~
+test: 1ed724c2e614e7be17cfaf51d5ae4a81d1f3bd75825e7b40a60391426e74e851
+review: 8f9fbe17c17f757ccc29762bae8e96f49053f463eb4c1cbd2cb8bfd6fe89ca3e
 ---
 Raw command mode
 instructs the Claude Code connector to call `claude` with its shell tool allowed without prompting.

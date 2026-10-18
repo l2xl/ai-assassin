@@ -1,7 +1,9 @@
 ---
 parents: [AI_CHAT]
 order: 20
-test: {send: ~, done: ~, refusal: ~}
+test: {send: 332bf7a314ed8383e6af4aea4bac5101e94b00704a5d13f1aec5c7015647964c, done: 2edd0de52d573671b2b900a28616358aeae71e124f0ad25bf46447ea7454d6bf,
+  refusal: 2e0fa3533fbf3bd5c4605e3faeda430a275dce8df68ceeda1218356c2807e9a4}
+review: d77365fe0eba072cda6d55724b121d75a7198d4c9066b3ddcbdd6ed9bfb219ee
 ---
 Description editor
 of an item is where its chat starts: entering the editor shows the chat and its controls, so the setup is chosen before the text is saved or sent; the `✓ done` pill and Esc save the statement and leave, hiding a chat the editor opened that holds no message.

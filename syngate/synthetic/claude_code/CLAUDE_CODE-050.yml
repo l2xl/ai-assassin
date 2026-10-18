@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 50
-test: d2f61ec75372560bcf595e5560b3fdf19d12b59d713ba4325546e28eced66063
-review: b81d78d658747d30bf21d17e02ff625f87707dbb4f6fac6c6d6505c872ab6d96
+test: 39040313aa6c059ced66213bfea6fdc9ddba90511c1124e34a171c9475a7fd80
+review: c676f2139cff2cd2288e373c9abc871f713afdd61fbe0253a45042a724f77207
 ---
 Seed context delivery
 by the Claude Code connector goes as the appended system prompt of the turn.

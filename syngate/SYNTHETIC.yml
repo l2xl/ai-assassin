@@ -2,6 +2,7 @@
 parents: [AI-SCRATCHER]
 order: 60
 sources: [src/ai_scratcher/synthetic.py]
+review: 67935cbe9ce964f0ca22c6901bce4ebac7711c269683445068f17f8306d48552
 ---
 Synthetic AI-agent library:
 [SYNTHETIC.md](SYNTHETIC.md)

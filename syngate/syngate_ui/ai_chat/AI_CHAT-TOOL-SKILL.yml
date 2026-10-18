@@ -1,7 +1,7 @@
 ---
 parents: [AI_CHAT-PROMPTS-TOOLS]
 sources: [src/ai_scratcher/prompts/skill.md]
-test: 451ec2e4f62c0dbec17d29e0695ae34b4861e58753e4db643ec27f061b78457d
-review: 07b514be65ba2abbe27dd1238f918a1633ca0822ecc0deb74f0ee63714bd94e4
+test: 092520157c99c158d976cd77e7f12c7fc562800a0b318b165347a9d7a4f95c85
+review: 36083f16b2044b8eb619c6fce735a8ae17649c42dc58497024476c8ff1238494
 ---
 The skill tool shall bring the named skill's text back as the next prompt of the same session, the way a query's result does, an unknown name being refused

@@ -1,6 +1,7 @@
 ---
 parents: [CLAUDE_CODE-010]
-test: ~
+test: 1d2354bbcf4d33938de2a32860bf6818ad3a1b6a33c1534d8c56e892dc19a6bc
+review: 7ceb6319db67de064713c568533854d658408143f006d73e8b118a2b9d3bff86
 ---
 Claude model selection
 offers the Claude Code model aliases `fable`, `opus`, `sonnet` and `haiku` without version suffix

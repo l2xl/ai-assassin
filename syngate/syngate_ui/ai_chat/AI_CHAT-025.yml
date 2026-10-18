@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT]
 order: 60
-test: ~
+test: 76686a068d7d254238ab119d12921e0c811bb4d6fe6b34b391e62b51a8435b35
+review: c7a98bbcf57f2ab9e94da73a25dbaf720dcccab649a82f7edddf262c1242972e
 ---
 Message styles
 switch one thing between the roles: the user's messages read as the description, left on the panel background and shown as typed; the AI's replies sit right, highlighted and rendered.

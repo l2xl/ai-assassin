@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-TOOLS]
 order: 40
 sources: [src/ai_scratcher/prompts/git.md, src/ai_scratcher/gitlib.py]
-test: {run: ~, offer: ~}
+test: {run: 20dfbca7e87f6c650705ec1b5fb03160f3150bf590c78cf84ce1498d22a42c6d, offer: 9e4ce0b9ca8f8646514a0393798531aae62f4f87306651c0eb30496995b6a3a6}
+review: 31f0e8d982b8a63d434c74500e66a3d0973225be0331b5be4cb15c69267250d1
 ---
 Git tool
 runs one git command line of an answer — `{"tool": "git", "command": "log --oneline -5"}` — in the project root without a shell, its exit status and output coming back as the next prompt, and is offered to a turn only while the `git` command finds a work tree around the project root.

@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-STATUS-POPUP]
 order: 20
-test: ~
+test: 858439cc4de8e5f538b72569c6c862e5f338085967fafc6afcb4b2dc6004ed1c
+review: 254f52d9cd1d535300b9ba8139afae3b26b198d670c98d6b3d9801cff73e3846
 ---
 Commit action
 of the status popup, `⎇ Commit with AI`, is offered while git is at hand and the project holds uncommitted changes and sends the commit request as a turn of the item's chat, the review action standing disabled with `commit first: N files` while the item's review footprint holds any of them.

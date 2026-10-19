@@ -1,7 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 170
-test: ~
+test: 37b842c5d51980a45d77173d04a9c58f53bfecb157a1b7afa3b16c9e8b8c89df
+review: 1c78ddcc31f13815c6fe2a38f65ac3c99600e3a6290f53be1d324ee160f7966e
 ---
 Subagent run indicator
 of a subagent running on another item is a link that jumps to that item's block.

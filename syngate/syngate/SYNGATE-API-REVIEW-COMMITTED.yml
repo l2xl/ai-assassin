@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-API-REVIEW]
 sources: [src/ai_scratcher/gitlib.py]
-test: ~
+test: 00a9a150f145ae4a27ab204cbf9870add87dc2afe9c76bd8b7b38798348e3460
+review: fb0fab9e6c93d6161df1fb0dd436f1ebd4d190045b7bb6b36a20487279f51219
 ---
 Committed review footprint
 is what `syngate review` stamps over in a git work tree: an item whose footprint holds an uncommitted change — modified, staged or untracked — is refused, the files named.

@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-TOOLS]
 order: 30
 sources: [src/ai_scratcher/assassin_ui.py, src/ai_scratcher/synthetic.py]
-test: ~
+test: 8e728c68c70e4062bcdbdb09b7d9364058195328acb0f04b0fc1630b0ad72cd4
+review: 0b64ac3c95db9d058f2c9564a47d08f9bb3ab0cecfa93ee0f1283dc60da5ada1
 ---
 Background agent call
 starts the child's turn without awaiting it when the call carries `background: true`: the call is answered at once with the started turn, the parent turn goes on and may end while the child runs, and the child's report then joins the parent's chat as an agent message and heads the parent's next message to the model.

@@ -2,8 +2,8 @@
 parents: [ASSASSIN-UI-STATUS-POPUP]
 test: {stream: 6688ed21f67bf80728a0376c1f7581274dde019ef90b401cf284aa23f5215db8, single_flight: 24a9da20bff2ed5cac6ad259f795479c75219fbf2d5c13a72f4efffed8d51242,
   branch: 00b270135e0cbed4eabbdfc6812e60137405b3a248f76c49485daedf4d125d13, reattach: b36b83aec98b2fd7885ad5984eea224e7eb55e047c4963d535c6f44e87ffcf75,
-  cancel: 731fa264b0839b69c21e243ed49b6f63ceb6ffd7f2b8314911b6cde2780830b6, pending: ~}
-review: fd4e001bbaefd1ec8d8ec623a4ed052f89e77dc6e23f8bd643ef3dcceab62906
+  cancel: 731fa264b0839b69c21e243ed49b6f63ceb6ffd7f2b8314911b6cde2780830b6, pending: bbfe964d62aa33ee69379dda882854ed8dbd9f611c352efcd9ed47d995274b2f}
+review: 943a2c6720fec18ef9752c3cbd094d586a80662420ca3bd1f1e0da36368aaa2b
 ---
 Run actions
 of the status popup start the test, review or clear command for the item — review and clear only while the review feature is on, clear only on a reviewed item — streaming the output into the console until the command exits, where a run can be stopped and a reloaded page re-attaches to the running one.

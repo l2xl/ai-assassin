@@ -1,6 +1,7 @@
 ---
 parents: [ASSASSIN-UI-STATUS-POPUP-RUN]
-test: {single: ~, several: ~}
+test: {single: 56429745f4938f4a9b45f0f689a2e0fffb1850437ae12a44a814d4c9b0157f45, several: 9c9d63567b1e60cb3955c5afbae90d236f841323fe9d10d00d5cb2d74dc4f8b4}
+review: 9167bc76aa8418ab640270751182cf22ac25b8cdcc76aa29666ba0f445f04448
 ---
 Review commit
 closes a review run of the page in a git work tree, committing the item files the run stamped and nothing else: as `Review: <subject>` when exactly one commit lies since the last review commit, else with the message the AI formulates in a turn of the reviewed item's chat.

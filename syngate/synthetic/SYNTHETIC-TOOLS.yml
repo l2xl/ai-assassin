@@ -1,7 +1,7 @@
 ---
 parents: [SYNTHETIC-PROMPTS]
 order: 20
-review: 0c1f939d6e22d42174cb189434b56be8d532b957f886b4d35986f09903802ebd
+review: 5650d0273f57e5a2cb78c1fa995b84fced075594f554650e2c5950140c13eadd
 ---
 A tool shall define the calls — their names and fields — an answer may carry to have the harness execute a command
 

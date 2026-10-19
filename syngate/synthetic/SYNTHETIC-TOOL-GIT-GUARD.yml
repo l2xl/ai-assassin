@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOL-GIT]
-test: {command: ~, option: ~}
+test: {command: 1be692b2dca856de349fccad3999336add3c1bb5efd4839c62dc4db958855745, option: 8e8fd4cff84a1ede9570abf00c98a40e01db796f02a6b94fcb80e5301d85aa14}
+review: 90434db9ff4f690308d9a6ae4356da68c97f3935a404fa8d465e59ad6df6f430
 ---
 History guard
 of the git tool runs only the reads and the records it lists, refusing any other command, an option ahead of the command and every option that discards, rewrites or deletes what git holds, in any abbreviation or bundle git accepts.

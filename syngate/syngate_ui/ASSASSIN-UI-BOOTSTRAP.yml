@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI]
+order: 5
+test: ~
+---
+Auto project bootstrap
+runs when the `assassin` command starts on a project without a `syngate/` folder or without any item file in it, creating the folder in the project root with a root item named after the project, so the page opens on an outline whose root's chat starts the dialog.

@@ -1,0 +1,9 @@
+---
+parents: [SYNGATE-API-REVIEW]
+sources: [src/ai_scratcher/gitlib.py]
+test: ~
+---
+Committed review footprint
+is what `syngate review` stamps over in a git work tree: an item whose footprint holds an uncommitted change — modified, staged or untracked — is refused, the files named.
+
+The footprint is the item files, key sources and linked project files of the item's seed context — its ancestors, itself and its descendants — and the files of the routines bound to it and to the items below it.

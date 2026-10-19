@@ -113,7 +113,7 @@ file named by `SYNGATE_COVERAGE_FILE` (no emission when unset).
 
 # CLI (`syngate`)
 
-The tree calls (`add` / `edit` / `move` / `delete`) are one line each over the core functions in
+The tree calls (`add` / `edit` / `move` / `rename` / `delete`) are one line each over the core functions in
 `syngatelib`; the AI Assassin UI and the Synthetic harness drive those same functions, so the command line
 is their genuine spelling rather than a second implementation.
 
@@ -128,6 +128,11 @@ is their genuine spelling rather than a second implementation.
   links and place the item among its siblings: `--from` names the link to re-point when the item
   has several, `--link` adds `--to` as one more parent instead of re-pointing, and a `--from` that
   is a parent while `--to` already is another drops the `--from` link.
+- `syngate rename <UID> <NEW_UID>` — give an item a new UID: its file takes the new stem in its
+  folder and every child's parent link follows it in place, a UID already taken — by an item or by a
+  file of that stem, an unparsable one included — refusing it. The stamps of its parents and
+  children move with it, dropped with `--clear-review`; test tags, coverage records and statements
+  naming the old UID are left as they are.
 - `syngate delete <UID>` — remove a childless item's file.
 - `syngate query <UID>` — print the item as the AI reads it back: description, parents, sources,
   children in sibling order and kind, as JSON.
@@ -147,7 +152,11 @@ is their genuine spelling rather than a second implementation.
   binding that can't be run at all (ambiguous, unresolved, or not built) blocks stamping. `syngate clear
   <UID>` removes the stamp (and reverts shas to `~`). Takes `--coverage-out` like `test`. Both are
   refused while the tree's review feature is off; with the test feature off, `review` stamps
-  childless items without running anything.
+  childless items without running anything. In a git work tree `review` stamps only over committed
+  content: an item is refused, the files named, while its **review footprint** — what its statement
+  is built from: the item files, key `sources` and linked project files of its seed context (its
+  ancestors, itself and its descendants), and the files of the routines bound to it and to the items
+  below it — holds a change git has not committed, modified, staged or untracked alike.
 - `syngate validate [--coverage FILE …] [--strict]` — structural validation + frozen-routine checks
   (+ coverage join when given files; `--strict` requires every item reviewed). CI entry:
   Open Trader's `ci/gate.sh` (bootstraps `.venv-syngate` with this package; `GATE_STRICT=1` adds `--strict`).
@@ -200,7 +209,9 @@ Coverage gaps are deliberately not item problems: an unrun binding already rolls
   a user-approved `syngate clear` + re-review.
 - **Two-commit re-approval** (`check_self_approval.py`, Open Trader CI `approval` job): a commit that
   changes an item's approval may neither change the item's substance nor touch any file under the
-  test trees.
+  test trees. In a git work tree the review keeps it by construction: the footprint is committed
+  before `review` stamps, and the page commits the stamps alone right after (the review commit,
+  [ASSASSIN_UI.md](ASSASSIN_UI.md#the-common-item-label-and-the-status-popup)).
 - **CI flow** (Open Trader `.github/workflows/validate.yml`): build → ctest (emits
   `build-ci/syngate_coverage.jsonl`, uploaded as `syngate-coverage-cpp`) → syngate job: `gate.sh`,
   pytest (emits `pytest-coverage.jsonl`), coverage join via `gate.sh --coverage …`, `syngate report`,

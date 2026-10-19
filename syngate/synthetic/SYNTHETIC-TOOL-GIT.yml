@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-TOOLS]
+order: 40
+sources: [src/ai_scratcher/prompts/git.md, src/ai_scratcher/gitlib.py]
+test: {run: ~, offer: ~}
+---
+Git tool
+runs one git command line of an answer — `{"tool": "git", "command": "log --oneline -5"}` — in the project root without a shell, its exit status and output coming back as the next prompt, and is offered to a turn only while the `git` command finds a work tree around the project root.

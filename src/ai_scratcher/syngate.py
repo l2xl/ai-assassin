@@ -5,7 +5,7 @@
 
 """Synergy Context Gate (syngate) CLI: the genuine spelling of every tree call.
 
-add / edit / move / delete are the tree mutations, each one line over the core
+add / edit / move / rename / delete are the tree mutations, each one line over the core
 call in syngatelib; AI Assassin and the Synthetic harness reach those same functions.
 `query` and `context` read an item back the way the AI does: its fields and
 children, and the seed context an AI call anchored at it is formed from.
@@ -24,7 +24,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import syngatelib, synthetic
+from . import gitlib, syngatelib, synthetic
 
 
 def _load_or_die():
@@ -73,6 +73,13 @@ def cmd_move(args):
         written = syngatelib.move_item(items, args.uid, args.to, before=args.before, source=args.source,
                                        link=args.link, clear=args.clear_review)
         return f"{args.uid}: under {', '.join(items[args.uid].parents)}" + (f" -- rewrote {', '.join(written)}" if written else " -- already placed")
+    return _mutate(run)
+
+
+def cmd_rename(args):
+    def run(items):
+        written = syngatelib.rename_item(items, args.uid, args.new_uid, clear=args.clear_review)
+        return f"renamed {args.uid} to {args.new_uid}" + (f" -- rewrote {', '.join(written[1:])}" if written[1:] else "")
     return _mutate(run)
 
 
@@ -215,7 +222,7 @@ def _expand_uids(items, uid_args, selectable, kind):
     return [uid for uid in selected if not (uid in seen or seen.add(uid))], errors
 
 
-def _review_one(items, structural, discovered, uid, build_dir, recording):
+def _review_one(items, structural, discovered, uid, build_dir, recording, uncommitted=frozenset()):
     own = [e for e in structural if e.startswith(f"{uid}:") and "reviewed stamp" not in e and "no stamped routine sha" not in e]
     if own:
         for line in own:
@@ -224,6 +231,10 @@ def _review_one(items, structural, discovered, uid, build_dir, recording):
     item = items.get(uid)
     if item is None:
         print(f"unknown UID '{uid}'", file=sys.stderr)
+        return False
+    blocked = sorted(uncommitted & syngatelib.review_footprint(items, uid, discovered)) if uncommitted else []
+    if blocked:
+        print(f"{uid}: uncommitted changes in its review footprint, commit them first: {', '.join(blocked)}", file=sys.stderr)
         return False
     resolved, unresolved = _resolve(item, discovered, item.tests) if item.is_leaf else ({}, {})
     passed, unrun = _run_bound({uid: resolved}, build_dir) if not unresolved else (False, {})
@@ -255,8 +266,9 @@ def cmd_review(args):
         return 1
     structural = syngatelib.validate_structure(items)
     discovered = syngatelib.discover_bindings()
+    uncommitted = gitlib.uncommitted(syngatelib.ROOT) if gitlib.at_hand(syngatelib.ROOT) else set()
     with _Recording(args.coverage_out) as recording:
-        failed = [uid for uid in uids if not _review_one(items, structural, discovered, uid, args.build_dir, recording)]
+        failed = [uid for uid in uids if not _review_one(items, structural, discovered, uid, args.build_dir, recording, uncommitted)]
     if failed:
         print(f"review: {len(failed)}/{len(uids)} item(s) not stamped: {' '.join(failed)}", file=sys.stderr)
         return 1
@@ -425,6 +437,10 @@ def main():
     p.add_argument("--from", dest="source", help="the parent link to re-point, or -- with --to another parent -- the link to drop")
     p.add_argument("--link", action="store_true", help="add --to as one more parent instead of re-pointing")
     p.set_defaults(func=cmd_move)
+
+    p = mutation("rename", "give an item a new UID, its file and its children's parent links following it")
+    p.add_argument("new_uid")
+    p.set_defaults(func=cmd_rename)
 
     p = mutation("delete", "remove a childless item")
     p.set_defaults(func=cmd_delete)

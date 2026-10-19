@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-GIT]
+order: 10
+test: ~
+---
+Tree path guard
+of the git tool refuses `mv` and `rm` of a path under `syngate/` or holding it, and any glob or pathspec magic among their paths, so the items change only through tree calls.

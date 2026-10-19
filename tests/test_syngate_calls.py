@@ -151,6 +151,41 @@ def test_delete_removes_a_childless_item_only_and_unsettles_the_parent_it_left(s
         syngatelib.delete_item(items, "LEAF-001")
 
 
+@pytest.mark.syngate("SYNGATE-API-RENAME", "tree")
+def test_rename_moves_the_file_in_its_folder_and_every_childs_parent_link_and_refuses_an_unknown_invalid_or_taken_uid(cli, syngate_tree):
+    run, syngate_dir = cli
+    _, make_item = syngate_tree
+    make_item(syngate_dir / "sub", "A", "It shall be renamed.\n", parents=("ROOT",))
+    make_item(syngate_dir, "B", "It shall stay.\n", parents=("ROOT",))
+    make_item(syngate_dir, "C", "It shall follow.\n", parents=("A", "B"))
+    items = syngatelib.load_tree(syngate_dir)[0]
+    for uid in ("ROOT", "A", "C"):
+        _stamped(items, uid)
+    assert syngatelib.review_problems(items) == []
+    (syngate_dir / "sub" / "TAKEN.yml").write_text("parents: [ROOT\n")  # unparsable: absent from the tree, yet never overwritten
+    files = lambda: {path: path.read_text() for path in syngate_dir.rglob("*.yml")}
+    before = files()
+    for uid, new_uid in (("NOPE", "NOPE-2"), ("A", "a-2"), ("A", "B"), ("A", "A"), ("A", "TAKEN")):
+        with pytest.raises(syngatelib.unknown_uid if uid == "NOPE" else syngatelib.tree_error):
+            syngatelib.rename_item(items, uid, new_uid)
+    assert files() == before and sorted(items) == ["A", "B", "BRANCH", "C", "LEAF-001", "ROOT"]
+    (syngate_dir / "sub" / "TAKEN.yml").unlink()
+
+    text = (syngate_dir / "sub" / "A.yml").read_text()
+    assert syngatelib.rename_item(items, "A", "A-2") == ["A-2", "C"]
+    assert not (syngate_dir / "sub" / "A.yml").exists() and (syngate_dir / "sub" / "A-2.yml").read_text() == text
+    items, errors = syngatelib.load_tree(syngate_dir)
+    assert errors == [] and syngatelib.layout_problems(items) == [] and items["C"].parents == ["A-2", "B"]  # the other link keeps its place
+    assert [uid for uid, _ in syngatelib.review_problems(items)] == ["C", "ROOT"]  # the item's own stamp holds no UID and stands
+    for uid in ("ROOT", "C"):
+        _stamped(items, uid)
+    syngatelib.rename_item(items, "A-2", "A-3", clear=True)
+    assert (items["ROOT"].reviewed, items["C"].reviewed, bool(items["A-3"].reviewed)) == (None, None, True)
+    assert syngatelib.review_problems(syngatelib.load_tree(syngate_dir)[0]) == []
+    assert run("rename", "A-3", "A-4") == 0 and _stored(syngate_dir, "C")["parents"] == ["A-4", "B"]
+    assert run("rename", "A-4", "B") == 1 and (syngate_dir / "sub" / "A-4.yml").is_file()
+
+
 @pytest.mark.syngate("SYNGATE-API-TEST")
 def test_a_run_addresses_the_test_bearing_items_below_and_runs_whichever_way_the_switch_sits(monkeypatch, tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree

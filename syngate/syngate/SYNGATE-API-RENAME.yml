@@ -1,0 +1,10 @@
+---
+parents: [SYNGATE-API]
+order: 25
+sources: [src/ai_scratcher/assassin_ui.py]
+test: {tree: ~, chat: ~}
+---
+Rename node
+gives an item a new UID: its file takes the new stem in its folder and every child's parent link follows it, an unknown item and an invalid or taken UID being refused, and the AI chat anchored at the item goes on under the new UID.
+
+A rename of an item whose chat runs another turn is refused. Test tags, coverage records and statements naming the old UID are left as they are, for the AI session to carry over on the user's instruction.

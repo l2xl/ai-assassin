@@ -425,8 +425,8 @@ def test_the_answer_schema_carries_every_tool_call_and_the_structured_output_is_
     assert schema == synthetic.ANSWER_SCHEMA and schema["properties"]["kind"]["enum"] == ["text", "calls"]
     shapes = {shape["properties"]["tool"]["const"]: shape["required"] for shape in schema["properties"]["calls"]["items"]["anyOf"]}
     assert shapes == {tool: ["tool", *fields] for tool, fields in synthetic.CALLS.items()}
-    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"} and set(synthetic.DELEGATIONS) == {"agent"}
-    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS) | set(synthetic.DELEGATIONS)
+    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"} and set(synthetic.DELEGATIONS) == {"agent"} and set(synthetic.GITS) == {"git"}
+    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS) | set(synthetic.DELEGATIONS) | set(synthetic.GITS)
     structured = tmp_path / "structured_stub.py"
     structured.write_text(STUB_STRUCTURED)
     answer, session = synthetic.claude_code_connector(cli=(sys.executable, str(structured)), cwd=tmp_path).dispatch("", "Go.")
@@ -673,6 +673,47 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
     connection.answers = [calls({"tool": "agent", "uid": "@", "prompt": "Me"}), {"kind": "text", "text": "Alone then."}]
     itself = app.turn_snapshot(app.start_turn({**setup, "uid": "ROOT", "text": "Delegate to yourself."})["turn"], wait=5)
     assert itself["reply"] == "- agent ROOT refused: the anchored item runs this turn — delegate to another item or do the work in this turn\nAlone then."
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-AGENT-BACKGROUND")
+def test_a_background_agent_call_is_answered_at_once_the_parent_turn_ends_while_the_child_runs_and_its_report_heads_the_next_message(tmp_path, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=())
+    make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
+    setup = {"connector": "scripted", "model": "model-a", "effort": "low", "modes": ["tree"]}
+    hold = {"tool": "agent", "uid": "LEAF-001", "prompt": "Hold"}
+    calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
+
+    assert synthetic.parse_reply(calls({**hold, "background": True}))[0] == "calls"
+    with pytest.raises(synthetic.protocol_error, match="background"):
+        synthetic.parse_reply(calls({**hold, "background": "yes"}))
+    shapes = synthetic.ANSWER_SCHEMA["properties"]["calls"]["items"]["anyOf"]
+    assert next(shape for shape in shapes if shape["properties"]["tool"] == {"const": "agent"})["properties"]["background"] == {"type": "boolean"}
+
+    app.connectors = {"scripted": (connection := DelegatedConnection(calls({**hold, "background": True}), {"kind": "text", "text": "Carry on."},
+                                                                      {"kind": "text", "text": "Next answered."}))}
+    started = app.start_turn({**setup, "uid": "ROOT", "text": "Start it."})
+    outcome = app.turn_snapshot(started["turn"], wait=5)
+    line = "- agent LEAF-001: started in the background (turn LEAF-001:1)"
+    assert outcome["reply"] == line + "\nCarry on." and connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + line
+    assert app.chats["LEAF-001"].running and not app.chats["LEAF-001"].turn.stopped and not app.chats["ROOT"].running
+    assert app.chats_snapshot()["chats"]["ROOT"]["agents"] == [{"uid": "LEAF-001", "turn": "LEAF-001:1"}]
+
+    connection.release.set()
+    assert _awaited(lambda: app.chats["ROOT"].reports)
+    kept = app.chats_snapshot()["chats"]["ROOT"]
+    assert "agents" not in kept and kept["log"][-1] == {"role": "ai", "agent_report": "LEAF-001", "text": "Held.", "steps": []}
+    report = "Report of the background subagent @LEAF-001:\nHeld.\n\n"
+    assert app.chats["ROOT"].reports == [report]
+
+    app.save_chats()
+    again = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
+    assert again.chats["ROOT"].reports == [report]  # an unreported report survives a restart
+
+    assert app.turn_snapshot(app.start_turn({**setup, "uid": "ROOT", "text": "Next."})["turn"], wait=5)["reply"] == "Next answered."
+    assert connection.prompts[2] == (report + "Next.", "session-2") and app.chats["ROOT"].reports == []
+    assert [m["text"] for m in app.chats["ROOT"].log if m["role"] == "user"] == ["Start it.", "Next."]  # the log keeps what the user typed
 
 
 STUB_AWAITED = """

@@ -87,11 +87,13 @@ LIBRARY = load_prompts()
 SKILLS = {name: entry for name, entry in LIBRARY.items() if entry.kind == "skill"}
 PROMPTS = {**{name: entry.text for name, entry in LIBRARY.items()}, DEFAULT_PROMPT: default_prompt(LIBRARY)}
 CALL_BLOCK_RE = re.compile(r"```syngate[ \t]*\n(.*?)\n[ \t]*```", re.DOTALL)
-TOOLS = {"add": ("uid", "description"), "edit": ("uid",), "remove": ("uid",), "move": ("uid", "to")}
+TOOLS = {"add": ("uid", "description"), "edit": ("uid",), "remove": ("uid",), "move": ("uid", "to"), "rename": ("uid", "new_uid")}
 QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
 RUNS = {"test": ("uid",)}
 DELEGATIONS = {"agent": ("uid", "prompt")}
-CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS}
+GITS = {"git": ("command",)}
+CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS}
+GIT_TOOL = "git"
 EDITABLE = ("description", "sources", "tests")
 QUERY_ROUNDS = 8
 RUN_TAIL = 40
@@ -197,6 +199,16 @@ def is_delegation(call):
     return call["tool"] in DELEGATIONS
 
 
+def is_git(call):
+    return call["tool"] in GITS
+
+
+def offered_library(git, library=None):
+    """The library a turn is offered: the git tool only while git is at hand for the project."""
+    library = LIBRARY if library is None else library
+    return library if git else {name: entry for name, entry in library.items() if name != GIT_TOOL}
+
+
 def run_report(items, targets, records, output=()):
     """The outcome of a run as the AI reads it back: one line per addressed leaf binding -- `targets` being (uid, binding|None),
     None standing for every binding of the leaf -- with pass/fail, a binding without a record having failed, then the captured
@@ -265,6 +277,8 @@ def parse_reply(reply, known=CALLS):
         missing = [name for name in known[tool] if not (isinstance(call.get(name), str) and call[name].strip())]
         if missing:
             raise protocol_error(f"{tool}: missing {', '.join(missing)}")
+        if "background" in call and not isinstance(call["background"], bool):
+            raise protocol_error(f"{tool}: background must be true or false")
         if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip())
                                    or any(isinstance(call.get(field), list) for field in ("sources", "tests"))):
             raise protocol_error(f"edit: missing {' or '.join(EDITABLE)}")
@@ -281,7 +295,7 @@ def apply_call(items, anchor, call, syngate_dir=None):
     rather than a silently unreviewed item."""
     at = lambda value: anchor if value == "@" else value
     tool, uid = call["tool"], at(call.get("uid"))
-    if tool in RUNS or tool in DELEGATIONS:
+    if tool in RUNS or tool in DELEGATIONS or tool in GITS:
         raise syngatelib.tree_error(f"{tool} runs through the page's harness, not against the tree")
     if tool == "skill":
         if call["name"] not in SKILLS:
@@ -305,6 +319,9 @@ def apply_call(items, anchor, call, syngate_dir=None):
     if tool == "remove":
         syngatelib.delete_item(items, uid)
         return f"- removed {uid}"
+    if tool == "rename":
+        syngatelib.rename_item(items, uid, call["new_uid"])
+        return f"- renamed {uid} to {call['new_uid']}"
     if tool != "move":
         raise syngatelib.tree_error(f"{tool} is not a call of the tree")
     source, target, link = at(call.get("from")), at(call["to"]), bool(call.get("link"))

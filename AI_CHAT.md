@@ -70,7 +70,8 @@ the hint, one click switching the mode and closing the menu. The switched-on one
 turn of the chat, the tree permission to the harness, the rest to the connector. Which permissions
 there are, their defaults, what each allows and how a refused call reads are the children of the
 permission switches item. Reading the tree — query and context — is the rail the harness runs on
-and is never a permission.
+and is never a permission, and neither is git, the project's change tracking carrier: its tool is
+limited by its guard alone.
 
 ## Messages
 
@@ -153,6 +154,16 @@ last turn failed, a dim mark for a hidden chat; a hidden chat's `▾` carries th
 - **Subagents reach their items.** A subagent anchored at a child item — explicitly, through the
   `agent` tool, or by the `@UID` convention of an implicit one — is also shown in that item's chat
   as an agent message with its collapsed transcript, an implicit one once the turn ends.
+- **Running subagents are links.** Every subagent still running on a known item other than the
+  chat's own — an agent step without report in the live activity, or a background one — shows as
+  an indicator `.agent-run` (spinner and `@UID`) closing the activity; it is a link that jumps to
+  that item's block (`AI_CHAT-AGENT-LINK`), and so is the `@UID` of an agent step's line.
+- **Background subagents leave the chat free.** An `agent` call marked `background` does not hold
+  the parent turn ([SYNTHETIC.md](SYNTHETIC.md)): once the turn ends, the chat shows no `■ stop`
+  and sends (`AI_CHAT-AGENT-BACKGROUND`), while a header `N background subagents running` with
+  the indicators stays under the log. A background subagent is stopped in its own item's chat; the
+  server lists the running ones as `agents` of the chat. The report of one that ended joins the
+  log as an agent message `report of @UID` with its collapsed transcript.
 
 ## History
 

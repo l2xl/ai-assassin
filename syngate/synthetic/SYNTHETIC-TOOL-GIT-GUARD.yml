@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-GIT]
+test: {command: ~, option: ~}
+---
+History guard
+of the git tool runs only the reads and the records it lists, refusing any other command, an option ahead of the command and every option that discards, rewrites or deletes what git holds, in any abbreviation or bundle git accepts.

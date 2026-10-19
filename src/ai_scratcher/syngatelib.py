@@ -97,6 +97,8 @@ BODY_FIELDS = ("header", "description")  # the legacy spelling of the body; refu
 FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)^---[ \t]*(?:\n|\Z)", re.DOTALL | re.MULTILINE)
 FEATURES = ("test", "review")
 SWITCH = {"enabled": True, "disabled": False}
+LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
+SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 
 PY_TEST_DIRS = ("scripts/tests", "tests")
 CPP_TEST_DIRS = ("test",)
@@ -1023,6 +1025,31 @@ def move_item(items, uid, to, before=None, source=None, link=False, clear=False)
     return sorted(written)
 
 
+def rename_item(items, uid, new_uid, clear=False):
+    """Give `uid` the UID `new_uid`: its file takes the new stem in its folder and every child's parent link follows it in place,
+    a file of that stem already there -- an unparsable item included -- refusing it. The stamps of its parents and children move
+    with it; its own holds no UID and stands. -> the UIDs written, the renamed one first."""
+    item = _addressed(items, uid)
+    if not UID_RE.match(new_uid or ""):
+        raise tree_error(f"'{new_uid}' is not a valid UID")
+    if new_uid in items:
+        raise tree_error(f"{new_uid} already exists at {items[new_uid].path}")
+    path = item.path.with_name(f"{new_uid}.yml")
+    if path.exists():
+        raise tree_error(f"{path} already exists")
+    kids = [items[child] for child in sorted(children_map(items)[uid])]
+    item.path.rename(path)
+    del items[uid]
+    item.uid, item.path, items[new_uid] = new_uid, path, item
+    for kid in kids:
+        kid.parents = [new_uid if parent == uid else parent for parent in kid.parents]
+        if clear and kid.reviewed:
+            clear_review(kid)
+        write_item(kid)
+    _settle(items, item.parents, clear)
+    return [new_uid, *(kid.uid for kid in kids)]
+
+
 def delete_item(items, uid, clear=False):
     """Remove a childless item's file. -> the path removed."""
     item = _addressed(items, uid)
@@ -1058,6 +1085,28 @@ def leaves_under(items, uid):
             leaves.append(node)
         stack.extend(reversed(sorted_children(items, children, node)))
     return leaves
+
+
+def linked_files(description):
+    """The project files a statement links: the targets of its markdown links that carry no scheme, without their fragment."""
+    targets = (target.partition("#")[0] for target in LINK_RE.findall(description) if not SCHEME_RE.match(target))
+    return [os.path.normpath(target) for target in targets if target]
+
+
+def review_footprint(items, uid, discovered, root=None):
+    """The root-relative files a review of `uid` stamps over: the item files, key sources and linked project files of its seed
+    context -- its ancestors, itself and its descendants -- and the files of the routines bound to it and to the items below it."""
+    root, files = Path(root or ROOT).resolve(), set()
+    for selected in walk(items, uid, descendants=True):
+        item = items[selected]
+        if item.path.resolve().is_relative_to(root):
+            files.add(item.path.resolve().relative_to(root).as_posix())
+        files.update(item.sources)
+        files.update(linked_files(item.description))
+    for under in items_under(items, uid):
+        for name in (items[under].tests or {}) if under in items else ():
+            files.update(location.path for location in discovered.get((under, name), []))
+    return files
 
 
 def items_under(items, uid):

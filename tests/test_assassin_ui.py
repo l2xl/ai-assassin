@@ -173,6 +173,34 @@ def test_requests_without_token_or_loopback_host_are_refused(server):
     assert status == 200  # EventSource cannot set headers; the query token is equivalent
 
 
+@pytest.mark.syngate("ASSASSIN-UI-BOOTSTRAP")
+def test_a_project_without_item_files_is_bootstrapped_with_a_root_item_named_after_it(tmp_path, monkeypatch):
+    project = tmp_path / "my-app"
+    project.mkdir()
+    (project / "README.md").write_text("An app.\n\n# My App\n\n## Usage\n")
+    monkeypatch.delenv("SYNGATE_ROOT", raising=False)
+    monkeypatch.chdir(project)
+    root = assassin_ui.bootstrap()
+    items, errors = syngatelib.load_tree(project / "syngate")
+    assert root == project.resolve() and errors == [] and list(items) == ["MY-APP"]
+    assert items["MY-APP"].parents == [] and items["MY-APP"].description == "My App\n\n[README.md](README.md)\n"
+    assert syngatelib.features(items) == {"test": False, "review": False}
+    assert assassin_ui.AssassinApp(root=root).build_model()["roots"] == ["MY-APP"]
+
+    bare = tmp_path / "2048"
+    (bare / "syngate").mkdir(parents=True)
+    assert assassin_ui.bootstrap(bare) == bare.resolve()
+    items, errors = syngatelib.load_tree(bare / "syngate")
+    assert errors == [] and list(items) == ["PROJECT"] and items["PROJECT"].description == "2048\n"
+
+    kept = tmp_path / "kept"
+    (kept / "syngate" / "area").mkdir(parents=True)
+    (kept / "syngate" / "area" / "BROKEN.yml").write_text("parents: [unclosed\n")
+    before = {path: path.read_bytes() for path in kept.rglob("*") if path.is_file()}
+    assert assassin_ui.bootstrap(kept) == kept.resolve()
+    assert {path: path.read_bytes() for path in kept.rglob("*") if path.is_file()} == before
+
+
 @pytest.mark.syngate("ASSASSIN-UI-REVIEW-CLEAR")
 def test_edit_of_a_stamped_field_clears_the_review(server, syngate_tree):
     base, app = server
@@ -1526,6 +1554,37 @@ def test_a_tree_call_answer_is_applied_to_the_tree_and_a_mixed_one_refused(serve
     assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "NEW-001", "NEW-003", "ROOT"]  # the refusal ended the batch and came back as the next prompt
 
 
+@pytest.mark.syngate("SYNGATE-API-RENAME", "chat")
+def test_a_rename_carries_the_items_chat_and_the_anchor_to_the_new_uid_and_is_refused_while_another_turn_of_the_item_runs(server, syngate_tree):
+    base, app = server
+    syngate_dir, _ = syngate_tree
+    batch = lambda *calls: "```syngate\n" + json.dumps(list(calls)) + "\n```"
+    gated = GatedConnector()
+    app.connectors = {"echo": CallsConnector(batch({"tool": "rename", "uid": "@", "new_uid": "TOP"}, {"tool": "query", "uid": "@"}), "Renamed."), "gated": gated}
+    setup = {"connector": "echo", "model": "model-a", "effort": "low", "modes": ["tree"]}
+    call(base, app, "/api/chat/ROOT", setup)
+    chat = app.chats["ROOT"]
+    call(base, app, "/api/turn", {**setup, "uid": "ROOT", "text": "Rename yourself."})
+    outcome = chat.turn.snapshot(wait=10)
+    assert (outcome["turn"], outcome["reply"]) == ("TOP:1", "- renamed ROOT to TOP\nRenamed.")  # the second round ran anchored at TOP
+    assert [step["lines"][1].split(": ", 1)[0] for step in outcome["steps"] if step["kind"] == "calls"] == ["- TOP"]  # so did the query after the rename
+    assert not (syngate_dir / "ROOT.yml").exists() and syngatelib.load_tree(syngate_dir)[0]["LEAF-001"].parents == ["TOP"]
+    chats = call(base, app, "/api/chats")[1]["chats"]
+    assert sorted(chats) == ["TOP"] and chats["TOP"]["uid"] == "TOP"
+    assert [(m["role"], m["text"]) for m in chats["TOP"]["log"]] == [("user", "Rename yourself."), ("ai", "- renamed ROOT to TOP\nRenamed.")]
+    app.save_chats()
+    stored = json.loads(app.chats_file.read_text())
+    assert sorted(stored) == ["TOP"] and [m["text"] for m in stored["TOP"]["log"]] == ["Rename yourself.", "- renamed ROOT to TOP\nRenamed."]
+
+    held = call(base, app, "/api/turn", {**setup, "connector": "gated", "uid": "LEAF-001", "text": "Hold on."})[1]["turn"]
+    app.connectors["echo"] = CallsConnector(batch({"tool": "rename", "uid": "LEAF-001", "new_uid": "LEAF-002"}), "Left as it is.")
+    status, result = call(base, app, "/api/chat", {**setup, "uid": "TOP", "text": "Rename the leaf."})
+    assert (status, result["reply"]) == (200, f"- rename LEAF-001 refused: a turn of LEAF-001 is running ({held})\nLeft as it is.")
+    assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "TOP"] and app.chats["LEAF-001"].running
+    gated.release.set()
+    assert call(base, app, f"/api/turn/{held}?wait=5")[1]["reply"] == "late reply to Hold on."
+
+
 @pytest.mark.syngate("ASSASSIN-UI-FEATURE-OFF")
 def test_a_feature_switched_off_has_no_affordances_on_the_page(server, chrome, syngate_tree):
     base, app = server
@@ -1664,6 +1723,68 @@ def test_while_a_turn_runs_the_hide_pill_is_a_stop_button_pressed_once_and_the_t
     calls = f"[...{LEAF}.querySelectorAll('.turn-activity > .turn-steps > .turn-step > .step-line')].find((line) => line.textContent.startsWith('calls'))"
     page.eval(f"{calls}.click()")
     assert page.eval(f"[{calls}.tagName, {calls}.textContent, {calls}.parentElement.querySelector('.step-detail .step-label').textContent]") == ["BUTTON", "callsquery", "read"]  # a read is not applied
+
+
+class BackgroundConnector(EchoConnector):
+    """Answers `Start` by launching a background subagent on ROOT, which holds on `Wait` until released; any other text is echoed."""
+
+    def __init__(self):
+        super().__init__()
+        self.release = threading.Event()
+
+    def dispatch(self, context, text, **kwargs):
+        if heard(text) == "Wait":
+            self.release.wait(10)
+            return {"kind": "text", "text": "Waited."}, "session-child"
+        if heard(text) == "Start":
+            return {"kind": "calls", "calls": [{"tool": "agent", "uid": "ROOT", "prompt": "Wait", "background": True}]}, "session-parent"
+        return super().dispatch(context, text, **kwargs)
+
+
+@pytest.mark.syngate("AI_CHAT-AGENT-BACKGROUND")
+def test_a_chat_whose_turn_ended_while_a_background_subagent_runs_shows_no_stop_pill_and_sends(server, chrome):
+    _, app = server
+    connector = BackgroundConnector()
+    page = open_chat(server, chrome, echo=connector)
+    pills = f"[Boolean({LEAF}.querySelector('.block-ai .chat-hide')), Boolean({LEAF}.querySelector('.block-ai .chat-stop')), Boolean({LEAF}.querySelector('.chat-pill.busy'))]"
+    send(page, "LEAF-001", "Start")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai') && {LEAF}.querySelector('.agent-run')")
+    assert app.chats["ROOT"].running and page.eval(pills) == [True, False, False] and page.eval(f"{LEAF}.getAttribute('aria-busy')") is None
+    assert page.eval(f"{LEAF}.querySelector('.chat-log > .turn-activity:last-child .turn-head').textContent.trim()") == "1 background subagent running"
+    send(page, "LEAF-001", "Again")
+    page.wait(f"{LEAF}.querySelectorAll('.chat-msg.ai').length === 2")
+    assert "|Again|" in page.eval(f"{LEAF}.querySelectorAll('.chat-msg.ai')[1].textContent") and app.chats["ROOT"].running  # the message went while the subagent ran
+
+    connector.release.set()
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai.agent-report') && !{LEAF}.querySelector('.agent-run')")
+    report = f"{LEAF}.querySelector('.chat-msg.ai.agent-report')"
+    assert page.eval(f"[{report}.querySelector('.msg-from').textContent, {report}.querySelector('.msg-part').textContent.trim()]") == ["report of @ROOT", "Waited."]
+
+
+class RunningAgentConnector(GatedConnector):
+    """Announces subagent steps still running on ROOT, on the chat's own item and on an unknown one before the gated answer."""
+
+    def dispatch(self, context, text, on_step=None, **kwargs):
+        for uid in ("ROOT", "LEAF-001", "NOPE-1"):
+            on_step({"kind": "agent", "uid": uid, "prompt": f"Check {uid}", "report": None, "steps": [], "at": 0.3})
+        return super().dispatch(context, text, on_step=on_step, **kwargs)
+
+
+@pytest.mark.syngate("AI_CHAT-AGENT-LINK")
+def test_the_run_indicator_of_a_subagent_on_another_item_is_a_link_jumping_to_that_item(server, chrome):
+    gated = RunningAgentConnector()
+    page = open_chat(server, chrome, echo=gated)
+    send(page, "LEAF-001", "Slow one")
+    page.wait(f"{LEAF}.querySelector('.turn-activity a.agent-run')")
+    runs = f"[...{LEAF}.querySelectorAll('a.jump.agent-run')].map((a) => [a.dataset.uid, a.textContent.trim(), Boolean(a.querySelector('.spinner'))])"
+    assert page.eval(runs) == [["ROOT", "@ROOT", True]]  # neither the chat's own item nor an unknown one
+    page.eval(f"{HEAD}.click()")
+    assert page.eval(f"[...{LEAF}.querySelectorAll('.turn-steps .step-line a.jump')].map((a) => a.dataset.uid)") == ["ROOT", "LEAF-001"]  # the step lines name their items alike
+    page.eval(f"{LEAF}.querySelector('a.agent-run').click()")
+    landed = "[state.selected, document.querySelector('#doc .block.selected')?.dataset.uid, document.activeElement.dataset.uid]"
+    assert page.eval(landed) == ["ROOT", "ROOT", "ROOT"]
+    gated.release.set()
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai') && !{LEAF}.querySelector('.agent-run')")
 
 
 class FlakyConnector(EchoConnector):

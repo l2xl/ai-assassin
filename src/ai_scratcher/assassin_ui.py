@@ -37,6 +37,7 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from . import gitlib
 from . import syngatelib
 from . import synthetic
 
@@ -56,11 +57,15 @@ FILE_LIMIT = 1 << 20
 CHATS_FILE = "assassin_chats.json"
 LEGACY_CHATS_FILE = "syngate_chats.json"
 WRITE_DELAY = 0.5
-# The harness's own permission, first among every connector's modes: whether a reply's add, edit, move and remove calls are
-# applied; its reads -- query, context, skill -- always are.
+# The harness's own permission, first among every connector's modes: whether a reply's add, edit, move, rename and remove calls
+# are applied; its reads -- query, context, skill -- always are.
 TREE_MODE = {"id": "tree", "label": "Tree edit", "hint": "add, edit, move and remove items; reading the tree stays on", "default": True, "advanced": False}
-TREE_OFF = "The tree is read-only for this chat: add, edit, move and remove are refused — answer in text and say what you would change."
+TREE_OFF = "The tree is read-only for this chat: add, edit, move, rename and remove are refused — answer in text and say what you would change."
 TREE_REFUSAL = "tree edits are off for this chat — switch Tree edit on"
+GIT_ABSENT = "git is not at hand for this project"
+# The request of the review commit's message, sent to the reviewed item's chat when no single commit names the review.
+REVIEW_MESSAGE = ("Formulate the commit message of the review that stamped {stamped}: answer in text with one line `Review: …` condensing what "
+                  "these commits since the last review commit changed, newest first:\n{subjects}")
 
 
 class ApiError(Exception):
@@ -91,13 +96,23 @@ def _call(run):
 
 
 class Job:
-    def __init__(self, job_id, argv):
+    """One run of the runner; `then`, given the job once its process exited, yields the lines of what closes the run -- a review
+    commit -- and the run stays live until it is done, the chat `turn` it awaits meanwhile stopped with the run."""
+
+    def __init__(self, job_id, argv, then=None):
         self.id = job_id
         self.argv = argv
+        self.then = then
+        self.turn = None
         self.lines = []
         self.returncode = None
         self.proc = None
         self.cond = threading.Condition()
+
+    def say(self, line):
+        with self.cond:
+            self.lines.append(line)
+            self.cond.notify_all()
 
     def snapshot(self):
         with self.cond:
@@ -217,10 +232,12 @@ class Chat:
         self.uid = uid
         self.turns = 0
         self.archive = []
+        self.background = []
         self.erase()
 
     def erase(self):
         self.log = []
+        self.reports = []
         self.session = None
         self.setup = {}
         self.turn = None
@@ -234,7 +251,7 @@ class Chat:
         if self.log:
             self.archive.append(self.conversation())
             self.archive.sort(key=lambda stored: stored["started"] or 0)
-        self.log, self.session, self.started = [], None, None
+        self.log, self.reports, self.session, self.started = [], [], None, None
 
     def resume(self, index):
         """The filed conversation `index` becomes the live one, with its setup, the live one filed in its place."""
@@ -272,11 +289,16 @@ class Chat:
     def snapshot(self):
         return {"uid": self.uid, "log": [dict(m) for m in self.log], "session": self.session, "started": self.started, **self.setup,
                 "archive": [self.summary(stored) for stored in self.archive], "turn": self.turn.id if self.running else None,
-                **({"steps": list(self.turn.steps)} if self.running else {})}
+                **({"steps": list(self.turn.steps)} if self.running else {}), **({"agents": agents} if (agents := self.agents()) else {})}
+
+    def agents(self):
+        """The background subagents of the chat still running: the item each runs on and its turn."""
+        return [{"uid": child.id.rpartition(":")[0], "turn": child.id} for child in self.background if child.outcome is None]
 
     def record(self):
         """The chat as it is kept across server runs: what is settled, never the turn in flight."""
-        return {"turns": self.turns, **self.conversation(), "archive": [dict(stored, log=[dict(m) for m in stored["log"]]) for stored in self.archive]}
+        return {"turns": self.turns, **self.conversation(), **({"reports": list(self.reports)} if self.reports else {}),
+                "archive": [dict(stored, log=[dict(m) for m in stored["log"]]) for stored in self.archive]}
 
     @classmethod
     def restore(cls, uid, record):
@@ -285,6 +307,7 @@ class Chat:
         chat.turns = turns if isinstance(turns, int) else 0
         live = cls._conversation(record)
         chat.log, chat.session, chat.setup, chat.started = live["log"], live["session"], live["setup"], live["started"]
+        chat.reports = [report for report in record.get("reports") or () if isinstance(report, str)]
         chat.archive = [cls._conversation(stored) for stored in record.get("archive") or () if isinstance(stored, dict) and isinstance(stored.get("log"), list)]
         return chat
 
@@ -315,12 +338,12 @@ class JobRunner:
         self._counter = 0
         self.current = None
 
-    def start(self, argv, cwd):
+    def start(self, argv, cwd, then=None):
         with self._lock:
             if self.current and self.current.returncode is None:
                 raise ApiError(409, f"a run is already in progress (job {self.current.id})")
             self._counter += 1
-            job = Job(self._counter, argv)
+            job = Job(self._counter, argv, then)
             try:
                 job.proc = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE,
                                             stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
@@ -332,10 +355,13 @@ class JobRunner:
 
     def _pump(self, job):
         for line in job.proc.stdout:
-            with job.cond:
-                job.lines.append(line.rstrip("\n"))
-                job.cond.notify_all()
+            job.say(line.rstrip("\n"))
         job.proc.wait()
+        try:
+            for line in job.then(job) if job.then else ():
+                job.say(line)
+        except Exception as err:
+            job.say(f"{type(err).__name__}: {err}")
         with job.cond:
             job.returncode = job.proc.returncode
             job.cond.notify_all()
@@ -376,6 +402,12 @@ class AssassinApp:
         self._chat_lock = threading.Condition()
         self._writer = None
         self.connectors = {name: connector(cwd=self.root) for name, connector in synthetic.CONNECTORS.items()}
+        self.detect_git()
+
+    def detect_git(self):
+        """Read once whether git is at hand for the project: it decides the library a turn is offered."""
+        self.git = gitlib.at_hand(self.root)
+        self.library = synthetic.offered_library(self.git)
 
     # -- model ------------------------------------------------------------
 
@@ -391,7 +423,13 @@ class AssassinApp:
             except OSError:
                 continue
             stat.update(f"{path}\0{meta.st_mtime_ns}\0{meta.st_size}\n".encode())
+        if self.git:
+            stat.update(gitlib.state(self.root).encode("utf-8", "surrogateescape"))
         return stat.hexdigest()
+
+    def _blocked(self, items, uids, discovered, uncommitted):
+        """The uncommitted files of the review footprints of `uids`."""
+        return sorted({path for uid in uids if uid in items for path in syngatelib.review_footprint(items, uid, discovered, self.root)} & uncommitted)
 
     def build_model(self):
         items, load_errors = syngatelib.load_tree(self.syngate_dir)
@@ -401,6 +439,9 @@ class AssassinApp:
         report = syngatelib.compute_status(items, records, problems)
         axes = syngatelib.compute_axes(items, records, problems)
         tree_errors = [message for uid, message in syngatelib.layout_problems(items) if uid is None]
+        uncommitted = gitlib.uncommitted(self.root) if self.git else set()
+        pending = self._pending(items, problems)
+        dirty = {uid: syngatelib.review_footprint(items, uid, discovered, self.root) & uncommitted for uid in pending} if uncommitted else {}
 
         payload = {}
         for uid, entry in report.items():
@@ -419,7 +460,8 @@ class AssassinApp:
                                 description_raw=item.description,
                                 path=str(item.path.relative_to(self.root)) if item.path.is_relative_to(self.root) else str(item.path),
                                 stamp_fresh=(syngatelib.item_stamp(items, uid) == item.reviewed) if item.reviewed else None,
-                                bindings=bindings)
+                                bindings=bindings,
+                                uncommitted=sorted(set().union(*(dirty[under] for under in syngatelib.items_under(items, uid) if under in dirty))))
 
         roots = sorted(uid for uid, item in items.items() if not item.parents)
         reachable, queue = set(), list(roots)
@@ -444,8 +486,15 @@ class AssassinApp:
             "build_dir": self.build_dir,
             "features": syngatelib.features(items),
             "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, *settings["modes"]]} for name, connector in self.connectors.items()},
+            "git": self.git,
+            "uncommitted": sorted(uncommitted),
             "job": job.id if job and job.returncode is None else None,
         }
+
+    @staticmethod
+    def _pending(items, problems):
+        """The items whose own review does not stand: unstamped, or with a validation problem of their own."""
+        return {uid for uid, item in items.items() if not item.reviewed or problems.get(uid)}
 
     # -- mutations --------------------------------------------------------
 
@@ -661,7 +710,9 @@ class AssassinApp:
             if not data.get("statement") and not data.get("retry"):
                 chat.log.append({"role": "user", "text": text, **({"agent": data["agent"]} if data.get("agent") else {})})
             turn = chat.next_turn(chat.setup.get("connector"), self._notify)
-            exchange = {"uid": uid, "text": text, "session": chat.session, "history": history, **chat.setup}
+            sent = "".join(chat.reports) + text if chat.session else text  # without a session the kept history carries the reports
+            chat.reports = []
+            exchange = {"uid": uid, "text": sent, "session": chat.session, "history": history, **chat.setup}
             started = self._changed(chat)
 
         def run():
@@ -678,7 +729,7 @@ class AssassinApp:
                             chat.session = outcome["session"]
                         role = "ai" if "error" not in outcome else "stopped" if turn.stopped else "error"
                         chat.log.append({"role": role, "text": outcome.get("error", outcome.get("reply")), **({"steps": list(turn.steps)} if turn.steps else {})})
-                        self._mirror(turn, uid)
+                        self._mirror(turn, chat.uid)
                         self._bump()
                 finally:
                     turn.finish(outcome)
@@ -697,6 +748,23 @@ class AssassinApp:
             if step["uid"] in items:
                 self._chat(step["uid"]).log.append({"role": "ai", "agent": turn.id, "prompt": step.get("prompt") or "", "text": step["report"],
                                                     "steps": list(step.get("steps") or ())})
+
+    def _rename(self, items, anchor, call, turn):
+        """Apply a rename call, refused while the item's chat runs a turn other than `turn`; the item's chat and its latest turn follow
+        it to the new UID. -> the line reporting it."""
+        uid = synthetic.call_target(anchor, call)
+        with self._chat_lock:
+            chat = self.chats.get(uid)
+            if chat and chat.running and chat.turn is not turn:
+                raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
+            line = _call(lambda: synthetic.apply_call(items, anchor, call, syngate_dir=self.syngate_dir))
+            if chat:
+                chat.uid = call["new_uid"]
+                self.chats[chat.uid] = self.chats.pop(uid)
+                if chat.turn:
+                    chat.turn.id = f"{chat.uid}:{chat.turn.id.rpartition(':')[2]}"
+                self._bump()
+            return line
 
     def _turn(self, key):
         """The turn `<UID>:<n>` addresses: the latest of its item's chat, readable until the next one starts."""
@@ -735,8 +803,10 @@ class AssassinApp:
         answer to correct it or to explain. The reply lists what was applied, ran or was reported; what was read stays in the steps.
         `history` is the kept part of an exchange whose session was dropped: it travels with the text of the first round.
         A `turn` stopped while a round is out ends the exchange there, what was applied so far staying applied.
+        A rename carries the item's chat to the new UID, and the exchange with it when the item is the anchor.
         The `tree` mode is the harness's own: without it the text is headed by `TREE_OFF`, the tree calls of a reply are refused and the
-        connector never sees the mode. The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
+        connector never sees the mode. A git call runs whatever the modes, through the git tool's guard, and comes back like a query's result.
+        The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
         modes = list(data.get("modes") or ())
@@ -757,8 +827,8 @@ class AssassinApp:
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
-                                                 data.get("effort"), modes=[mode for mode in modes if mode != "tree"], session=session, history=history,
-                                                 root=self.root, on_step=on_step, stopped=halted if turn else None)
+                                                 data.get("effort"), modes=[mode for mode in modes if mode != "tree"], session=session,
+                                                 history=history, root=self.root, on_step=on_step, stopped=halted if turn else None, library=self.library)
             except synthetic.query_error as err:
                 raise ApiError(400, str(err)) from None
             except synthetic.connection_error as err:
@@ -783,14 +853,27 @@ class AssassinApp:
                     continue
                 if halted():
                     raise stopped(results, payload, shown)
+                if synthetic.is_git(call):
+                    try:
+                        line, records = self._git(call)
+                    except ApiError as err:
+                        refusal = denied(f"git {call['command']}", err)
+                        break
+                    results.append(line)
+                    if records:
+                        shown.append(line)
+                    continue
                 if call["tool"] in synthetic.TOOLS and not tree:
                     refusal = denied(f"{call['tool']} {named(call)}", ApiError(403, TREE_REFUSAL))
                     break
+                renamed = named(call) if call["tool"] == "rename" else None
                 try:
-                    results.append(_call(lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir)))
+                    results.append(self._rename(items, uid, call, turn) if renamed else _call(lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir)))
                 except ApiError as err:
                     refusal = denied(f"{call['tool']} {named(call)}", err)
                     break
+                if renamed == uid:
+                    uid = call["new_uid"]
                 if not synthetic.is_query(call):
                     shown.append(results[-1])
             if runs and refusal is None:
@@ -816,16 +899,27 @@ class AssassinApp:
             batch_step(results, payload)
             applied += shown
             calls += payload
-            if refusal is None and not any(synthetic.is_query(call) for call in payload) and not runs and not delegations:
+            if refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) for call in payload) and not runs and not delegations:
                 return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
             text = synthetic.RESULTS_PREAMBLE + "\n".join(results)
         raise ApiError(422, "\n".join([*applied, "answer refused: the exchange kept querying"]), session=session)
 
+    def _git(self, call):
+        """Run a git call of an answer through the tool's guard. -> (the line telling its outcome, whether it records)."""
+        if not self.git:
+            raise ApiError(403, GIT_ABSENT)
+        try:
+            words, records = gitlib.guard(call["command"])
+        except gitlib.refused as err:
+            raise ApiError(403, str(err)) from None
+        return f"- git {call['command']}:\n{gitlib.run(self.root, words)}", records
+
     def _delegate(self, items, anchor, data, calls, turn, results):
         """Every agent call of a batch as a turn of its item's chat with the call's prompt, in the setup of `data` the call may override,
         all running in parallel and awaited -- a stop of the parent `turn` starts none more and stops the running ones. Each child's
-        report joins `results` and its transcript the parent's steps as an agent step; a child switches the `tree` mode on only when the
-        parent has it; -> (error, line) of the call refused, which starts none after it."""
+        report joins `results` and its transcript the parent's steps as an agent step; a call marked `background` is answered at once
+        instead and not awaited -- see `_watch`; a child switches the `tree` mode on only when the parent has it;
+        -> (error, line) of the call refused, which starts none after it."""
         started, refusal = [], None
         for call in calls:
             child = synthetic.call_target(anchor, call)
@@ -844,11 +938,16 @@ class AssassinApp:
             except ApiError as err:
                 refusal = (err, f"agent {child}")
                 break
-            step, shift = {"kind": "agent", "uid": child, "prompt": call["prompt"], "report": None, "steps": [], "at": 0}, turn.elapsed() if turn else 0
-            started.append((self._turn(key), step, shift))
+            step, shift, run = {"kind": "agent", "uid": child, "prompt": call["prompt"], "report": None, "steps": [], "at": 0}, turn.elapsed() if turn else 0, self._turn(key)
+            if call.get("background"):
+                step["report"] = f"started in the background (turn {key})"
+                results.append(f"- agent {child}: {step['report']}")
+                self._watch(self._chat(anchor), run)
+            else:
+                started.append((run, step, shift))
             if turn:
                 turn.add_step(step, shift)
-                turn.children.append(started[-1][0])
+                turn.children.append(run)
                 if turn.stopped:
                     self.stop_turn(key)
         for child, step, shift in started:
@@ -858,6 +957,25 @@ class AssassinApp:
                 turn.add_step(step, shift)
             results.append(f"- agent {step['uid']}: {step['report']}")
         return refusal
+
+    def _watch(self, parent, child):
+        """Let the `parent` chat go on without the running `child` turn: when the child ends, its report joins the parent's log as an
+        agent report message -- its transcript as the message's steps -- and waits in the chat's unreported reports to head the next
+        message sent to the model."""
+        with self._chat_lock:
+            parent.background.append(child)
+            self._bump(settled=False)
+
+        def report():
+            outcome = child.snapshot(wait=None)
+            uid, text = child.id.rpartition(":")[0], outcome.get("reply", outcome.get("error"))
+            with self._chat_lock:
+                parent.background.remove(child)
+                parent.log.append({"role": "ai", "agent_report": uid, "text": text, "steps": list(child.steps)})
+                parent.reports.append(f"Report of the background subagent @{uid}:\n{text}\n\n")
+                self._bump()
+
+        threading.Thread(target=report, daemon=True).start()
 
     def _run_calls(self, items, addressed, turn=None):
         """Every test call of a batch -- `addressed` being (uid, binding|None) -- as one run of the page's runner, awaited and held
@@ -885,7 +1003,7 @@ class AssassinApp:
         items = self._load()
         if action != "test" and not syngatelib.features(items)["review"]:
             raise ApiError(400, str(syngatelib.feature_off("review")))
-        argv = [*self.cli_prefix, action]
+        argv, then = [*self.cli_prefix, action], None
         if action == "clear":
             argv += uids
         else:
@@ -893,14 +1011,80 @@ class AssassinApp:
             targets = list(dict.fromkeys(target for uid in uids for target in under(items, uid)))
             if not targets:
                 raise ApiError(400, f"no leaf with a test under {', '.join(uids)}")
+            if action == "review":
+                targets, then = self._review_targets(items, uids, targets)
             argv += [*targets, "--build-dir", str(data.get("build_dir") or self.build_dir), "--coverage-out", str(coverage_out or self.run_coverage)]
-        job = self.jobs.start(argv, cwd=self.root)
+        job = self.jobs.start(argv, cwd=self.root, then=then)
         return {"job": job.id}
+
+    def _review_targets(self, items, uids, targets):
+        """(the `targets` a review stamps -- those whose own review does not stand, an unknown UID passing through for the CLI to judge --,
+        what closes the run: the review commit while git is at hand); refused when none needs review or, with git, while their review
+        footprints hold uncommitted changes."""
+        discovered = syngatelib.discover_bindings(self.root)
+        pending = self._pending(items, syngatelib.item_problems(items, discovered))
+        targets = [target for target in targets if target not in items or target in pending]
+        if not targets:
+            raise ApiError(400, f"nothing under {', '.join(uids)} needs review")
+        if not self.git:
+            return targets, None
+        blocked = self._blocked(items, targets, discovered, gitlib.uncommitted(self.root))
+        if blocked:
+            raise ApiError(409, f"commit first: {', '.join(blocked)}", files=blocked)
+        root = self.root.resolve()
+        paths = [items[target].path.resolve().relative_to(root).as_posix() for target in targets if target in items and items[target].path.resolve().is_relative_to(root)]
+        return targets, lambda job: self._review_commit(job, paths, uids[0])
+
+    def _review_commit(self, job, paths, uid):
+        """Close a review run in a git work tree: of the item files `paths`, clean when it started, those it stamped are committed alone,
+        as `Review: <subject>` of the one commit since the last review commit, else with the message the AI formulates in `uid`'s chat.
+        -> the lines the console ends with."""
+        stamped = sorted(set(paths) & gitlib.uncommitted(self.root))
+        if not stamped:
+            return ["review commit: nothing was stamped"]
+        left = f"the stamps of {', '.join(stamped)} are left uncommitted"
+        if job.proc.returncode < 0:
+            return [f"review commit: the run was stopped, {left}"]
+        subjects = gitlib.since_review(self.root)
+        message = f"Review: {subjects[0]}" if len(subjects) == 1 else self._review_message(job, uid, subjects, stamped)
+        if message is None:
+            return [f"review commit: no message came from the chat of {uid}, {left}"]
+        made, output = gitlib.commit(self.root, stamped, message)
+        return [f"review commit{'' if made else ' failed'}: {line}" for line in output.splitlines() or [message]]
+
+    def _review_message(self, job, uid, subjects, stamped):
+        """The review commit's message, formulated by the AI in a turn of `uid`'s chat the `job` holds, so the run's cancel stops it;
+        its reply's line opening with `Review`, else its last line so prefixed. None when the turn cannot start, fails or is stopped."""
+        listed = "\n".join(f"- {subject}" for subject in subjects[:30]) or "- (none: the stamped items were committed before the last review commit)"
+        text = REVIEW_MESSAGE.format(stamped=", ".join(Path(path).stem for path in stamped), subjects=listed)
+        try:
+            job.turn = self._turn(self.start_turn({**self._setup(uid), "uid": uid, "text": text, "agent": "review"})["turn"])
+        except ApiError:
+            return None
+        outcome = job.turn.snapshot(wait=None)
+        lines = [line.strip() for line in str(outcome.get("reply") or "").splitlines() if line.strip()]
+        if "error" in outcome or not lines:
+            return None
+        line = next((line for line in lines if gitlib.REVIEW_RE.match(line)), lines[-1])
+        return line if gitlib.REVIEW_RE.match(line) else f"Review: {line}"
+
+    def _setup(self, uid):
+        """The setup of a turn the harness starts in `uid`'s chat: the chat's own, else the first connector's default one."""
+        chat = self.chats.get(uid)
+        if chat and chat.setup.get("connector") in self.connectors:
+            return dict(chat.setup)
+        name, connector = next(iter(self.connectors.items()))
+        settings = connector.settings()
+        default = settings.get("default") or {}
+        return {"connector": name, "model": default.get("model") or settings["models"][0]["id"], "effort": default.get("effort") or next(iter(settings["efforts"]), None),
+                "modes": [mode["id"] for mode in [TREE_MODE, *settings["modes"]] if mode.get("default")]}
 
     def cancel_job(self, job_id):
         job = self.jobs.get(job_id)
         if job is None:
             raise ApiError(404, f"no such job {job_id}")
+        if job.turn is not None and job.turn.outcome is None:
+            self.stop_turn(job.turn.id)
         threading.Thread(target=self.jobs.cancel, args=(job,), daemon=True).start()
         return {"ok": True}
 
@@ -1084,8 +1268,32 @@ def make_server(app, port=DEFAULT_PORT):
     return server
 
 
+def bootstrap(root=None):
+    """The managed project root -- `find_root`'s, else the working directory -- whose `syngate/`, while it holds no item file, gets one
+    root item named after the project: the first `# ` heading of its README.md, else the folder's name, over a link to the README, both
+    features off."""
+    try:
+        root = syngatelib.find_root(root)
+    except FileNotFoundError:
+        root = Path.cwd().resolve()
+    syngate_dir = root / "syngate"
+    if any(syngate_dir.rglob("*.yml")):
+        return root
+    uid = re.sub(r"[^A-Z0-9_]+", "-", root.name.upper()).strip("-")
+    uid = uid if syngatelib.UID_RE.match(uid) else "PROJECT"
+    readme = root / "README.md"
+    lines = readme.read_text(encoding="utf-8", errors="replace").splitlines() if readme.is_file() else ()
+    title = next((line[2:].strip() for line in lines if line.startswith("# ")), "") or root.name
+    link = "\n\n[README.md](README.md)" if readme.is_file() else ""
+    item = syngatelib.Item(uid=uid, path=syngate_dir / f"{uid}.yml", description=f"{title}{link}\n", parents=[])
+    syngate_dir.mkdir(parents=True, exist_ok=True)
+    syngatelib.write_item(item)
+    print(f"assassin: bootstrapped {item.path.relative_to(root)}, the root item of {root}")
+    return root
+
+
 def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_browser=True, root=None):
-    root = syngatelib.find_root(root)
+    root = bootstrap(root)
     coverage = list(coverage) or [str(Path(root) / name) for name in DEFAULT_COVERAGE if (Path(root) / name).is_file()]
     app = AssassinApp(root=root, coverage=coverage, build_dir=build_dir)
     try:
@@ -1119,7 +1327,7 @@ def main():
     parser.add_argument("--coverage", action="append", default=[], help="syngate_coverage.jsonl file(s) to color statuses; repeatable (default: well-known local files)")
     parser.add_argument("--build-dir", default=DEFAULT_BUILD_DIR, help="build tree the test runner uses for test and review runs")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
-    parser.add_argument("--root", help="managed project root (default: SYNGATE_ROOT, else the nearest ancestor of the working directory holding syngate/)")
+    parser.add_argument("--root", help="managed project root (default: SYNGATE_ROOT, else the nearest ancestor of the working directory holding syngate/, else the working directory)")
     args = parser.parse_args()
     return serve(port=args.port, coverage=args.coverage, build_dir=args.build_dir, open_browser=not args.no_browser, root=args.root)
 

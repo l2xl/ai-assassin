@@ -1,0 +1,7 @@
+---
+parents: [AI-CHAT]
+order: 160
+test: ~
+---
+Background subagent chat
+stays free while only background subagents run: no turn of the chat is running, so the stop pill and the busy state are absent and a new message is sent.

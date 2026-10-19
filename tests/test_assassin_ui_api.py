@@ -17,6 +17,7 @@ import urllib.error
 import pytest
 
 import assassin_ui
+import syngatelib
 import synthetic
 from test_assassin_ui import app, call, server  # noqa: F401 -- the server fixtures of the page tests
 
@@ -351,3 +352,18 @@ def test_a_cancelled_run_ends_with_its_whole_process_group_and_the_api_answers_b
     with pytest.raises(urllib.error.HTTPError) as crashed:
         call(base, app, "/api/tree")
     assert crashed.value.code == 500 and json.loads(crashed.value.read()) == {"error": "RuntimeError: boom"}
+
+
+@pytest.mark.syngate("ASSASSIN-UI-STATUS-POPUP-RUN", "pending")
+def test_a_review_run_stamps_only_the_items_whose_own_review_does_not_stand_and_is_refused_where_none_does(server, syngate_tree):
+    base, app = server
+    syngate_dir, _ = syngate_tree
+    standing = syngatelib.Item(uid="BRANCH-A", path=syngate_dir / "BRANCH-A.yml", description="Standing\n\nIt shall stand.\n", parents=["ROOT"])
+    standing.reviewed = syngatelib.compute_stamp(standing)
+    syngatelib.write_item(standing)
+    syngatelib.write_item(syngatelib.Item(uid="BRANCH-B", path=syngate_dir / "BRANCH-B.yml", description="Edited since\n\nIt shall move.\n", parents=["ROOT"], reviewed="b" * 64))
+    job = call(base, app, "/api/run", {"action": "review", "uids": ["ROOT"]})[1]["job"]
+    body = call(base, app, f"/api/job/{job}/events?token={app.token}", token=False, raw=True)[1].decode()
+    assert "stub: review BRANCH-B LEAF-001 ROOT --build-dir" in body  # BRANCH-A's stamp stands, BRANCH-B's no longer matches
+    status, refusal = refused(base, app, "/api/run", {"action": "review", "uids": ["BRANCH-A"]})
+    assert (status, refusal["error"]) == (400, "nothing under BRANCH-A needs review")

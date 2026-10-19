@@ -50,6 +50,25 @@ every leaf definition bound to a test frozen on approval, and an item's seed con
 session is seeded from. Open Trader is such a project, and so is this repository — its own items
 live under `syngate/` and its tests bind to them.
 
+# Git
+
+Git is the carrier of the project's change and evolution. Wherever the `git` command finds a work
+tree around the project root, AI Assassin records the evolution of the DAG and of what it describes
+as the project's history (`gitlib`); without one everything works as before, nothing of git offered.
+
+- **The AI reads and records the history through the git tool**, never through raw shell commands:
+  it reads anything, stages, commits and branches in every chat, no switch withholding it, and nothing
+  it may call erases or rewrites what git holds; publishing stays the user's act ([SYNTHETIC.md](SYNTHETIC.md)).
+- **Content commits are made with the AI.** The chat that made a change knows it best, so
+  `⎇ Commit with AI` of the status popup asks the item's chat to commit the uncommitted changes, the
+  AI condensing them into the message.
+- **A review approves committed content and is committed itself.** `syngate review` refuses an item
+  whose footprint — what its statement is built from — holds uncommitted changes
+  ([SYNGATE.md](SYNGATE.md)), and the page's review commits the stamps it wrote, alone, right after:
+  `Review: <subject>` of the one content commit it approves, or a message the AI formulates over
+  several ([ASSASSIN_UI.md](ASSASSIN_UI.md)). The history thus alternates content commits and the
+  review commits approving them, the two-commit re-approval the CI checks.
+
 # Install and run
 
 ```
@@ -65,7 +84,9 @@ application, `synthetic` harness, `check_self_approval`, `render_syngate_report`
 Toolkit tests: `pip install -e .` then `pytest`.
 
 **Managed project root**: `--root PATH` on any command, else the `SYNGATE_ROOT` environment
-variable, else the nearest ancestor of the working directory holding a `syngate/` folder. Test
+variable, else the nearest ancestor of the working directory holding a `syngate/` folder. `assassin`
+falls back to the working directory itself and, on a project without any item file, bootstraps
+`syngate/` with one root item named after the project ([ASSASSIN_UI.md](ASSASSIN_UI.md#the-server)). Test
 discovery scans `scripts/tests/` and `tests/` for pytest bindings and `test/` for Catch2 ones.
 
 # Contributing

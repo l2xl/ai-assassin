@@ -228,6 +228,9 @@ button.pill { appearance: none; line-height: 1.55; }
 .turn-head::after { content: " ▸"; } .turn-head[aria-expanded=true]::after { content: " ▾"; }
 .turn-head.bare { cursor: default; } .turn-head.bare::after { content: none; }
 .turn-activity .spinner, .pill .spinner { width: 0.8em; height: 0.8em; border-width: 1.5px; }
+.agent-runs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 0.9em; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; }
+.agent-run, .msg-from a.jump, .step-kind a.jump { color: var(--accent); text-decoration: none; cursor: pointer; }
+.agent-run:hover, .msg-from a.jump:hover, .step-kind a.jump:hover { text-decoration: underline; }
 .turn-steps { align-self: stretch; padding-left: 1.1rem; font-size: 0.8rem; }
 .step-line { display: block; width: 100%; overflow: hidden; padding: 0; border: none; border-radius: 0; background: none; text-align: left; color: var(--dim); white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
 .step-line:hover { color: var(--accent); }
@@ -949,7 +952,8 @@ function endDrag() {
 
 // A known item's UID written `@UID` (or the older `[UID]`) is a jump link to its block; the text is left as written, escaped already.
 const UID_TAG_RE = /\[([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\]|@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)(?![\w-])/g;
-const jumps = (html) => html.replace(UID_TAG_RE, (m, tagged, at) => state.model.items[tagged || at] ? `<a class="jump" data-uid="${tagged || at}">${tagged || m}</a>` : m);
+const uidLink = (uid) => (state.model.items[uid] ? `<a class="jump" data-uid="${esc(uid)}">@${esc(uid)}</a>` : "@" + esc(uid));
+const jumps = (html) =>html.replace(UID_TAG_RE, (m, tagged, at) => state.model.items[tagged || at] ? `<a class="jump" data-uid="${tagged || at}">${tagged || m}</a>` : m);
 const dirname = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 const slug = (text) => text.toLowerCase().replace(/<[^>]*>/g, "").replace(/&[a-z#0-9]+;/g, "").replace(/[^\w\- ]/g, "").trim().replace(/\s+/g, "-");
 
@@ -1070,13 +1074,29 @@ function statusLines(uid, it) {
 }
 
 // The popup: the status lines, the binding editor and test runs of a childless item, then the run actions.
+// While git is at hand the review waits for its footprint to be committed, and a commit is offered whenever the project holds changes.
 function popupHtml(uid, it) {
-  const n = leavesUnder(uid).length, own = leavesUnder(uid).includes(uid), below = descendants(uid).size;
+  const n = leavesUnder(uid).length, own = leavesUnder(uid).includes(uid), pending = pendingUnder(uid), below = pending.filter((u) => u !== uid).length;
+  const blocked = it.uncommitted || [], held = !pending.length ? "nothing here needs review" : blocked.length ? `commit first: ${blocked.join(", ")}` : "";
   return `<div class="status-lines">${statusLines(uid, it)}</div>` + (feature("test") && !it.children.length ? testsHtml(uid, it) : "")
     + '<div class="section-label">run</div><div class="run-actions">'
     + `<button data-run="test" ${n ? "" : "disabled"}>▶ ${own ? "Run test" : `Run tests of ${plural(n, "leaf item")}`}</button>`
-    + (feature("review") ? `<button data-run="review">👀 ${below ? `Mark reviewed with ${plural(below, "item")} below` : "Mark reviewed"}</button>` : "")
-    + (feature("review") && it.reviewed ? '<button data-run="clear" class="danger">✕ Clear review</button>' : "") + "</div>";
+    + (feature("review") ? `<button data-run="review" ${held ? `disabled title="${esc(held)}"` : ""}>👀 ${below ? `Mark reviewed with ${plural(below, "item")} below` : "Mark reviewed"}</button>` : "")
+    + (feature("review") && it.reviewed ? '<button data-run="clear" class="danger">✕ Clear review</button>' : "")
+    + (state.model.git && state.model.uncommitted.length ? `<button data-commit title="${esc(plural(state.model.uncommitted.length, "file"))} uncommitted — the AI commits them in this item's chat">⎇ Commit with AI</button>` : "")
+    + (feature("review") && blocked.length ? `<span class="note commit-first" title="${esc(blocked.join("\n"))}">commit first: ${plural(blocked.length, "file")}</span>` : "") + "</div>";
+}
+
+// The items a review of `uid` stamps: itself and those below whose own review does not stand — unstamped, or with a problem of their own.
+function pendingUnder(uid) { return [uid, ...descendants(uid)].filter((u) => !item(u).reviewed || item(u).problems.length); }
+
+// A content commit is the AI's: the request goes as a turn of the item's chat.
+const COMMIT_TEXT = "Commit the uncommitted changes of the project.";
+function commitWithAi(uid) {
+  const row = state.docRows.find((r) => r.path === state.path) || state.docRows.find((r) => r.uid === uid);
+  if (!row) return;
+  openChat(row);
+  sendChat(row, null, false, COMMIT_TEXT);
 }
 
 // The statement, then the key source files as links opening inside the block like any linked file, then the item's validation problems.
@@ -1202,8 +1222,9 @@ function messageHtml(m, index, busy, last) {
       + `<button type="button" class="msg-drop" title="remove the failed turn from the log">${MARK.remove}</button>`
     : `<button type="button" class="msg-child" title="ask the AI to make the kept text a child item">${MARK.child}</button><button type="button" class="msg-sibling" title="ask the AI to make the kept text the next sibling item">${MARK.sibling}</button>`;
   const [agent, turn] = String(m.agent || "").split(":");
-  const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>` : "";
-  return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${out ? " dropped" : ""}" data-index="${index}">`
+  const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>`
+    : m.agent_report ? `<div class="msg-from">report of ${uidLink(m.agent_report)}</div>` : "";
+  return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${m.agent_report ? " agent-report" : ""}${out ? " dropped" : ""}" data-index="${index}">`
     + `<div class="msg-body">${from}${partsHtml(m, busy)}</div>` + (right ? `<span class="msg-tools right">${right}</span>` : "") + "</div>";
 }
 function foldMark(folded, exchange, frozen) {
@@ -1283,7 +1304,7 @@ function stepHtml(step, key) {
     case "usage": return "";
     case "diff": return foldHtml(key, kind("diff") + plural(step.files.length, "file changed", "files changed"),
       () => step.files.map((f, i) => foldHtml(`${key}/${i}`, kind(FILE_STATUS[f.status] || f.status) + esc(f.path), () => `<pre>${esc(f.hunks)}</pre>`)).join(""));
-    case "agent": return foldHtml(key, kind("agent" + (step.uid ? " @" + step.uid : "")) + esc(firstLine(step.prompt)) + pending(step.report),
+    case "agent": return foldHtml(key, `<span class="step-kind">agent${step.uid ? " " + uidLink(step.uid) : ""}</span>` + esc(firstLine(step.prompt)) + pending(step.report),
       () => partHtml("prompt", step.prompt) + partHtml("report", step.report) + (step.steps?.length ? `<div class="turn-steps">${stepsHtml(step.steps, key)}</div>` : ""));
     case "workflow": return foldHtml(key, kind("workflow") + esc(brief(step.input)) + pending(step.result), () => partHtml("input", step.input) + partHtml("result", step.result));
     default: return foldHtml(key, kind(step.kind), () => partHtml(step.kind, step));
@@ -1292,13 +1313,33 @@ function stepHtml(step, key) {
 const stepsHtml = (steps, key) => steps.map((step, i) => stepHtml(step, `${key}/${i}`)).join("");
 
 // Every reply closes with its activity header; the header unfolds to the steps only when the turn had some beyond the answer.
-function activityHtml(steps = [], key, running = false) {
+function activityHtml(steps = [], key, running = false, extra = "") {
   const open = state.unfolded.has(key), listed = steps.some((s) => s.kind !== "usage");
   const summary = (running ? '<span class="spinner"></span> ' : "") + esc(activitySummary(steps));
   return '<div class="turn-activity">' + (listed
     ? `<button type="button" class="turn-head" aria-expanded="${open}" data-fold="${esc(key)}" title="${open ? "fold" : "unfold"} the turn's steps">${summary}</button>`
       + (open ? `<div class="turn-steps">${stepsHtml(steps, key)}</div>` : "")
-    : `<span class="turn-head bare">${summary}</span>`) + "</div>";
+    : `<span class="turn-head bare">${summary}</span>`) + extra + "</div>";
+}
+
+// The subagents still running on known items other than the chat's own: the unreported agent steps of the live turn and the chat's
+// background ones, each a link to its item.
+function runningAgents(chat) {
+  const found = new Set(), walk = (steps) => (steps || []).forEach((s) => { if (s.kind === "agent") { if (s.report == null && s.uid) found.add(s.uid); walk(s.steps); } });
+  if (chat.turn) walk(chat.steps);
+  (chat.agents || []).forEach((agent) => found.add(agent.uid));
+  return [...found].filter((uid) => uid !== chat.uid && state.model.items[uid]);
+}
+function agentRunsHtml(chat) {
+  const uids = runningAgents(chat);
+  return uids.length ? '<div class="agent-runs">' + uids.map((uid) => `<a class="jump agent-run" data-uid="${esc(uid)}" title="a subagent runs on ${esc(uid)} — jump there"><span class="spinner"></span> @${esc(uid)}</a>`).join("") + "</div>" : "";
+}
+// The end of the log while something runs: the running turn's activity, or, the turn over and background subagents going on, a header of
+// theirs; the run indicators close either.
+function liveHtml(chat, running) {
+  const key = `${chat.uid}:${chat.log.length}`, background = chat.agents?.length || 0;
+  if (running) return chat.steps?.length ? activityHtml(chat.steps, key, true, agentRunsHtml(chat)) : '<div class="chat-msg note"><span class="spinner"></span> waiting for the reply…</div>';
+  return background ? `<div class="turn-activity"><span class="turn-head bare"><span class="spinner"></span> ${esc(plural(background, "background subagent"))} running</span>${agentRunsHtml(chat)}</div>` : "";
 }
 
 function toggleFold(key) {
@@ -1326,8 +1367,7 @@ function decorateChat(el, row) {
   }
   const connector = state.model.connectors[chat.connector], advanced = advancedModes(chat.connector), running = busy(chat), several = Object.keys(state.model.connectors).length > 1;
   setHtml(box.querySelector(".chat-log"), chat.log.map((m, i) => messageHtml(m, i, running, i === chat.log.length - 1) + (m.role === "user" ? "" : activityHtml(m.steps, `${chat.uid}:${i}`))).join("")
-    + (!running ? "" : chat.steps?.length ? activityHtml(chat.steps, `${chat.uid}:${chat.log.length}`, true)
-      : '<div class="chat-msg note"><span class="spinner"></span> waiting for the reply…</div>'));
+    + liveHtml(chat, running));
   const sendTitle = running ? `a turn of ${chat.uid} is running — wait for it or stop it` : editing
     ? "save the statement and send it as the first message of a new conversation — the previous one is kept, ▾ lists it (Ctrl/⌘+Enter)" : "send the message (Ctrl/⌘+Enter)";
   const statePill = running ? (state.stopping.has(chat.turn) ? '<button type="button" class="pill chat-stop" disabled><span class="spinner"></span> stopping…</button>'
@@ -1662,7 +1702,8 @@ function openRowMenu(row, anchor) {
 }
 
 function startRun(action, uid) {
-  if (action === "review" && descendants(uid).size && !confirm(feature("test") ? `Run the tests of the ${plural(leavesUnder(uid).length, "leaf item")} under ${uid} and mark ${uid} and every item below it reviewed?` : `Mark ${uid} and every item below it reviewed?`)) return;
+  const tested = pendingUnder(uid).filter((u) => leavesUnder(uid).includes(u)).length;
+  if (action === "review" && descendants(uid).size && !confirm(feature("test") ? `Run the tests of the ${plural(tested, "leaf item")} under ${uid} and mark ${uid} and every item below it reviewed?` : `Mark ${uid} and every item below it reviewed?`)) return;
   if (action === "clear" && !confirm(`Clear the review of ${uid}? Its frozen test routines are released as well.`)) return;
   run(action, [uid]);
 }
@@ -2022,6 +2063,7 @@ testsPop.addEventListener("click", (event) => {
   const uid = state.selected, target = event.target;
   if (target.id === "add-binding-btn") addBinding(uid);
   if (target.dataset.run) { testsPop.hidePopover(); startRun(target.dataset.run, uid); }
+  if (target.dataset.commit !== undefined) { testsPop.hidePopover(); commitWithAi(uid); }
   if (target.dataset.unbind !== undefined) {
     const bindings = item(uid).bindings, gone = bindings[Number(target.dataset.unbind)];
     if (gone.sha && !confirm(`Binding '${gone.name || "(default)"}' was frozen by a review; removing it releases that. Remove?`)) return;

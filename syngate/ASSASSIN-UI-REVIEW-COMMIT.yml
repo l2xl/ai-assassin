@@ -1,0 +1,8 @@
+---
+parents: [ASSASSIN-UI-STATUS-POPUP-RUN]
+test: {single: ~, several: ~}
+---
+Review commit
+closes a review run of the page in a git work tree, committing the item files the run stamped and nothing else: as `Review: <subject>` when exactly one commit lies since the last review commit, else with the message the AI formulates in a turn of the reviewed item's chat.
+
+The last review commit is the latest whose subject opens with `Review` or `Reviewed`. A message turn that fails or is stopped, and a stopped run, leave the stamps uncommitted, the console saying so.

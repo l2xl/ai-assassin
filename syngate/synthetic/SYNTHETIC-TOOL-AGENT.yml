@@ -7,4 +7,4 @@ review: 10a1482a34a4e0fa8ccba6de843c3928b05c8e54b2a3cc87e8095cfd8920e00f
 ---
 The agent tool shall run a turn of the named item's chat with the given prompt, every agent call of a batch running in parallel after the batch's other calls and the reports coming back as the next prompt
 
-Fields: `uid` (`@` for the anchored item), `prompt`, optional `model`, `effort` and `modes`. An item already running a turn refuses the call.
+Fields: `uid` (`@` for the anchored item), `prompt`, optional `model`, `effort`, `modes` and `background`. An item already running a turn refuses the call.

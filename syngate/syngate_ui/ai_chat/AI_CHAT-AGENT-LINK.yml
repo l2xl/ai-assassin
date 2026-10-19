@@ -1,0 +1,7 @@
+---
+parents: [AI-CHAT]
+order: 170
+test: ~
+---
+Subagent run indicator
+of a subagent running on another item is a link that jumps to that item's block.

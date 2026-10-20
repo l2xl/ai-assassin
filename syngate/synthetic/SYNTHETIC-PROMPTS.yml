@@ -2,7 +2,7 @@
 parents: [SYNTHETIC]
 order: 35
 test: dac0e3de1b426262cfaf5ee0892b01dd1c748d60e1a1d4c3cdaa5c11017a83d9
-review: 16d1e44d8eda6053ba7fea91a611ad13f6fbded5ccaead97ff182bd07b85533e
+review: 9856f514ad334f159e5b48409dcceeab75197756f52cd777174f756a97df97a2
 ---
 The prompt library shall be the markdown files under the package's `prompts/` folder, each a skill or a tool named by its file stem
 

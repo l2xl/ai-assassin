@@ -2,7 +2,8 @@
 parents: [AI-CHAT]
 order: 75
 sources: [src/ai_scratcher/assassin_ui.html, src/ai_scratcher/assassin_ui.py]
-test: {api: ~, page: ~}
+test: {api: 8160c09df5a49bf6c9159bd62e46c101171118e1ee3b12ad35a8731dbdac556b, page: bc4a711364570ec8b69d57db9537204be964b8c9260070adc65ccf75d3ea2018}
+review: aa3186aa0b29cf2cd43df9df844c8ba7661af39918daabcb4aa8ebd941ea2744
 ---
 Mention hint
 opens while `@` is typed in a description editor or a reply line, listing the items whose UID contains the text typed after it and the project files whose name contains it; a pick replaces the typed word with `@UID` or with the file's project-relative path, Esc closing the hint with the text as typed.

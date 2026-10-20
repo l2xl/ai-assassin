@@ -1,9 +1,9 @@
 ---
 parents: [AI-CHAT]
 order: 20
-test: {send: 332bf7a314ed8383e6af4aea4bac5101e94b00704a5d13f1aec5c7015647964c, done: 2edd0de52d573671b2b900a28616358aeae71e124f0ad25bf46447ea7454d6bf,
+test: {send: a68c73dc861a9bd7124865590c7cff5327dda61b3ba4ff128b54d6f713e5b951, done: 64e2f6377786228f1ecbee6e01d9944f80aa1c0d6044423e08002352e52ab638,
   refusal: 2e0fa3533fbf3bd5c4605e3faeda430a275dce8df68ceeda1218356c2807e9a4}
-review: ef6996edd897ac7ebf430bb1b8f687a6548c52f95ffddb8f9fd2d6488de2ca69
+review: e1b7882eb5736969216d549d55d69727b7c257a49ae580521a0162ca2516e275
 ---
 Description editor
 of an item is where its chat starts or goes on: entering the editor shows the chat and its controls — a new, empty conversation while the item's chat is hidden, the shown one otherwise — so the setup is chosen before anything is sent; editing alone sends nothing and begins no conversation, `▴ done` and Esc saving the statement and closing the editor with the chat.

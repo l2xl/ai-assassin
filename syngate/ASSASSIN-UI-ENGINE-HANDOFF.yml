@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-ENGINE-RELOAD]
 order: 20
-test: {socket: ~, page: ~}
+test: {socket: f16512f4282b65db3dc1772a256eddf9f2b141f56b8f12587e50520428ca134b, page: 25aebfda3496976d698101959d04e5473ade22464cc8e197699d160d7117d61a}
+review: 7c2675e04d897bd511de42730db40deb9c149be763f0d9494d59b7d4d99941aa
 ---
 Session handoff
 carries the listening socket, the session token and the chats over to the restarted process, so an open tab goes on at the same URL and, seeing the new boot id, reads the tree and the chats anew.

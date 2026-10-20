@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-CONTENT]
 order: -10
-test: ~
+test: 2bcc39f914d13ab72c306afbaaa89c61e99b24a5074f3dc41cdcc62c7c100049
+review: fdaa58c96847decab419899c4de9f01fe82769ad0cba61be35706ae11b35edd0
 ---
 Document width
 fills the whole width the splitter leaves beside the outline, with no maximum of its own, its left margin narrower than its right one.

@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 95
-test: ~
+test: cbd0e6665be1baa669682a9c5200dbd54ee41916da7376f1d8b81294895e890c
+review: abd93b6b6b45fe85687ef9367a34a4ab10e43f341bd19c5d7e322762629ac561
 ---
 Page update reload
 follows a change of the page's file on the server: an idle tab reloads itself keeping its selection, filters, open file views, unfolded steps, reply text and scroll, a busy one shows `⟳ page updated` in the header and reloads on its click or once idle.

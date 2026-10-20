@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 10
 test: 6635f2ebb74267e3f6fda3575777bee3078531d5b4c14015ec7889f370e9c4c4
-review: 13141a5e2c5f42d921734446968bcb959f68c8f3e0db1afa8a2ce5e1fc6e6c13
+review: f97f84f2c61fb8628eb6184ff6831c33b0289bc56abe3ff903c66244226b8f3a
 ---
 Reply line
 waits empty under every item's statement, outside the Tab order until the item's chat is shown; entered by click or focus, it shows that chat — the log and the controls — and a message sent from it goes to the exchange without touching the item.

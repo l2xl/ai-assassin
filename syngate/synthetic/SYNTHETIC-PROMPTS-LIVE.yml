@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-PROMPTS]
 order: 30
-test: ~
+test: e593a3ee178445e0b38c9dfacc72ba968545ae189b856526f133925d3e0fb4dd
+review: b4fdd16dc813e5784b48c372d7e9ffaccbdf7f6b91533ae24865a1f42e608647
 ---
 Live prompt library
 is read from its files anew whenever a prompt is needed — every turn of every session, a skill call, the default prompt, the answer schema — no prompt text kept between two reads, so a prompt file added, edited or removed shapes the next turn without a restart.

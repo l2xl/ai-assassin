@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 30
 sources: [src/ai_scratcher/prompts/deliver.md]
-test: ~
+test: c8db4a00cfc28cddc976ab650d2de77d8f5b58dba81014074aa09565a118399e
+review: d37bb8c785fbd87f11a1db86eed9e5f9a2ec159902ed3b2aa72216615d09f6bc
 ---
 Delivery skill
 is a default skill telling the turn that a task adding or rewording items is a task on the project, carried into it in the same turn the way the tree's test switch sets.

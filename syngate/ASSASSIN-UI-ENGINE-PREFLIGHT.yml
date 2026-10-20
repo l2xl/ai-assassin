@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI-ENGINE-RELOAD]
+order: 10
+test: ~
+---
+Update preflight
+compiles every engine source and imports the server in a fresh interpreter before the restart, once per state of the files, a failure keeping the running engine and naming the error in the header.

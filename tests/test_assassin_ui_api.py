@@ -9,6 +9,8 @@ session and chat resets, the retry of a failed turn, the connector's closing usa
 
 import json
 import os
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -124,7 +126,7 @@ def test_chats_are_kept_in_a_file_next_to_the_tree_across_server_runs_and_droppe
     record = stored()["LEAF-001"]
     assert isinstance(record.pop("started"), float) and app.chats_file.parent == app.root
     assert record == {"turns": 1, "log": [{"role": "user", "text": "First"}, {"role": "ai", "text": "First reply", "cuts": [[6, 11]]}], "session": None,
-                      "setup": {**SETUP}, "archive": []}
+                      "setup": {**SETUP}, "statement": "It shall leaf.", "archive": []}
     record["session"] = "session-1"
     app.chats_file.write_text(json.dumps({**stored(), "LEAF-001": record}))
 
@@ -145,7 +147,7 @@ def test_chats_are_kept_in_a_file_next_to_the_tree_across_server_runs_and_droppe
     app.save_chats()
     root = stored()["ROOT"]
     assert isinstance(root.pop("started"), float)
-    assert root == {"turns": 1, "log": [{"role": "user", "text": "Slow"}], "session": None, "setup": {**SETUP}, "archive": []}  # never a running turn
+    assert root == {"turns": 1, "log": [{"role": "user", "text": "Slow"}], "session": None, "setup": {**SETUP}, "statement": "Root branch", "archive": []}  # never a running turn
     gate.set()
     assert call(base, app, f"/api/turn/{running}?wait=5")[1]["reply"] == "late"
 
@@ -247,6 +249,32 @@ def test_a_new_conversation_files_the_live_one_and_a_filed_one_resumes_with_its_
     assert again.chats["LEAF-001"].archive[0]["session"] == "session-2" and again.chats["LEAF-001"].archive[0]["setup"]["modes"] == ["edit"]
     erased = call(base, app, "/api/chat/LEAF-001", {"erase": True})[1]
     assert erased["log"] == [] and [c["title"] for c in erased["archive"]] == ["Second"]  # deleting the live conversation leaves the filed ones
+
+
+@pytest.mark.syngate("AI_CHAT-STATEMENT-CHANGE")
+def test_a_turn_after_the_anchored_statement_changed_is_headed_by_a_logged_message_quoting_it(server, syngate_tree):
+    base, app = server
+    syngate_dir, make_item = syngate_tree
+    app.connectors = {"echo": (scripted := Scripted())}
+    note = lambda statement: assassin_ui.STATEMENT_NOTE.format(uid="LEAF-001", statement=statement)
+    logged = lambda: [(m["text"], m.get("statement", False)) for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"] if m["role"] == "user"]
+    turn(base, app, "LEAF-001", "First", modes=["tree"])
+    turn(base, app, "LEAF-001", "Second", modes=["tree"])
+    assert [h["text"] for h in scripted.heard] == ["First", "Second"]  # unchanged: nothing announced
+    call(base, app, "/api/item/LEAF-001", {"description": "It shall leaf in the page.\n", "base": {"description": "It shall leaf.\n"}})
+    turn(base, app, "LEAF-001", "Third", modes=["tree"])
+    assert scripted.heard[-1]["text"] == note("It shall leaf in the page.") + "\n\nThird" and scripted.heard[-1]["session"] == "session-2"
+    assert logged()[-2:] == [(note("It shall leaf in the page."), True), ("Third", False)]
+    make_item(syngate_dir, "LEAF-001", "It shall leaf on disk.\n", parents=("ROOT",), tests=None)
+    turn(base, app, "LEAF-001", "Fourth", modes=["tree"])
+    assert scripted.heard[-1]["text"] == note("It shall leaf on disk.") + "\n\nFourth"
+    turn(base, app, "LEAF-001", "It shall leaf on disk.", statement=True, modes=["tree"])  # the editor's send into a conversation holding messages
+    assert scripted.heard[-1]["text"] == note("It shall leaf on disk.") and logged()[-1] == (note("It shall leaf on disk."), True)
+    turn(base, app, "LEAF-001", "It shall leaf on disk.", statement=True, fresh=True, modes=["tree"])  # the first message of a new conversation
+    assert scripted.heard[-1] == {"text": "It shall leaf on disk.", "session": None, "modes": []} and logged() == []
+    app.save_chats()
+    again = assassin_ui.AssassinApp(root=app.root, syngate_dir=syngate_dir, cli_prefix=app.cli_prefix)
+    assert again.chats["LEAF-001"].statement == "It shall leaf on disk." and again.chats["LEAF-001"].archive[0]["statement"] == "It shall leaf on disk."
 
 
 @pytest.mark.syngate("AI_CHAT-RETRY", "api")
@@ -367,3 +395,39 @@ def test_a_review_run_stamps_only_the_items_whose_own_review_does_not_stand_and_
     assert "stub: review BRANCH-B LEAF-001 ROOT --build-dir" in body  # BRANCH-A's stamp stands, BRANCH-B's no longer matches
     status, refusal = refused(base, app, "/api/run", {"action": "review", "uids": ["BRANCH-A"]})
     assert (status, refusal["error"]) == (400, "nothing under BRANCH-A needs review")
+
+
+@pytest.mark.syngate("AI_CHAT-MENTION-HINT", "api")
+def test_the_project_files_endpoint_lists_tracked_files_else_a_bounded_walk_inside_the_project_behind_the_token(server, tmp_path, tmp_path_factory, monkeypatch):
+    base, app = server
+    outside = tmp_path_factory.mktemp("outside") / "secret.txt"
+    outside.write_text("secret\n")
+    for name in ("README.md", "src/main.py", "src/deep/util.py", "node_modules/pkg/index.js", ".venv/lib/mod.py", ".git/config", "cmake-build-debug/out.o", "__pycache__/x.pyc"):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text("x\n")
+    (tmp_path / "escape.txt").symlink_to(outside)
+    with pytest.raises(urllib.error.HTTPError) as missing:
+        call(base, app, "/api/files", token=False)
+    assert missing.value.code == 401
+
+    app.git = False
+    listed = call(base, app, "/api/files")[1]
+    assert listed["files"] == sorted(["README.md", "src/main.py", "src/deep/util.py", "syngate/LEAF-001.yml", "syngate/ROOT.yml"]) and listed["truncated"] is False
+    monkeypatch.setattr(assassin_ui, "FILES_LIMIT", 2)
+    capped = call(base, app, "/api/files")[1]
+    assert len(capped["files"]) == 2 and capped["truncated"] is True
+    monkeypatch.undo()
+
+    if shutil.which("git") is None:
+        return
+    git = lambda *args: subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+    git("init", "-q")
+    for name in ("README.md", "src/main.py", "escape.txt", "node_modules/pkg/index.js"):
+        git("add", "-f", name)
+    (tmp_path / "gone.txt").write_text("x\n")
+    git("add", "gone.txt")
+    (tmp_path / "gone.txt").unlink()
+    app.detect_git()
+    assert app.git is True
+    tracked = call(base, app, "/api/files")[1]["files"]
+    assert tracked == ["README.md", "node_modules/pkg/index.js", "src/main.py"]  # tracked files only: no untracked, deleted or outside-pointing ones

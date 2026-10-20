@@ -7,19 +7,22 @@ the description, the controls on the panel's bottom-left border, `.block-ai`).
 
 ## Starting a chat
 
-- **By editing.** Editing the description starts a chat: the modified text is its first message.
-  While the editor is open the AI controls appear on the bottom border as in a running chat —
-  connector · model · effort (`.chat-setup`), the permission switches (`.chat-mode`), `➤ send`
-  (`.chat-send`, titled `save the statement and send it as the first message of a new conversation —
-  the previous one is kept, ▾ lists it (Ctrl/⌘+Enter)`) and `✓ done` (`.chat-done`, titled `done —
-  the statement is saved, the editor closed (Esc)`) — so the setup can be chosen before the text is
-  saved or sent. `➤ send` and Ctrl/⌘+Enter in the editor save the item and send the saved statement
-  as the user's text of the first turn of a new conversation (`/api/turn` with `fresh`): the
-  conversation so far is filed behind `▾`, nothing asked, nothing erased. While a turn of the item
-  runs the send is refused with a notice (`a turn of UID is running — wait for it or stop it`), the
-  editor staying open; an empty statement is refused the same way (`the statement is empty —
-  nothing to send`). `✓ done` and Esc save the item and leave the editor; a chat the editor opened
-  that holds no message hides with it, a chat with messages stays shown.
+- **By editing.** The page draws no line between editing the item and chatting about it: the
+  editor and the chat are one interaction with one `▴ done`. Entering the editor shows the chat
+  with the AI controls on the bottom border — connector · model · effort (`.chat-setup`), the
+  permission switches (`.chat-mode`), `➤ send` (`.chat-send`) — so the setup can be chosen before
+  anything is sent. Which conversation it shows depends on whether a chat is active in the block:
+
+  | Before the edit | The editor shows | `➤ send` / Ctrl/⌘+Enter | `▴ done` / Esc |
+  |---|---|---|---|
+  | no chat shown — none yet, or a hidden one | a new, empty conversation | the saved statement as the first message of a new conversation (`/api/turn` with `statement`, `fresh` when a live one holds messages): the old one is filed behind `▾`, nothing asked, nothing erased | saves the item and closes editor and chat; no conversation is begun, filed or sent |
+  | the chat shown in the block | that conversation | the saved statement announced into it (*Statement changes* below) | saves the item and closes editor and chat; the history stays, the change is announced with the next turn |
+
+  The send goes whether the statement changed or not. While a turn of the item runs the send is
+  refused with a notice (`a turn of UID is running — wait for it or stop it`), the editor staying
+  open, and the stop pill stands in place of `▴ done`, so Esc ends the edit only; an empty
+  statement is refused the same way (`the statement is empty — nothing to send`). Editing alone
+  never sends anything.
 - **In the reply line.** Every panel holds the empty reply line (`.chat-input`) under its
   description at all times, outside the Tab order while at rest (it joins it with the open chat or
   the editor). Its top rule and hint appear with the block's border, on hover or focus; at rest the
@@ -34,18 +37,34 @@ the description, the controls on the panel's bottom-left border, `.block-ai`).
   While the turn runs a spinner (`.reply-wait`) stands left of the field, in the block's left
   padding, so it never overlaps the typed text; it shows whether the chat is open or hidden.
 
+  While the line of the open chat holds text, the clear mark (`.reply-clear`, `✕`, titled `clear
+  the message`) stands on the block's right border line level with the line's first line — the
+  border-mounted place and round shape of the message marks, the left padding being the spinner's
+  and the mention hint opening under the field's left edge, so neither ever meets it. It empties
+  the line and the text the tab keeps for it (see [History](#history)), the focus back
+  in the line and an open mention hint closed; the log, the session and the item are untouched.
+
   Entering the line — by click or by focus — opens the chat: the log and the controls appear, and
   a message sent from there starts the exchange without touching the item. When the item's chat
-  holds messages and is shown nowhere in this tab, entering the line is the explicit choice of a
-  new conversation (`update_chat` with `begin`): the log shown is empty, the previous conversation
-  filed behind `▾` with its session, the setup kept; a chat whose turn is running is joined
-  instead, and a chat shown in another block of the item is simply shown here too. An empty send
+  holds messages and is shown nowhere in this tab, entering the line is the choice of a new
+  conversation: the log shown is empty (the tab's view is `fresh`), and the previous conversation
+  is filed behind `▾` with its session only by the first send (`/api/turn` with `fresh`), the
+  setup kept — leaving with `▴ done` before anything is sent leaves the conversations as they
+  were. A chat whose turn is running is joined instead, and a chat shown in another block of the
+  item is simply shown here too. An empty send
   is refused (`type a message first`). While a turn of the item runs the line stays editable, so
   the next message is prepared meanwhile, but its send is refused with a notice (`a turn of UID is
   running — wait for it or stop it`), the send pill dimmed and the typed text kept in the field.
 - **Edit, then reply.** Clicking the reply line right after an edit saves the item, leaves the
   editor with the chat shown and waits for one more message before anything goes to the AI, so an
   edit never fires an exchange by itself.
+- **Statement changes.** A conversation remembers the anchored statement as its previous turn
+  carried it (`statement`, stored with the conversation). When a turn starts and the statement
+  differs — changed in the page, on disk or by the AI's own `edit` — the turn is headed by a user
+  message of the log (`statement: true`, shown under `statement changed`): `The statement of @UID
+  now reads:` and the statement, so the AI learns of the change at its next turn, whatever the
+  session. The editor's send into a shown conversation is that message alone. The seed context of
+  every turn already carries the current statement; the message is what tells the model it moved.
 
 ## Setup and permissions
 
@@ -173,19 +192,21 @@ of the item and in every browser tab. The chat is its **live conversation** — 
 setup the turns address — with the item's earlier conversations **filed** behind it, each with its
 own log, session and setup, in start order; the page reads them as summaries (`archive`:
 `started`, `title` — the first line of the first message — and `messages`). A conversation is
-filed, never erased, by whatever begins a new one: the reply line entered on a hidden chat, the
-editor's send, `＋ New chat`. A conversation without messages is not kept.
+filed, never erased, by whatever begins a new one: the first send of a new conversation shown
+by the reply line or the editor on a hidden chat, `＋ New chat`. A conversation without messages
+is not kept.
 
 The `▴ done` pill (`.chat-hide`, dim, never green, titled `hide the chat here — ▾ lists it again,
-nothing is lost`) hides the chat in that block and becomes `▾` (`.chat-show`) on the bottom-left
-border; while the editor is open the same place holds `✓ done`. `▾` is the way back to what was
+nothing is lost`) is the only state pill besides `■ stop`: it closes whatever is open in the block —
+the editor, its statement saved, and the chat — and becomes `▾` (`.chat-show`) on the bottom-left
+border. Text left in the reply line is kept by the tab, in memory, and is back in the line when
+the item's chat shows again. `▾` is the way back to what was
 said: it always opens the drop-down of the item's conversations, even when it holds a single one
 (`conversations`, `data-chat-resume`, the live one first marked `●` unless it is empty, the filed
 ones `○`, each `title · N messages · time` — the time of day for a conversation begun today, the
 date before it otherwise), and nothing is shown until an entry is picked: picking one shows it, a
 filed one resumes (`update_chat` with `resume`),
 becoming the live conversation with its session and setup while the live one is filed in its place.
-Resuming and beginning are refused while a turn runs (409). Hiding is refused with the toast
-`send or clear the message first` while the reply line holds text. Esc does what the pill does: in
-the editor and in the empty reply line it is the done mark; with text in the line it only returns
-the focus to the block. The chat of an item removed from the tree is dropped with every conversation.
+Resuming and beginning are refused while a turn runs (409). Esc does what the pill does, in the
+editor, in the reply line and on the focused block; while a turn runs it only returns the focus to
+the block. The chat of an item removed from the tree is dropped with every conversation.

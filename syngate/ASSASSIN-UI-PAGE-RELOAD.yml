@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI]
+order: 95
+test: ~
+---
+Page update reload
+follows a change of the page's file on the server: an idle tab reloads itself keeping its selection, filters, open file views, unfolded steps, reply text and scroll, a busy one shows `⟳ page updated` in the header and reloads on its click or once idle.

@@ -1,7 +1,6 @@
 ---
 parents: [ASSASSIN-UI]
 order: 140
-review: 42edc61014cae165950d5ec2aef3356cb6950cf16bf5d69cb415051a9ed0d5c2
 ---
 Content panel
 shows the whole tree as one document on the right, every item a block of it shifted by its depth.

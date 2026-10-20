@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -58,9 +59,56 @@ def read_prompt(path):
                   body.strip("\n") + "\n", meta.get("calls") or None)
 
 
-def load_prompts(prompts_dir=PROMPTS_DIR):
-    """The prompt library: name -> prompt of every markdown file under `prompts_dir`, the name being the file stem."""
-    return {path.stem: read_prompt(path) for path in sorted(prompts_dir.glob("*.md"))}
+def load_prompts(prompts_dir=None):
+    """The prompt library: name -> prompt of every markdown file under `prompts_dir` (`PROMPTS_DIR` as it is set at the call), the name
+    being the file stem -- read from the files at every call, nothing of it kept."""
+    return {path.stem: read_prompt(path) for path in sorted(Path(prompts_dir or PROMPTS_DIR).glob("*.md"))}
+
+
+class live_mapping(Mapping):
+    """A mapping built anew by `build` at every access -- for the library, the prompt files read again -- holding nothing of what it maps;
+    a reader wanting one consistent view takes `dict(mapping.items())`, one build."""
+
+    def __init__(self, build):
+        self.build = build
+
+    def __getitem__(self, key):
+        return self.build()[key]
+
+    def __iter__(self):
+        return iter(self.build())
+
+    def __len__(self):
+        return len(self.build())
+
+    def __contains__(self, key):
+        return key in self.build()
+
+    def keys(self):
+        return self.build().keys()
+
+    def items(self):
+        return self.build().items()
+
+    def values(self):
+        return self.build().values()
+
+    def __repr__(self):
+        return f"live_mapping({self.build()!r})"
+
+
+def read_library(library=None):
+    """One consistent view of `library` -- the shipped one by default -- read from the prompt files at this call when it is a live one."""
+    return load_prompts() if library is None else dict(library.items())
+
+
+def skills_of(library):
+    return {name: entry for name, entry in library.items() if entry.kind == "skill"}
+
+
+def prompt_texts(library):
+    """Every prompt's text by name, and the default prompt composed from them."""
+    return {**{name: entry.text for name, entry in library.items()}, DEFAULT_PROMPT: default_prompt(library)}
 
 
 def default_prompt(library):
@@ -83,9 +131,11 @@ def library_calls(library):
     return {name: tuple(spec.get("required") or ()) for entry in library.values() if entry.kind == "tool" for name, spec in (entry.calls or {}).items()}
 
 
-LIBRARY = load_prompts()
-SKILLS = {name: entry for name, entry in LIBRARY.items() if entry.kind == "skill"}
-PROMPTS = {**{name: entry.text for name, entry in LIBRARY.items()}, DEFAULT_PROMPT: default_prompt(LIBRARY)}
+# The shipped library and what derives from it, each re-read from the prompt files whenever it is read: an edit of a prompt reaches the
+# next turn of every session without a restart.
+LIBRARY = live_mapping(load_prompts)
+SKILLS = live_mapping(lambda: skills_of(load_prompts()))
+PROMPTS = live_mapping(lambda: prompt_texts(load_prompts()))
 CALL_BLOCK_RE = re.compile(r"```syngate[ \t]*\n(.*?)\n[ \t]*```", re.DOTALL)
 TOOLS = {"add": ("uid", "description"), "edit": ("uid",), "remove": ("uid",), "move": ("uid", "to"), "rename": ("uid", "new_uid")}
 QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
@@ -124,7 +174,7 @@ def answer_schema(library):
             "required": ["kind"], "additionalProperties": False}
 
 
-ANSWER_SCHEMA = answer_schema(LIBRARY)
+ANSWER_SCHEMA = live_mapping(lambda: answer_schema(load_prompts()))
 
 
 def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None):
@@ -204,8 +254,10 @@ def is_git(call):
 
 
 def offered_library(git, library=None):
-    """The library a turn is offered: the git tool only while git is at hand for the project."""
-    library = LIBRARY if library is None else library
+    """The library a turn is offered: the git tool only while git is at hand for the project; without a `library` given, the shipped one,
+    read from the prompt files at every access."""
+    if library is None:
+        return LIBRARY if git else live_mapping(lambda: {name: entry for name, entry in load_prompts().items() if name != GIT_TOOL})
     return library if git else {name: entry for name, entry in library.items() if name != GIT_TOOL}
 
 
@@ -298,9 +350,10 @@ def apply_call(items, anchor, call, syngate_dir=None):
     if tool in RUNS or tool in DELEGATIONS or tool in GITS:
         raise syngatelib.tree_error(f"{tool} runs through the page's harness, not against the tree")
     if tool == "skill":
-        if call["name"] not in SKILLS:
+        skill = skills_of(load_prompts()).get(call["name"])
+        if skill is None:
             raise syngatelib.tree_error(f"unknown skill '{call['name']}'")
-        return f"- skill {call['name']}:\n{SKILLS[call['name']].text}"
+        return f"- skill {call['name']}:\n{skill.text}"
     if tool == "query":
         return f"- {uid}: {json.dumps(item_view(items, uid), ensure_ascii=False)}"
     if tool == "context":
@@ -351,7 +404,7 @@ def query(connectors, items, uid, text, connector, model, effort, modes=(), sess
         raise query_error(f"unknown mode in {sorted(modes)}")
     if not text.strip():
         raise query_error("empty input")
-    library = LIBRARY if library is None else library
+    library = read_library(library)
     native = getattr(connection, "library_delivery", "text") == "native"
     head = native_prompt(library) if native else default_prompt(library)
     context = seed_context(items, uid, root=root, head=head) + referenced(items, text, syngatelib.walk(items, uid, descendants=True))
@@ -659,7 +712,7 @@ class claude_code_connector:
         permission = next((self.modes[mode][4] for mode in modes if self.modes[mode][4]), None)
         tools = list(dict.fromkeys([*self.always_allowed, *(tool for mode in modes for tool in self.modes[mode][5])]))
         effort = effort if effort in self.model_efforts.get(model, self.efforts) else None
-        library = LIBRARY if library is None else library
+        library = read_library(library)
         with (tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as seed, tempfile.TemporaryFile("w+", encoding="utf-8") as errors,
               tempfile.TemporaryDirectory() as plugin):
             seed.write(context)

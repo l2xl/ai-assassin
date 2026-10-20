@@ -812,7 +812,7 @@ def test_while_a_turn_runs_the_reply_line_shows_a_spinner_at_its_left_and_keeps_
 
 
 @pytest.mark.syngate("AI_CHAT-REPLY-NEW")
-def test_entering_the_reply_line_of_a_hidden_chat_joins_a_running_turn_else_begins_a_new_conversation(server, chrome):
+def test_entering_the_reply_line_of_a_hidden_chat_joins_a_running_turn_else_shows_a_new_conversation_filing_the_old_one_on_the_first_send(server, chrome):
     gated = GatedConnector()
     page = open_chat(server, chrome, echo=gated)
     send(page, "LEAF-001", "Slow one")
@@ -828,11 +828,19 @@ def test_entering_the_reply_line_of_a_hidden_chat_joins_a_running_turn_else_begi
     assert page.eval(f"{LEAF}.querySelector('.chat-input').placeholder") == REST_HINT
     enter_reply(page, "LEAF-001")
     assert page.eval(f"{LEAF}.querySelectorAll('.chat-msg').length") == 0
-    page.wait("state.chats.get('LEAF-001').archive.length === 1")
+    page.eval(f"{LEAF}.querySelector('.block-ai .chat-hide').click()")  # shown, not sent: the conversations stay as they were
+    enter_reply(page, "LEAF-001")
+    assert page.eval(f"{LEAF}.querySelectorAll('.chat-msg').length") == 0 and page.eval("state.chats.get('LEAF-001').archive.length") == 0
+    base, app = server
+    assert [m["text"] for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"] if m["role"] == "user"] == ["Slow one"]
+    send(page, "LEAF-001", "Fresh one")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
+    assert page.eval(f"[...{LEAF}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent)") == ["Fresh one"]
+    assert page.eval("state.chats.get('LEAF-001').archive.map((c) => c.title)") == ["Slow one"]  # filed by the first send
 
 
 @pytest.mark.syngate("AI_CHAT-022", "send")
-def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_statement(server, chrome):
+def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_statement_first_or_into_the_shown_conversation(server, chrome):
     page = item_page(server, chrome)
     edit_leaf(page, "It shall leaf better.")
     controls = f"[...{LEAF_BLOCK}.querySelectorAll('.block-ai .chat-send, .block-ai .chat-setup, .block-ai .chat-mode, .block-ai .chat-advanced')].length"
@@ -844,42 +852,55 @@ def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_stat
     assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("It shall leaf better.|It shall leaf better.|model-b|low|edit,internet|None")
     assert page.eval(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg.user').length") == 0  # the first message is the content itself
     edit_leaf(page, "It shall leaf by keyboard.")
-    page.eval("window.asked = []; window.confirm = (text) => { window.asked.push(text); return true; }")
     page.eval(CTRL_ENTER % "document.querySelector('#doc .block.editing textarea')")
-    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')?.textContent.includes('|It shall leaf by keyboard.|')")
-    assert page.eval("[window.asked, state.chats.get('LEAF-001').archive.map((c) => c.messages)]") == [[], [1]]  # nothing erased, nothing asked: the first conversation is filed
+    page.wait(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg.ai').length === 2")
     assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf by keyboard."
-    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|None")  # Ctrl+Enter sends as the button does: a new chat
+    announced = assassin_ui.STATEMENT_NOTE.format(uid="LEAF-001", statement="It shall leaf by keyboard.")
+    assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user .msg-part')].map((el) => el.textContent)") == [announced]
+    base, app = server
+    assert call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"][-1]["text"].endswith(f"|{announced}|model-b|low|edit,internet|session-1")  # into the shown conversation
+    assert page.eval("state.chats.get('LEAF-001').archive.length") == 0
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
+    edit_leaf(page, "It shall leaf by keyboard.")  # unchanged, and the chat hidden: Ctrl+Enter begins a new conversation all the same
+    page.eval(CTRL_ENTER % "document.querySelector('#doc .block.editing textarea')")
+    page.wait(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg.ai').length === 1 && state.chats.get('LEAF-001').archive.length === 1")
+    assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|It shall leaf by keyboard.|model-b|low|edit,internet|None")
 
 
 @pytest.mark.syngate("AI_CHAT-022", "done")
-def test_the_done_pill_ends_the_edit_with_the_text_saved_and_hides_only_a_chat_the_editor_opened_empty(server, chrome):
+def test_done_ends_the_edit_with_the_text_saved_closing_the_chat_and_beginning_no_conversation(server, chrome):
+    base, app = server
     page = item_page(server, chrome)
     strip = f"[...{LEAF_BLOCK}.querySelectorAll('.block-ai .pill')].map((el) => el.className.split(' ').pop() + ':' + el.textContent.trim())"
     after = f"[state.editing, {LEAF_BLOCK}.classList.contains('editing'), {LEAF_BLOCK}.classList.contains('chatting'), document.activeElement === {LEAF_BLOCK}]"
     edit_leaf(page, "It shall leaf, done.")
-    assert page.eval(strip)[0] == "chat-done:✓ done" and page.eval(f"{LEAF_BLOCK}.classList.contains('chatting')")
-    corner = f"(() => {{ const done = {LEAF_BLOCK}.querySelector('.block-ai .chat-done').getBoundingClientRect(), strip = {LEAF_BLOCK}.querySelector('.block-ai').getBoundingClientRect(), block = {LEAF_BLOCK}.getBoundingClientRect();" \
+    assert page.eval(strip)[0] == "chat-hide:▴ done" and page.eval(f"{LEAF_BLOCK}.classList.contains('chatting')")
+    assert page.eval(f"{LEAF_BLOCK}.querySelectorAll('.block-ai .chat-hide, .block-ai .chat-stop').length") == 1  # one done, whatever is open
+    corner = f"(() => {{ const done = {LEAF_BLOCK}.querySelector('.block-ai .chat-hide').getBoundingClientRect(), strip = {LEAF_BLOCK}.querySelector('.block-ai').getBoundingClientRect(), block = {LEAF_BLOCK}.getBoundingClientRect();" \
              " return [done.left - strip.left < 2, Math.abs(done.top + done.height / 2 - block.bottom) < done.height]; })()"
     assert page.eval(corner) == [True, True]  # the state pill leads the strip, straddling the bottom-left border
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-done').click()")
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
     page.wait("drafts.size === 0")
     assert page.eval(after) == [None, False, False, True] and tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf, done."
+    assert call(base, app, "/api/chats")[1]["chats"].get("LEAF-001", {"log": []})["log"] == []  # nothing sent
     enter_reply(page, "LEAF-001")
     send(page, "LEAF-001", "Kept")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     edit_leaf(page, "It shall leaf, done twice.")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-done').click()")
-    assert page.eval(after) == [None, False, True, True] and page.eval(strip)[0] == "chat-hide:▴ done"  # the chat holds messages: it stays
+    assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent)") == ["Kept"]  # the shown conversation goes on
     page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
+    page.wait("drafts.size === 0")
+    assert page.eval(after) == [None, False, False, True]  # the editor and the chat close together
     edit_leaf(page, "It shall leaf, done thrice.")
-    assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent)") == ["Kept"]  # the editor shows the hidden history again
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-done').click()")
-    assert page.eval(after) == [None, False, True, True]
+    assert page.eval(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg').length") == 0  # a hidden chat is no chat: the editor shows a new conversation
+    page.eval(KEY % (f"{LEAF_BLOCK}.querySelector('.block-body textarea')", "Escape"))
+    page.wait("drafts.size === 0")
+    chat = call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]
+    assert page.eval(after) == [None, False, False, True] and chat["archive"] == [] and [m["text"] for m in chat["log"]][0] == "Kept"  # none begun, none sent
 
 
 @pytest.mark.syngate("AI_CHAT-030", "esc")
-def test_escape_is_the_done_mark_from_the_keyboard_and_keeps_a_typed_message(server, chrome):
+def test_escape_is_the_done_mark_from_the_keyboard_and_keeps_a_typed_message_for_the_chat_shown_again(server, chrome):
     page = item_page(server, chrome)
     state = f"[state.editing, {LEAF_BLOCK}.classList.contains('chatting'), document.activeElement === {LEAF_BLOCK}, {LEAF_BLOCK}.querySelector('.chat-input').value]"
     edit_leaf(page, "It shall leaf by key.")
@@ -888,17 +909,138 @@ def test_escape_is_the_done_mark_from_the_keyboard_and_keeps_a_typed_message(ser
     enter_reply(page, "LEAF-001")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').value = 'a draft'")
     page.eval(KEY % (f"{LEAF_BLOCK}.querySelector('.chat-input')", "Escape"))
-    assert page.eval(state) == [None, True, True, "a draft"]  # text in the line: the focus moves, nothing hides
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
-    assert page.eval(state) == [None, True, False, "a draft"] and page.eval(TOASTS) == ["toast info:send or clear the message first"]
-    assert page.eval(f"document.activeElement === {LEAF_BLOCK}.querySelector('.chat-input')")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').value = ''")
-    page.eval(KEY % (f"{LEAF_BLOCK}.querySelector('.chat-input')", "Escape"))
-    assert page.eval(state) == [None, False, True, ""]
+    assert page.eval(state) == [None, False, True, ""]  # hidden, the line at rest empty
     enter_reply(page, "LEAF-001")
+    assert page.eval(state) == [None, True, False, "a draft"]  # the kept text is back
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
+    assert page.eval(state) == [None, False, True, ""] and page.eval(TOASTS) == []
+    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
+    assert page.eval(state)[1:] == [True, False, "a draft"]
+    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').value = ''")
     page.eval(f"{LEAF_BLOCK}.focus()")
     page.eval(KEY % ("document.activeElement", "Escape"))
     assert page.eval(state) == [None, False, True, ""]  # on the focused block Esc hides its chat
+
+
+@pytest.mark.syngate("AI_CHAT-REPLY-CLEAR")
+def test_the_clear_mark_stands_on_the_right_border_level_with_a_reply_line_holding_text_and_empties_it_and_its_kept_text(server, chrome):
+    base, app = server
+    page = open_chat(server, chrome)
+    send(page, "LEAF-001", "Kept")
+    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
+    before = call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]
+    line, mark = f"{LEAF_BLOCK}.querySelector('.chat-input')", f"{LEAF_BLOCK}.querySelector('.reply-clear')"
+    shown = f"{mark}.getBoundingClientRect().width > 0"
+    page.eval(f"{line}.focus()")
+    assert page.eval(shown) is False and tab(page, back=True) != "reply-clear"  # an empty line has nothing to clear, and no mark in the Tab order
+    page.eval(f"{line}.focus()")
+    set_text(page, line, "a draft @lea")
+    assert page.eval(shown) is True and page.eval(MENTION)[0] is True
+    assert page.eval(f"[{mark}.tagName, {mark}.title, {mark}.tabIndex, Boolean({mark}.querySelector('svg path'))]") == ["BUTTON", "clear the message", 0, True]
+    place = f"(() => {{ const m = {mark}.getBoundingClientRect(), l = {line}.getBoundingClientRect(), b = {LEAF_BLOCK}.getBoundingClientRect(), s = getComputedStyle({line});" \
+            " const first = l.top + parseFloat(s.borderTopWidth) + parseFloat(s.paddingTop) + parseFloat(s.lineHeight) / 2;" \
+            " return [Math.abs(m.left + m.width / 2 - (b.right - 0.5)) < 1.5, Math.abs(m.top + m.height / 2 - first) < 3, m.left >= l.right]; })()"
+    assert page.eval(place) == [True, True, True]  # on the right border line, level with the line's first line, off the typed text
+    looks = "(() => { const seen = new Set(); for (const el of document.querySelectorAll('%s')) { const s = getComputedStyle(el);" \
+            " seen.add([s.width, s.height, s.borderTopStyle, s.borderTopWidth, s.borderTopLeftRadius, s.backgroundColor].join()); } return [...seen]; })()"
+    assert len(page.eval(looks % f"#doc .msg-tools button, #doc .reply-clear")) == 1  # the one border-mark shape
+    page.eval(f"{mark}.click()")
+    cleared = f"[{line}.value, document.activeElement === {line}, {shown}, state.replies.has('LEAF-001'), {LEAF_BLOCK}.classList.contains('chatting')]"
+    assert page.eval(cleared) == ["", True, False, False, True] and page.eval(MENTION)[0] is False
+    set_text(page, line, "a second draft")
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
+    assert page.eval("state.replies.get('LEAF-001')") == "a second draft" and page.eval(shown) is False  # kept by the tab, no mark on a hidden chat
+    enter_reply(page, "LEAF-001")
+    assert page.eval(f"[{line}.value, {shown}]") == ["a second draft", True]  # the kept text is back, and its mark with it
+    page.eval(f"{line}.focus()")
+    assert tab(page, back=True) == "reply-clear"  # reached by keyboard
+    press(page, " ", "Space", 32)
+    assert page.eval(cleared) == ["", True, False, False, True]
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
+    enter_reply(page, "LEAF-001")
+    assert page.eval(f"{line}.value") == ""  # nothing kept to come back
+    after = call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]
+    assert [after["log"], after["session"]] == [before["log"], before["session"]] and tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf."
+
+
+MENTION = "(() => { const pop = document.getElementById('mention-hint'); return [pop.matches(':popover-open'), [...pop.querySelectorAll('.mention-entry')].map((e) => e.dataset.kind + ':' + e.dataset.value + (e.getAttribute('aria-selected') === 'true' ? '*' : ''))]; })()"
+
+
+def type_keys(page, text):
+    for char in text:
+        press(page, char)
+
+
+def set_text(page, target, text):
+    page.eval(f"(() => {{ const el = {target}; el.value = {json.dumps(text)}; el.setSelectionRange(el.value.length, el.value.length); el.dispatchEvent(new Event('input', {{ bubbles: true }})); }})()")
+
+
+@pytest.mark.syngate("AI_CHAT-MENTION-HINT", "page")
+def test_typing_at_in_a_reply_line_or_an_editor_hints_items_and_files_and_a_pick_writes_the_mention(server, chrome):
+    base, app = server
+    for name in ("guide.md", "docs/leaf-notes.md"):
+        (app.root / name).parent.mkdir(parents=True, exist_ok=True)
+        (app.root / name).write_text("# Guide\n")
+    page = item_page(server, chrome)
+    page.activate()
+    reply = f"{LEAF_BLOCK}.querySelector('.chat-input')"
+    enter_reply(page, "LEAF-001")
+    page.wait(f"document.activeElement === {reply}")
+    assert page.eval(MENTION) == [False, []]
+    type_keys(page, "@lea")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 3")  # the items at once, the files once the listing arrives
+    assert page.eval(MENTION) == [True, ["item:@LEAF-001*", "file:docs/leaf-notes.md", "file:syngate/LEAF-001.yml"]]
+    assert page.eval("document.getElementById('mention-hint').style.length") == 2  # only the computed position is inline
+    press(page, "Escape", "Escape", 27)
+    assert page.eval(MENTION)[0] is False and page.eval(f"[{reply}.value, {LEAF_BLOCK}.classList.contains('chatting'), document.activeElement === {reply}]") == ["@lea", True, True]
+    type_keys(page, "f")
+    assert page.eval(MENTION)[0] is False  # dismissed for this word
+    set_text(page, reply, "")
+    type_keys(page, "@oo")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 2")
+    assert page.eval(MENTION) == [True, ["item:@ROOT*", "file:syngate/ROOT.yml"]]
+    press(page, "ArrowDown", "ArrowDown", 40)
+    assert page.eval(MENTION)[1] == ["item:@ROOT", "file:syngate/ROOT.yml*"]
+    press(page, "ArrowUp", "ArrowUp", 38)
+    assert page.eval(MENTION)[1][0] == "item:@ROOT*"
+    press(page, "Enter", "Enter", 13)
+    assert page.eval(MENTION)[0] is False and page.eval(f"[{reply}.value, {LEAF_BLOCK}.querySelectorAll('.chat-msg').length]") == ["@ROOT", 0]  # picked, not sent, no newline
+    type_keys(page, " @zzz")
+    assert page.eval(MENTION) == [False, []]  # nothing matches
+    set_text(page, reply, "")
+    type_keys(page, "@lea")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 3")
+    page.eval(f"{reply}.setSelectionRange(0, 0)")
+    page.wait("!document.getElementById('mention-hint').matches(':popover-open')")  # the caret left the word
+    set_text(page, reply, "")
+    type_keys(page, "@lea")
+    page.wait("document.getElementById('mention-hint').matches(':popover-open')")
+    page.eval(f"{reply}.blur()")
+    assert page.eval(MENTION)[0] is False
+
+    page.eval(f"{reply}.value = ''")
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide').click()")
+    page.wait(f"!{LEAF_BLOCK}.classList.contains('chatting')")
+    page.eval("(() => { select('LEAF-001', 'ROOT/LEAF-001'); startEditing('ROOT/LEAF-001'); })()")
+    editor = "document.querySelector('#doc .block.editing textarea.block-text')"
+    page.wait(f"document.activeElement === {editor}")
+    type_keys(page, " see @oo")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 2")
+    press(page, "Tab", "Tab", 9)
+    assert page.eval(MENTION)[0] is False and page.eval(f"{editor}.value") == "It shall leaf. see @ROOT"
+    type_keys(page, " @guide")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 1")
+    assert page.eval(MENTION) == [True, ["file:guide.md*"]]
+    press(page, "Enter", "Enter", 13)
+    assert page.eval(f"{editor}.value") == "It shall leaf. see @ROOT guide.md"  # a file is written as its project-relative path
+    type_keys(page, " @oo")
+    page.wait("document.getElementById('mention-hint').matches(':popover-open')")
+    press(page, "Escape", "Escape", 27)
+    assert page.eval(MENTION)[0] is False and page.eval(f"[state.editing, {editor}.value]") == ["ROOT/LEAF-001", "It shall leaf. see @ROOT guide.md @oo"]  # Esc closed the hint only
+    press(page, "Escape", "Escape", 27)
+    assert page.eval("state.editing") is None
+    page.wait("drafts.size === 0")
+    assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf. see @ROOT guide.md @oo"  # every pick reached the autosave
 
 
 @pytest.mark.syngate("AI_CHAT-025")
@@ -1165,6 +1307,12 @@ def test_the_hide_pill_hides_the_chat_and_becomes_the_drop_down_showing_it_again
     enter_reply(page, "LEAF-001")
     users = f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user')].map((el) => el.textContent)"
     assert page.eval(users) == []  # the reply line of a hidden chat is the choice of a new conversation
+    page.eval(f"{closer}.click()")
+    assert page.eval("state.chats.get('LEAF-001').archive.length") == 0  # shown, never sent: nothing filed
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-show').click()")
+    assert page.eval(MENU_RESUME) == ["live"]
+    page.eval("document.querySelector('#status-menu [data-chat-resume=\"live\"]').click()")
+    page.eval("(() => { document.querySelector('.chat-setup').click(); document.querySelector('#status-menu [data-chat-reset=\"begin\"]').click(); })()")
     page.wait("state.chats.get('LEAF-001').archive.length === 1")
     page.eval(f"{closer}.click()")
     assert page.eval(hidden) == [0, REST_HINT, False, True]  # the live conversation is empty, yet ▾ leads to the filed one
@@ -1173,6 +1321,7 @@ def test_the_hide_pill_hides_the_chat_and_becomes_the_drop_down_showing_it_again
     page.eval("document.querySelector('#status-menu [data-chat-resume=\"0\"]').click()")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     assert page.eval(users) == ["Kept"] and page.eval("state.chats.get('LEAF-001').archive.length") == 0  # the one filed conversation resumes once picked
+    page.eval(f"{closer}.click()")
     edit_leaf(page, "It shall leaf anew.")
     page.eval("window.confirm = () => { throw new Error('nothing is erased, nothing to confirm'); }")
     page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-send').click()")
@@ -1510,6 +1659,28 @@ def test_the_splitter_resizes_the_outline_and_double_click_resets_it(page):
     assert page.eval(width) == default - 16 and page.eval("state.selected") is None  # the arrows move the splitter, not the selection
     page.eval(KEY % ("document.getElementById('splitter')", "ArrowRight"))
     assert page.eval(width) == default
+
+
+SPAN = "(() => { const pane = document.getElementById('doc-pane'), doc = document.getElementById('doc').getBoundingClientRect(), box = pane.getBoundingClientRect(), s = getComputedStyle(pane);" \
+       " const left = box.left + pane.clientLeft + parseFloat(s.paddingLeft), right = box.left + pane.clientLeft + pane.clientWidth - parseFloat(s.paddingRight);" \
+       " return [Math.abs(doc.left - left) < 1, Math.abs(doc.right - right) < 1, parseFloat(s.paddingLeft) < parseFloat(s.paddingRight), Math.round(doc.width)]; })()"
+
+
+@pytest.mark.syngate("ASSASSIN-UI-CONTENT-WIDTH")
+def test_the_document_fills_the_width_the_splitter_leaves_with_a_left_margin_narrower_than_the_right(page):
+    page.cdp.call("Emulation.setDeviceMetricsOverride", {"width": 1920, "height": 900, "deviceScaleFactor": 1, "mobile": False}, page.session)
+    page.wait("innerWidth === 1920")
+    wide = page.eval(SPAN)
+    assert wide[:3] == [True, True, True]
+    splitter = "document.getElementById('splitter')"
+    page.eval(f"{splitter}.focus()")
+    for _ in range(10):
+        page.eval(KEY % (splitter, "ArrowLeft"))
+    narrowed = page.eval(SPAN)
+    assert narrowed[:3] == [True, True, True] and narrowed[3] == wide[3] + 160  # the outline gave up 160px, the document took them all
+    page.eval("setTreeWidth(0)")
+    page.cdp.call("Emulation.clearDeviceMetricsOverride", {}, page.session)
+    page.wait("innerWidth === 1280")
 
 
 class CallsConnector(EchoConnector):

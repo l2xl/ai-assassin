@@ -5,4 +5,4 @@ test: 13e602b5376beb41134335db60feccd64467a2b6439fb3f1336f9bf642234a4d
 review: 45049cb3076d43660b8661355289e60307c7b1d6c53939c7dafa28318bad309b
 ---
 New conversation by entry
-begins when the reply line is entered while the item's chat holds messages and is shown nowhere in the tab, the previous conversation filed; a chat whose turn is running is joined instead.
+is shown, empty, when the reply line is entered while the item's chat holds messages and is shown nowhere in the tab, the previous conversation filed only once a first message is sent; a chat whose turn is running is joined instead.

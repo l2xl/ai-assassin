@@ -53,6 +53,8 @@ header h1 { font-size: 1rem; margin: 0; white-space: nowrap; }
 header .counts { display: flex; gap: 0.4rem; }
 #filter { width: 14rem; }
 #gate-banner { color: var(--red); font-size: 0.82rem; }
+#engine-state { color: var(--yellow-text); font-size: 0.82rem; white-space: nowrap; }
+#engine-state.failed { color: var(--red); }
 #save-state { font-size: 0.8rem; color: var(--dim); white-space: nowrap; }
 #save-state.unsaved { color: var(--yellow-text); }
 #save-state.failed { color: var(--red); cursor: pointer; }
@@ -65,8 +67,10 @@ main { flex: 1; display: flex; min-height: 0; }
 #splitter { position: relative; flex: none; width: 5px; cursor: col-resize; background: var(--line); touch-action: none; }
 #splitter::after { content: ""; position: absolute; inset: 0 -6px; }
 #splitter:hover, #splitter:focus-visible, #splitter.dragging { background: var(--accent); outline: none; }
-#doc-pane { flex: 1; overflow: auto; background: var(--panel); padding: 1.1rem 1.6rem 0; }
-#doc { max-width: 64rem; padding-bottom: 70vh; }
+/* The document fills the pane: its left margin holds only the fold marks sticking out of a top-level block's left border by half a mark,
+   the right one the message hover band (.chat-msg::after) is computed from. */
+#doc-pane { flex: 1; overflow: auto; background: var(--panel); padding: 1.1rem 1.6rem 0 calc(var(--mark) / 2 + 0.2rem); }
+#doc { padding-bottom: 70vh; }
 
 .chip { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.72rem; padding: 0.12em 0.55em 0.12em 0.4em; border-radius: 3px; white-space: nowrap; border: 1px solid transparent; cursor: pointer; background: none; }
 .chip .ball { display: inline-block; width: 0.62em; height: 0.62em; border-radius: 50%; margin-right: 0.35em; }
@@ -194,12 +198,12 @@ main { flex: 1; display: flex; min-height: 0; }
 .chat-msg:hover .msg-tools, .chat-msg:focus-within .msg-tools { opacity: 1; pointer-events: auto; }
 .msg-tools.left { left: calc(-1 * var(--block-pad) - var(--mark) / 2); margin-top: calc((1.55em - var(--mark)) / 2); align-items: flex-start; }
 .msg-tools.right { right: calc(-0.95rem - var(--mark) / 2); top: 0; bottom: 0; width: calc(0.95rem + var(--mark) / 2); min-height: calc(var(--mark) + 1.55em + 1rem); padding-block: calc(0.35rem + (1.55em - var(--mark)) / 2); box-sizing: border-box; align-items: flex-end; }
-/* The one shape of a mark -- the message marks, the selection's, the hidden chat's show button: a circle of --mark whose glyph is an inline
+/* The one shape of a mark -- the message marks, the selection's, the reply line's clear mark: a circle of --mark whose glyph is an inline
    SVG path centred in it, so it draws the same at any font, browser and density. */
-.msg-tools button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: var(--mark); height: var(--mark); margin: 0; padding: 0; border: 1px solid color-mix(in oklab, currentColor 45%, transparent); border-radius: 50%; background: var(--panel); color: var(--text); font-size: 1rem; line-height: 0; cursor: pointer; }
-.msg-tools button svg { display: block; width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.msg-tools button, .reply-clear { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: var(--mark); height: var(--mark); margin: 0; padding: 0; border: 1px solid color-mix(in oklab, currentColor 45%, transparent); border-radius: 50%; background: var(--panel); color: var(--text); font-size: 1rem; line-height: 0; cursor: pointer; }
+.msg-tools button svg, .reply-clear svg { display: block; width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .msg-tools button svg .fill { fill: currentColor; stroke: none; }
-.msg-tools button:hover, .msg-tools button:focus-visible { color: var(--accent); border-color: currentColor; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--panel); }
+.msg-tools button:hover, .msg-tools button:focus-visible, .reply-clear:hover, .reply-clear:focus-visible { color: var(--accent); border-color: currentColor; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--panel); }
 .msg-tools button.msg-drop:hover { color: var(--red); background: linear-gradient(var(--red-soft), var(--red-soft)), var(--panel); }
 .msg-fold[aria-disabled=true] { opacity: 0.45; pointer-events: none; }
 .chatting textarea.chat-input { min-height: 3.1em; }
@@ -212,6 +216,11 @@ textarea.chat-input { border-top: 1px solid transparent; padding-top: 0.35rem; c
 .reply-wait { display: block; position: relative; height: 0; color: var(--dim); }
 .reply-wait .spinner { position: absolute; left: -1.4rem; top: calc(0.35rem + 1px + 0.1em); }
 .block:not([aria-busy]) .reply-wait { display: none; }
+/* The clear mark of the reply line takes its place before the field and stands on the block's right border line level with the line's
+   first line, while the open chat's line holds text: the left padding is the spinner's, the mention hint opens under the field's left edge. */
+.reply-clear { position: absolute; right: calc(-0.5px - var(--mark) / 2); margin-top: calc((0.9rem * 1.55 - var(--mark)) / 2); z-index: 2; }
+.block-chat > .reply-clear { display: none; }
+.chatting > .block-chat:has(> .chat-input:not(:placeholder-shown)) > .reply-clear { display: inline-flex; }
 .block.editing .block-body { border-left: 2px solid var(--sel-line); margin-left: -0.6rem; padding-left: 0.45rem; }
 button.pill { appearance: none; line-height: 1.55; }
 .chat-pill { cursor: default; }
@@ -253,7 +262,6 @@ textarea.block-text:focus { outline: none; }
 .pill.chat-mode .ball { background: currentColor; }
 /* Every strip control reaches a little past its drawn pill, so a finger lands on it too. */
 .block-ai .pill:not(.chat-pill)::before, .chat-pill > button::before { content: ""; position: absolute; inset: -0.45rem -0.3rem; }
-.block-ai .pill.chat-done { color: var(--green); }
 .block-ai .save-mark { cursor: default; }
 .block-ai .save-mark.failed { color: var(--red); cursor: pointer; }
 /* The stop pill arms a moment after it appears, so a click meant for the hide pill it replaces does not stop the turn. */
@@ -265,7 +273,7 @@ textarea.block-text:focus { outline: none; }
 .pill .ball { display: inline-block; width: 0.62em; height: 0.62em; border-radius: 50%; margin-right: 0.4em; }
 .pill .rev { margin-left: 0.6em; padding-left: 0.6em; border-left: 1px solid color-mix(in oklab, var(--dim) 45%, transparent); color: var(--dim); }
 .note { color: var(--dim); font-size: 0.78rem; }
-#tests-pop, #status-menu, #help-pop { position: fixed; inset: auto; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 8px 28px #0004; }
+#tests-pop, #status-menu, #help-pop, #mention-hint { position: fixed; inset: auto; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 8px 28px #0004; }
 #tests-pop { width: min(40rem, 90vw); max-height: 70vh; overflow: hidden auto; padding: 0.6rem 1rem 0.8rem; }
 /* The status lines of the popup: one per axis, binding, tally and problem, coloured by its state. */
 .status-lines { font-size: 0.82rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -273,6 +281,14 @@ textarea.block-text:focus { outline: none; }
 .run-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 #status-menu { padding: 0.3rem; }
 #help-pop { padding: 0.6rem 1rem; }
+/* The mention hint is a manual popover: it never takes the focus from the field it hints, and nothing light-dismisses it. */
+#mention-hint { min-width: 14rem; max-width: min(36rem, 90vw); max-height: 40vh; overflow: auto; padding: 0.25rem; }
+#mention-hint:popover-open { display: flex; flex-direction: column; }
+.mention-entry { display: flex; gap: 0.8rem; align-items: baseline; justify-content: space-between; padding: 0.3em 0.7em; border-radius: 5px; font-size: 0.85rem; white-space: nowrap; cursor: pointer; }
+.mention-entry[aria-selected=true] { background: var(--sel-fill); outline: 1px solid var(--sel-line); }
+.mention-name { font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; }
+.mention-note { color: var(--dim); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; }
+.mention-entry[data-kind=file] .mention-note { font-style: italic; }
 #help-pop dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.25rem 0.9rem; margin: 0; font-size: 0.82rem; }
 #help-pop dt { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
 #help-pop dd { margin: 0; color: var(--dim); }
@@ -337,7 +353,7 @@ textarea.block-text:focus { outline: none; }
   main { flex-direction: column; }
   #splitter { display: none; }
   #tree-pane { width: auto !important; min-width: 0; max-width: none; max-height: 38vh; border-bottom: 1px solid var(--line); padding-bottom: 0.6rem; }
-  #doc-pane { padding: 0.8rem 1rem 0 1.6rem; overflow-x: hidden; }
+  #doc-pane { padding: 0.8rem 1rem 0 calc(var(--mark) / 2 + 0.2rem); overflow-x: hidden; }
   .chat-msg::after { width: calc(0.95rem + 1rem - 2px); }
   #filter { width: 100%; }
   #toasts { left: 1rem; right: 1rem; }
@@ -356,6 +372,9 @@ textarea.block-text:focus { outline: none; }
   <span class="counts" id="counts"></span>
   <span id="gate-banner" hidden></span>
   <span class="spacer"></span>
+  <span id="engine-state" hidden></span>
+  <button id="engine-restart" hidden title="stop what runs and restart the engine now">restart now</button>
+  <button id="page-update" hidden title="the page changed on the server — reload it here, the selection, filter, open files and reply text kept">⟳ page updated</button>
   <span id="save-state"></span>
   <button id="help" title="keys (?)">?</button>
   <input id="filter" type="search" placeholder="Filter by UID or text (press /)" aria-label="filter">
@@ -380,6 +399,7 @@ textarea.block-text:focus { outline: none; }
 <div id="tests-pop" popover></div>
 <div id="status-menu" popover role="menu"></div>
 <div id="sel-tools" popover="manual" class="msg-tools"><button type="button" class="msg-fold" aria-expanded="true" title="fold the selected text — it leaves the exchange"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.5 5.25h9L8 10.75z"/></svg></button><button type="button" class="msg-child" title="ask the AI to make the selection a child item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v6.5h7M9 7.5l2.5 2.5L9 12.5"/></svg></button><button type="button" class="msg-sibling" title="ask the AI to make the selection the next sibling item"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg></button></div>
+<div id="mention-hint" popover="manual" role="listbox" aria-label="mention"></div>
 <div id="help-pop" popover aria-label="keys"><dl>
   <dt>/</dt><dd>filter</dd>
   <dt>?</dt><dd>this list</dd>
@@ -387,6 +407,7 @@ textarea.block-text:focus { outline: none; }
   <dt>→ ←</dt><dd>unfold and fold a row</dd>
   <dt>Enter</dt><dd>edit the statement</dd>
   <dt>Esc</dt><dd>done</dd>
+  <dt>@</dt><dd>in a statement or reply: hint the items and files to mention · ↑ ↓ choose · Enter Tab pick · Esc close</dd>
   <dt>Ctrl/⌘+Enter</dt><dd>send</dd>
   <dt>Ctrl/⌘+.</dt><dd>stop the turn</dd>
   <dt>m · s</dt><dd>row menu · status popup of the focused block</dd>
@@ -397,6 +418,9 @@ textarea.block-text:focus { outline: none; }
 <script>
 "use strict";
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
+// The version of this page as the server stamped it; the fingerprint names the version served now.
+const PAGE = document.documentElement.dataset.page || "";
+const RELOAD_KEY = "assassin-reload";
 const SAVE_IDLE_MS = 1000, SAVE_MAX_MS = 5000, HOVER_EXPAND_MS = 600;
 const CALM = matchMedia("(prefers-reduced-motion: reduce)");
 const $ = (id) => document.getElementById(id);
@@ -413,8 +437,10 @@ const state = {
   // archive: the conversations filed behind the live one as [{started, title, messages}]}
   chats: new Map(),
   chatsVersion: -1,
-  // Where this tab shows an item's chat: block path -> {uid, byEdit: opened by this edit and hidden with it unless a message was sent}
+  // Where this tab shows an item's chat: block path -> {uid, byEdit: opened by this edit and hidden with it unless a message was sent,
+  // fresh: a new conversation shown empty, the live one filed only by the first send}
   views: new Map(JSON.parse(sessionStorage.getItem("assassin-chat-views") || "[]")),
+  replies: new Map(),   // uid -> the text left in the reply line when its chat was hidden, back in the line when the chat shows again
   seen: new Map(JSON.parse(sessionStorage.getItem("assassin-chat-seen") || "[]")),  // uid -> the log length this tab has shown
   watching: false,      // whether this tab's long poll on the chats is out
   stopping: new Set(),  // turns whose stop this tab has requested and not yet seen land
@@ -430,6 +456,9 @@ const state = {
   drag: null,           // {uid, from, under}
   job: null,
   savedAt: null,
+  boot: null,           // the run of the server the page last read: a new one counts its chats, turns and jobs anew
+  engine: null,         // the engine watch: sources changed, the error keeping them from loading, what a restart waits for
+  pageStale: false,     // the server serves another version of the page: it reloads once the tab is idle
 };
 // Autosave: drafts holds the fields typed but not yet stored, keyed "uid field";
 // shown holds the server value each text field was last filled from -- the
@@ -1168,12 +1197,18 @@ function decorateFileView(el, f) {
 
 // The AI chat lives inside its item's block: log and input under the description, controls on the bottom-left border.
 // An item has one chat, held by the server and shared by every block and every browser tab showing the item; a tab only keeps where it shows it.
-function persistViews() { sessionStorage.setItem("assassin-chat-views", JSON.stringify([...state.views].filter(([, view]) => !view.byEdit))); }
+function persistViews() { sessionStorage.setItem("assassin-chat-views", JSON.stringify([...state.views].filter(([, view]) => !view.byEdit && !view.fresh))); }
 function chatOf(uid) {
   const chat = { uid, log: [], session: null, turn: null, ...chatSetup(Object.keys(state.model.connectors)[0]), ...(state.chats.get(uid) || {}) };
   return state.model.connectors[chat.connector] ? chat : { ...chat, ...chatSetup(Object.keys(state.model.connectors)[0]) };
 }
-function chatAt(row) { return state.views.has(row.path) ? chatOf(row.uid) : null; }
+// A fresh view shows the new conversation it stands for: the setup of the chat, nothing of the live log, until a turn runs.
+function chatAt(row) {
+  const view = state.views.get(row.path), chat = view ? chatOf(row.uid) : null;
+  return view?.fresh && !chat.turn ? { ...chat, log: [], session: null, started: null, fresh: true } : chat;
+}
+// No chat is active for the item in this tab: nothing shown here of a live conversation holding messages, no turn to join.
+const startsAnew = (uid) => { const kept = state.chats.get(uid); return Boolean(kept && kept.log.length && !kept.turn && !chatShown(uid)); };
 const busy = (chat) => Boolean(chat.turn);
 const chatInput = (path) => $("doc").querySelector(`.block[data-path="${CSS.escape(path)}"] .chat-input`);
 
@@ -1223,7 +1258,7 @@ function messageHtml(m, index, busy, last) {
     : `<button type="button" class="msg-child" title="ask the AI to make the kept text a child item">${MARK.child}</button><button type="button" class="msg-sibling" title="ask the AI to make the kept text the next sibling item">${MARK.sibling}</button>`;
   const [agent, turn] = String(m.agent || "").split(":");
   const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>`
-    : m.agent_report ? `<div class="msg-from">report of ${uidLink(m.agent_report)}</div>` : "";
+    : m.agent_report ? `<div class="msg-from">report of ${uidLink(m.agent_report)}</div>` : m.statement ? '<div class="msg-from">statement changed</div>' : "";
   return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${m.agent_report ? " agent-report" : ""}${out ? " dropped" : ""}" data-index="${index}">`
     + `<div class="msg-body">${from}${partsHtml(m, busy)}</div>` + (right ? `<span class="msg-tools right">${right}</span>` : "") + "</div>";
 }
@@ -1350,12 +1385,16 @@ function toggleFold(key) {
 // Every block holds the reply line under its description; the log and the controls come with the open chat. The strip's first pill
 // follows the state: ■ stop while a turn runs, ✓ done while the block is edited, ▴ done for the open chat, ▾ for a hidden one with history.
 function decorateChat(el, row) {
+  const view = state.views.get(row.path);
+  if (view?.fresh && state.chats.get(row.uid)?.turn) { view.fresh = false; persistViews(); }  // a turn begun elsewhere is joined
   const chat = chatAt(row), box = el.querySelector(".block-chat"), tools = el.querySelector(".block-ai"), kept = state.chats.get(row.uid), editing = state.editing === row.path;
   el.classList.toggle("chatting", Boolean(chat));
   el.classList.toggle("busy", Boolean(chat && busy(chat)));
   if (kept?.turn) el.setAttribute("aria-busy", "true"); else el.removeAttribute("aria-busy");
-  if (chat && state.seen.get(row.uid) !== chat.log.length) { state.seen.set(row.uid, chat.log.length); persistSeen(); }
-  if (!box.firstChild) box.innerHTML = '<div class="chat-log" role="log" aria-live="polite"></div><span class="reply-wait"><span class="spinner"></span></span><textarea class="block-text chat-input" spellcheck="true"></textarea>';
+  if (chat && kept && state.seen.get(row.uid) !== kept.log.length) { state.seen.set(row.uid, kept.log.length); persistSeen(); }
+  if (!box.firstChild) box.innerHTML = '<div class="chat-log" role="log" aria-live="polite"></div><span class="reply-wait"><span class="spinner"></span></span>'
+    + `<button type="button" class="reply-clear" title="clear the message">${MARK.remove}</button><textarea class="block-text chat-input" spellcheck="true"></textarea>`;
+  if (chat && state.replies.has(row.uid)) { if (!box.lastChild.value) box.lastChild.value = state.replies.get(row.uid); state.replies.delete(row.uid); }
   box.lastChild.placeholder = kept?.turn ? "Waiting AI response" : chat ? "Type message · Ctrl/⌘+Enter sends" : "Type a message to start new chat";
   box.lastChild.tabIndex = chat || editing ? 0 : -1;
   if (!chat) {
@@ -1368,12 +1407,11 @@ function decorateChat(el, row) {
   const connector = state.model.connectors[chat.connector], advanced = advancedModes(chat.connector), running = busy(chat), several = Object.keys(state.model.connectors).length > 1;
   setHtml(box.querySelector(".chat-log"), chat.log.map((m, i) => messageHtml(m, i, running, i === chat.log.length - 1) + (m.role === "user" ? "" : activityHtml(m.steps, `${chat.uid}:${i}`))).join("")
     + liveHtml(chat, running));
-  const sendTitle = running ? `a turn of ${chat.uid} is running — wait for it or stop it` : editing
-    ? "save the statement and send it as the first message of a new conversation — the previous one is kept, ▾ lists it (Ctrl/⌘+Enter)" : "send the message (Ctrl/⌘+Enter)";
+  const sendTitle = running ? `a turn of ${chat.uid} is running — wait for it or stop it` : !editing ? "send the message (Ctrl/⌘+Enter)" : chat.log.length
+    ? "save the statement and send it into this conversation (Ctrl/⌘+Enter)" : "save the statement and send it as the first message of a new conversation — the previous one is kept, ▾ lists it (Ctrl/⌘+Enter)";
   const statePill = running ? (state.stopping.has(chat.turn) ? '<button type="button" class="pill chat-stop" disabled><span class="spinner"></span> stopping…</button>'
       : '<button type="button" class="pill chat-stop" title="stop the turn now — nothing more of it is applied">■ stop</button>')
-    : editing ? '<button type="button" class="pill chat-done" title="done — the statement is saved, the editor closed (Esc)">✓ done</button>'
-    : '<button type="button" class="pill chat-hide" title="hide the chat here — ▾ lists it again, nothing is lost">▴ done</button>';
+    : `<button type="button" class="pill chat-hide" title="${editing ? "done — the statement is saved, the editor and the chat closed (Esc)" : "hide the chat here — ▾ lists it again, nothing is lost"}">▴ done</button>`;
   setHtml(tools, statePill + (editing ? `<span class="pill save-mark" data-uid="${esc(row.uid)}"></span>` : "")
     + `<span class="pill chat-pill${running ? " busy" : ""}">`
     + `<button type="button" class="chat-send" title="${sendTitle}">➤ send</button>`
@@ -1415,10 +1453,11 @@ function chatSetup(connector) {
 }
 
 // Showing the chat in a block: wherever the item is shown, in this tab or another, it is the same chat.
+// A view begun where no chat is active shows a new, fresh conversation.
 function showChat(row, byEdit = false) {
-  if (!state.views.has(row.path)) state.views.set(row.path, { uid: row.uid, byEdit });
+  if (!state.views.has(row.path)) state.views.set(row.path, { uid: row.uid, byEdit, fresh: startsAnew(row.uid) });
   persistViews();
-  return chatOf(row.uid);
+  return chatAt(row);
 }
 
 function focusChat(path) {
@@ -1426,7 +1465,8 @@ function focusChat(path) {
   if (input) { input.focus({ preventScroll: true }); input.scrollIntoView({ block: "nearest" }); }
 }
 
-function openChat(row) {
+function openChat(row, picked = false) {
+  if (picked) state.views.set(row.path, { uid: row.uid, byEdit: false, fresh: false });
   showChat(row);
   select(row.uid, row.path, { origin: "doc" });
   renderDoc();
@@ -1452,17 +1492,28 @@ function openConversationMenu(row, kept, live, anchor) {
 }
 async function resumeConversation(row, index) {
   await updateChat(row.uid, { resume: index });
-  openChat(row);
+  openChat(row, true);
 }
 
-// Hiding is refused while a message waits in the reply line: nothing typed is lost unseen.
+// Hiding keeps the text typed in the reply line for when the chat shows again; a fresh conversation hides without a trace.
 function hideChat(path) {
-  const input = chatInput(path);
-  if (input && input.value.trim()) { toast("send or clear the message first", "info"); input.focus({ preventScroll: true }); return false; }
+  const input = chatInput(path), view = state.views.get(path);
+  if (input && input.value.trim() && view) { state.replies.set(view.uid, input.value); input.value = ""; }
   state.views.delete(path);
   persistViews();
   renderDoc();
   return true;
+}
+
+// The clear mark empties the reply line and the text the tab keeps for it, the focus back in the line; the log and the item stay.
+function clearReply(row) {
+  const input = chatInput(row.path);
+  state.replies.delete(row.uid);
+  mentionClose();
+  if (!input) return;
+  input.value = "";
+  autoGrow(input);
+  input.focus({ preventScroll: true });
 }
 
 // A change to the chat shows at once and is then stored by the server, whose record every tab reads back; of changes in flight
@@ -1491,7 +1542,8 @@ function toggleChatMode(chat, mode) {
 }
 
 // A turn: the typed text -- or the `composed` one of a mark -- joins the log as the user's message; a statement sent from the editor is the
-// content itself, not repeated, and starts the item's chat anew, the old one filed first; a retry sends the last message again without logging it twice.
+// content itself, not repeated, as the first message of a new conversation, and is announced into a conversation holding messages; a fresh
+// view's first send files the live conversation; a retry sends the last message again without logging it twice.
 async function sendChat(row, statement = null, retry = false, composed = null) {
   const chat = row && chatAt(row), input = chat && chatInput(row.path);
   const text = retry ? chat?.log.findLast((m) => m.role === "user")?.text ?? "" : statement ?? composed ?? (input ? input.value.trim() : "");
@@ -1499,15 +1551,16 @@ async function sendChat(row, statement = null, retry = false, composed = null) {
   if (busy(chat)) { toast(`a turn of ${chat.uid} is running — wait for it or stop it`, "info"); return; }
   if (!text) { toast("type a message first", "info"); return; }
   if (input && statement === null && composed === null && !retry) input.value = "";
-  state.views.get(row.path).byEdit = false;
+  const view = state.views.get(row.path), fresh = Boolean(view.fresh);
+  Object.assign(view, { byEdit: false, fresh: false });
   persistViews();
-  if (statement !== null) for (const key of state.unfolded) if (key.startsWith(chat.uid + ":")) state.unfolded.delete(key);
+  if (fresh) for (const key of state.unfolded) if (key.startsWith(chat.uid + ":")) state.unfolded.delete(key);
   const { uid, connector, model, effort, modes } = chat;
   try {
-    const started = await api("/api/turn", { uid, connector, model, effort, modes, text, statement: statement !== null, fresh: statement !== null, retry });
+    const started = await api("/api/turn", { uid, connector, model, effort, modes, text, statement: statement !== null, fresh, retry });
     takeChat(started.chat);
     watchChats();
-  } catch (err) { toast(err.message); }
+  } catch (err) { if (fresh) view.fresh = true; toast(err.message); renderDoc(); }
 }
 
 // One press stops the turn; the pill reads as stopping until the outcome lands.
@@ -1543,8 +1596,8 @@ function extractItem(row, text, sibling) {
   sendChat(row, null, false, extractionText(row, text, sibling));
 }
 
-// The editor's send: the item is saved first and its stored statement is the user's text of the turn; a chat with messages is erased
-// only after a confirmation, and nothing is sent while a turn runs or the statement is empty.
+// The editor's send: the item is saved first and its stored statement, changed or not, is the user's text of the turn -- the first message
+// of a new conversation, or announced into the one shown; nothing is sent while a turn runs or the statement is empty.
 async function sendEdited(row) {
   if (busy(chatOf(row.uid))) { toast(`a turn of ${row.uid} is running — wait for it or stop it`, "info"); return; }
   showChat(row);
@@ -1568,16 +1621,12 @@ async function finishEditing(row) {
   await flushAll();
 }
 
-// The reply field is entered by click or by focus: in the editor it ends the edit, at rest it opens the chat — a new conversation when the
-// item's chat holds messages and is shown nowhere in this tab, the old one filed behind ▾; a running turn is joined instead.
+// The reply field is entered by click or by focus: in the editor it ends the edit, at rest it opens the chat — a new, fresh conversation
+// when the item's chat holds messages and is shown nowhere in this tab, the old one filed behind ▾ by the first send; a running turn is joined instead.
 function enterReply(el) {
   const row = { uid: el.dataset.uid, path: el.dataset.path };
   if (state.editing === row.path) finishEditing(row);
-  else if (!chatAt(row)) {
-    const kept = state.chats.get(row.uid);
-    if (kept && kept.log.length && !kept.turn && !chatShown(row.uid)) updateChat(row.uid, { begin: true });
-    openChat(row);
-  }
+  else if (!chatAt(row)) openChat(row);
 }
 
 function openChatMenu(chat, anchor) {
@@ -1647,6 +1696,7 @@ function renderDoc() {
   }
   doc.querySelectorAll(".block").forEach((el, i) => decorateBlock(el, state.docRows[i]));
   renderChatMarks();
+  if (mention.el && (!mention.el.isConnected || document.activeElement !== mention.el)) mentionClose();
 }
 
 // ---- status popup, opened from the label's icon in either pane -------------------
@@ -1772,22 +1822,23 @@ async function reloadFiles() {
   }));
 }
 
-// The edit ends with its text kept; a chat this edit opened hides again unless it holds a message or runs a turn.
+// The edit ends with its text kept; a chat this edit opened hides again unless it shows a message or runs a turn.
 function stopEditing() {
   if (!state.editing) return;
   const row = state.docRows.find((r) => r.path === state.editing), view = row && state.views.get(row.path);
   state.editing = null;
   if (view && view.byEdit) {
-    const chat = chatOf(row.uid);
-    if (busy(chat) || chat.log.length || !hideChat(row.path)) { view.byEdit = false; persistViews(); }
+    const chat = chatAt(row);
+    if (busy(chat) || chat.log.length) { view.byEdit = false; persistViews(); } else hideChat(row.path);
   }
   flushAll();
 }
 
-// The done mark, Esc being its keyboard twin: an open edit ends, else the chat hides here; the block takes the focus back.
+// The one done mark, Esc being its keyboard twin: whatever is open in the block closes -- the edit, its text saved, and the chat, the reply
+// line's text kept for later -- the chat staying while a turn runs; the block takes the focus back.
 function closeChat(row) {
-  if (state.editing === row.path) stopEditing();
-  else if (!hideChat(row.path)) return;
+  stopEditing();
+  if (state.views.has(row.path) && !busy(chatOf(row.uid))) hideChat(row.path);
   renderDoc();
   blockEl(row.path)?.focus({ preventScroll: true });
 }
@@ -1851,6 +1902,162 @@ function stopJob() {
   api(`/api/job/${state.job.id}/cancel`, {}).catch((err) => toast(err.message));
 }
 
+// ---- mention hint: `@` typed in a statement editor or a reply line hints the items and project files it may name ----
+
+const MENTION_FIELDS = "#doc textarea.block-text", MENTION_RE = /(^|[\s(])@([^\s@]*)$/, MENTION_LIMIT = 6, FILES_FRESH_MS = 5000;
+// el: the field being hinted; start: where its `@` stands; dismissed: the word Esc closed, kept closed until the caret leaves it.
+const mention = { el: null, start: 0, entries: [], sig: "", index: 0, dismissed: null, picking: false, files: [], fetched: 0, loading: false };
+
+function mentionWord(el) {
+  if (el.selectionStart !== el.selectionEnd) return null;
+  const found = MENTION_RE.exec(el.value.slice(0, el.selectionStart));
+  return found && { start: found.index + found[1].length, query: found[2] };
+}
+
+// Up to MENTION_LIMIT items, the UIDs starting with the text first, then as many files, the names starting with it first.
+function mentionEntries(query) {
+  const needle = query.toLowerCase(), has = (text) => text.toLowerCase().includes(needle), starts = (text) => text.toLowerCase().startsWith(needle);
+  const items = Object.keys(state.model.items).filter(has).sort((a, b) => Number(starts(b)) - Number(starts(a)) || a.localeCompare(b)).slice(0, MENTION_LIMIT)
+    .map((uid) => ({ kind: "item", value: "@" + uid, name: "@" + uid, note: item(uid).title }));
+  const name = (path) => path.slice(path.lastIndexOf("/") + 1), rank = (path) => (starts(name(path)) ? 0 : has(name(path)) ? 1 : 2);
+  const files = mention.files.filter(has).sort((a, b) => rank(a) - rank(b) || a.length - b.length || a.localeCompare(b)).slice(0, MENTION_LIMIT)
+    .map((path) => ({ kind: "file", value: path, name: path, note: "file" }));
+  return [...items, ...files];
+}
+
+// The project's file list is read when a hint opens and kept for a few seconds; until it arrives the hint offers the items alone.
+async function mentionFiles(el) {
+  if (mention.loading || Date.now() - mention.fetched < FILES_FRESH_MS) return;
+  mention.loading = true;
+  try { mention.files = (await api("/api/files")).files; } catch (err) { /* the items still hint */ }
+  mention.fetched = Date.now();
+  mention.loading = false;
+  if (document.activeElement === el) mentionUpdate(el);
+}
+
+function mentionClose() {
+  const pop = $("mention-hint");
+  if (pop.matches(":popover-open")) pop.hidePopover();
+  if (mention.el) for (const attribute of ["aria-controls", "aria-activedescendant"]) mention.el.removeAttribute(attribute);
+  Object.assign(mention, { el: null, entries: [], sig: "" });
+  setHtml(pop, "");
+}
+
+function mentionRender() {
+  const pop = $("mention-hint");
+  setHtml(pop, mention.entries.map((entry, i) => `<div class="mention-entry" role="option" id="mention-${i}" data-index="${i}" data-kind="${entry.kind}" data-value="${esc(entry.value)}" aria-selected="${i === mention.index}">`
+    + `<span class="mention-name">${esc(entry.name)}</span><span class="mention-note">${esc(entry.note)}</span></div>`).join(""));
+  if (!pop.matches(":popover-open")) pop.showPopover();
+  placeBy(pop, mention.el);
+  mention.el.setAttribute("aria-controls", "mention-hint");
+  mention.el.setAttribute("aria-activedescendant", "mention-" + mention.index);
+  pop.querySelector("[aria-selected=true]")?.scrollIntoView({ block: "nearest" });
+}
+
+// Re-reads the word at the caret: the hint follows it, opens for it, or closes once there is none, no entry matches or Esc dismissed it.
+function mentionUpdate(el) {
+  if (mention.picking) return;
+  const word = el.isConnected && document.activeElement === el ? mentionWord(el) : null;
+  if (!word) { mention.dismissed = null; mentionClose(); return; }
+  if (mention.dismissed && mention.dismissed.el === el && mention.dismissed.start === word.start) { mentionClose(); return; }
+  mentionFiles(el);
+  const entries = mentionEntries(word.query), sig = entries.map((entry) => entry.value).join("\n");
+  if (!entries.length) { mentionClose(); return; }
+  if (sig !== mention.sig) mention.index = 0;
+  Object.assign(mention, { el, start: word.start, entries, sig });
+  mentionRender();
+}
+
+// A pick replaces the `@word` before the caret and announces the new text as typed, so the autosave stores it.
+function mentionPick(index = mention.index) {
+  const { el, start, entries } = mention, entry = entries[index];
+  if (!entry) return;
+  const caret = el.selectionStart;
+  mentionClose();
+  el.setRangeText(entry.value, start, caret, "end");
+  mention.picking = true;
+  try { el.dispatchEvent(new Event("input", { bubbles: true })); } finally { mention.picking = false; }
+  el.focus({ preventScroll: true });
+}
+
+// In the capture phase, so an open hint takes its keys before the editor's Esc and the reply line's own handlers see them.
+document.addEventListener("keydown", (event) => {
+  if (!mention.el || event.target !== mention.el || event.isComposing) return;
+  const plain = !(event.ctrlKey || event.metaKey || event.altKey || event.shiftKey), count = mention.entries.length;
+  if (plain && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    mention.index = (mention.index + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
+    mentionRender();
+  } else if (plain && (event.key === "Enter" || event.key === "Tab")) mentionPick();
+  else if (plain && event.key === "Escape") { mention.dismissed = { el: mention.el, start: mention.start }; mentionClose(); }
+  else { if (event.key === "Enter") mentionClose(); return; }
+  event.preventDefault();
+  event.stopPropagation();
+}, true);
+$("mention-hint").addEventListener("mousedown", (event) => event.preventDefault());
+$("mention-hint").addEventListener("click", (event) => {
+  const entry = event.target.closest(".mention-entry");
+  if (entry) mentionPick(Number(entry.dataset.index));
+});
+document.addEventListener("focusout", (event) => { if (event.target === mention.el) mentionClose(); });
+document.addEventListener("selectionchange", () => { if (mention.el) mentionUpdate(mention.el); });
+addEventListener("resize", () => { if (mention.el) placeBy($("mention-hint"), mention.el); });
+
+// ---- live engine: a changed page reloads itself, a changed server restarts in place -------------
+
+// The header reads the engine watch: an update that does not load, one waiting for what runs -- with a restart now that stops it -- or the
+// restart under way; and, while the tab is busy, the page update it waits to reload.
+function renderEngine() {
+  const engine = state.engine, el = $("engine-state"), wanted = Boolean(engine?.watch && (engine.changed.length || engine.requested));
+  const waiting = wanted && !engine.error && !engine.restarting && engine.running > 0;
+  el.className = engine?.error && wanted ? "failed" : "";
+  el.title = engine?.error && wanted ? engine.error : wanted ? engine.changed.join("\n") : "";
+  el.textContent = !wanted ? "" : engine.error ? "⛔ engine update does not load — the running engine stays"
+    : waiting ? `⟳ engine update waits for ${plural(engine.running, "running turn or run", "running turns and runs")}` : "⟳ engine restarting…";
+  el.hidden = !wanted;
+  $("engine-restart").hidden = !waiting;
+  $("page-update").hidden = !state.pageStale;
+}
+
+// A tab is idle while nothing it holds would be lost or cut by a reload: no unsaved edit, no open editor, menu or hint, no drag, no text
+// selected and no text in the field holding the focus.
+function idle() {
+  const el = document.activeElement, typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && el.value;
+  return !drafts.size && !state.editing && !state.adding && !state.drag && !state.creating && !mention.el && !typing
+    && !document.querySelector(":popover-open") && getSelection().isCollapsed;
+}
+
+// What a reload keeps of the tab beyond what the session storage already holds: the selection, the filters, the open file views, the
+// unfolded steps, the text of every reply line and the scroll of both panes.
+function uiState() {
+  const replies = new Map(state.replies);
+  for (const input of $("doc").querySelectorAll(".block .chat-input")) if (input.value.trim()) replies.set(input.closest(".block").dataset.uid, input.value);
+  return { selected: state.selected, path: state.path, panel: state.panel, filter: state.filter, statusFilter: [...state.statusFilter],
+    files: [...state.files.values()].map((f) => [f.path, f.anchor]), unfolded: [...state.unfolded], replies: [...replies],
+    scroll: [$("doc-pane").scrollTop, $("tree-pane").scrollTop] };
+}
+
+async function reloadPage() {
+  if (state.reloading) return;
+  state.reloading = true;
+  await flushAll();
+  if (drafts.size || !idle()) { state.reloading = false; renderEngine(); return; }
+  sessionStorage.setItem(RELOAD_KEY, JSON.stringify(uiState()));
+  location.reload();
+}
+
+async function restoreUi(saved) {
+  state.filter = $("filter").value = saved.filter || "";
+  state.statusFilter = new Set(saved.statusFilter || []);
+  state.unfolded = new Set(saved.unfolded || []);
+  state.replies = new Map(saved.replies || []);
+  if (saved.selected && state.model.items[saved.selected]) Object.assign(state, { selected: saved.selected, path: docPath(saved.selected, saved.path), panel: saved.panel });
+  for (const [path, anchor] of saved.files || []) state.files.set(path, { path, anchor, text: null });
+  await reloadFiles();
+  $("counts")._html = null;
+  render();
+  [$("doc-pane").scrollTop, $("tree-pane").scrollTop] = saved.scroll || [0, 0];
+}
+
 // ---- refresh loop --------------------------------------------------------
 
 let refreshSeq = 0;
@@ -1861,6 +2068,8 @@ async function refresh() {
   if (seq !== refreshSeq) return;
   const booting = !state.model;
   state.model = model;
+  state.engine = model.engine;
+  if (model.boot !== state.boot) { state.chatsVersion = -1; state.boot = model.boot; }  // a restarted engine counts its chats from zero
   try { await reloadChats(); } catch (err) { toast(err.message); return; }
   if (seq !== refreshSeq) return;
   for (const [path, view] of state.views) {
@@ -1875,13 +2084,19 @@ async function refresh() {
   if (model.job && state.job?.id !== model.job) attachJob(model.job);
   await reloadFiles();
   render();
+  renderEngine();
 }
 
 async function poll() {
   if (document.hidden || !state.model || state.drag) return;
   try {
     const open = [...state.files.values()].filter((f) => f.text != null);
-    const { fingerprint, files, chats, job } = await api("/api/fingerprint" + (open.length ? "?" + open.map((f) => "file=" + encodeURIComponent(f.path)).join("&") : ""));
+    const { fingerprint, files, chats, job, boot, page, engine } = await api("/api/fingerprint" + (open.length ? "?" + open.map((f) => "file=" + encodeURIComponent(f.path)).join("&") : ""));
+    state.engine = engine;
+    if (page !== PAGE) state.pageStale = true;
+    if (state.pageStale && idle()) { reloadPage(); return; }
+    renderEngine();
+    if (boot !== state.boot) { await refresh(); return; }
     if (job && state.job?.id !== job) attachJob(job);
     const stale = chats !== state.chatsVersion;
     if (stale) await reloadChats();
@@ -1954,8 +2169,8 @@ document.addEventListener("mousedown", () => { if (state.drag) endDrag(); });
 document.addEventListener("input", (event) => {
   const el = event.target;
   if (el.tagName === "TEXTAREA") autoGrow(el);
-  if (!el.dataset || !el.dataset.field) return;
-  edit(el.dataset.uid, el.dataset.field, el.value);
+  if (el.dataset && el.dataset.field) edit(el.dataset.uid, el.dataset.field, el.value);
+  if (el.matches(MENTION_FIELDS)) mentionUpdate(el);
 });
 document.addEventListener("focusout", (event) => {
   const el = event.target;
@@ -1978,13 +2193,13 @@ $("conflicts").addEventListener("click", (event) => {
 });
 
 const doc = $("doc");
-// In the reply line Esc is the done mark while the line is empty; with text in it, or a turn running, it only returns the focus to the block.
+// In the reply line Esc is the done mark, the typed text kept for later; while a turn runs it only returns the focus to the block.
 doc.addEventListener("keydown", (event) => {
   if (!event.target.classList.contains("chat-input")) return;
   const block = event.target.closest(".block"), row = state.docRows.find((r) => r.path === block.dataset.path);
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendChat(row); }
   if (stopKey(event)) { event.preventDefault(); stopTurn(chatOf(row.uid)); }
-  if (event.key === "Escape") { event.preventDefault(); !event.target.value.trim() && !busy(chatOf(row.uid)) ? closeChat(row) : block.focus({ preventScroll: true }); }
+  if (event.key === "Escape") { event.preventDefault(); !busy(chatOf(row.uid)) ? closeChat(row) : block.focus({ preventScroll: true }); }
   event.stopPropagation();
 });
 doc.addEventListener("click", (event) => {
@@ -2004,8 +2219,9 @@ doc.addEventListener("click", (event) => {
     const row = state.docRows.find((r) => r.path === path), chat = chatAt(row), tool = target.closest(".msg-tools button"), fold = target.closest("[data-fold]");
     if (fold) toggleFold(fold.dataset.fold);
     else if (target.closest(".chat-input")) enterReply(el);
+    else if (target.closest(".reply-clear")) clearReply(row);
     else if (target.closest(".chat-show")) showHidden(row, target.closest(".chat-show"));
-    else if (target.closest(".chat-hide, .chat-done")) closeChat(row);
+    else if (target.closest(".chat-hide")) closeChat(row);
     else if (target.closest(".chat-stop")) stopTurn(chat);
     else if (target.closest(".chat-send")) state.editing === path ? sendEdited(row) : sendChat(row);
     else if (target.closest(".chat-setup")) openChatMenu(chat, target.closest(".chat-setup"));
@@ -2040,7 +2256,7 @@ statusMenu.addEventListener("click", (event) => {
   if (!event.target.closest("[role^=menuitem]")) return;
   closeMenu();
   if (chat && chatReset) resetChat(chat, chatReset);
-  else if (row && chatResume !== undefined) chatResume === "live" ? openChat(row) : resumeConversation(row, Number(chatResume));
+  else if (row && chatResume !== undefined) chatResume === "live" ? openChat(row, true) : resumeConversation(row, Number(chatResume));
   else if (chat && chatMode) toggleChatMode(chat, chatMode);
   else if (row && rowAct === "add") startAdding(row);
   else if (row && rowAct === "add-parent") startLinking(row);
@@ -2054,7 +2270,7 @@ statusMenu.addEventListener("keydown", (event) => {
   if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); entries.at((at + (event.key === "ArrowDown" ? 1 : -1)) % entries.length)?.focus({ preventScroll: true }); }
   if (event.key === "Escape") { event.preventDefault(); closeMenu(); }
 });
-const onPaneScroll = () => { if (!settling) hideMenus(); };
+const onPaneScroll = () => { if (mention.el) placeBy($("mention-hint"), mention.el); if (!settling) hideMenus(); };
 $("doc-pane").addEventListener("scroll", onPaneScroll, { passive: true });
 $("tree-pane").addEventListener("scroll", onPaneScroll, { passive: true });
 addEventListener("resize", hideMenus);
@@ -2132,6 +2348,17 @@ selTools.addEventListener("click", (event) => {
   getSelection().removeAllRanges();
 });
 $("help").addEventListener("click", toggleHelp);
+$("page-update").addEventListener("click", async () => {
+  await flushAll();
+  if (drafts.size) { toast("resolve the unsaved edits first"); return; }
+  sessionStorage.setItem(RELOAD_KEY, JSON.stringify(uiState()));
+  location.reload();
+});
+$("engine-restart").addEventListener("click", async () => {
+  const running = state.engine?.running || 0;
+  if (!confirm(`Stop the ${plural(running, "running turn or run", "running turns and runs")} and restart the engine now?`)) return;
+  try { state.engine = await api("/api/engine", { stop: true }); renderEngine(); } catch (err) { toast(err.message); }
+});
 $("console-stop").addEventListener("click", stopJob);
 doc.addEventListener("dblclick", (event) => {
   const view = event.target.closest(".file-view");
@@ -2241,8 +2468,10 @@ if (!TOKEN) {
   document.body.innerHTML = '<div class="empty"><h2>Missing session token</h2><p>Open the exact URL printed by <code>assassin</code> (it carries <code>?token=…</code>).</p></div>';
 } else {
   refresh().then(() => {
+    const saved = JSON.parse(sessionStorage.getItem(RELOAD_KEY) || "null");
+    sessionStorage.removeItem(RELOAD_KEY);
     if (state.model) for (const uid of state.model.roots) state.expanded.add(uid);
-    render();
+    if (saved && state.model) restoreUi(saved); else render();
   });
   setInterval(poll, 2000);
 }

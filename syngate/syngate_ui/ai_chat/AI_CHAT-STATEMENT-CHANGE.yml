@@ -1,0 +1,7 @@
+---
+parents: [AI-CHAT]
+order: 25
+test: ~
+---
+Statement change announcement
+heads the next turn of a conversation whose anchored item's statement changed since its previous turn — in the page, on disk or by the AI — as a message of the log quoting the statement as it now reads.

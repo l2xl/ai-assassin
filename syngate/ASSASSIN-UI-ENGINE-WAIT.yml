@@ -1,0 +1,6 @@
+---
+parents: [ASSASSIN-UI-ENGINE-RELOAD]
+test: ~
+---
+Restart deferral
+holds the restart while any turn, background subagent or run is live, the header naming the update and what it waits for, its `restart now` stopping them first; once nothing runs, a new turn or run is refused until the engine is back.

@@ -1,0 +1,6 @@
+---
+parents: [ASSASSIN-UI]
+order: 7
+---
+Engine reload
+re-executes the `assassin` server in place on a change of its package's Python sources or a `restart now`, unless the server was started with `--no-reload`.

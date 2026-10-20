@@ -48,7 +48,9 @@ is one non-interactive turn of the chosen connector.
   parent's is off, and one line ahead of the user's text tells the model the tree is read-only for
   this chat, so it answers in text.
 - **Prompt library.** The markdown files under the package's `prompts/` folder, by file stem
-  (`synthetic.LIBRARY`), each opened by a front matter: `kind` — `skill` or `tool` — a
+  (`synthetic.LIBRARY`), read from the files anew whenever a prompt is needed — every round of every turn, a skill call, the
+  default prompt, the answer schema — and never kept between two reads: `LIBRARY`, `SKILLS`, `PROMPTS` and `ANSWER_SCHEMA` are live
+  views that build themselves from the files at every access, a turn taking one consistent read of them per round. Each file is opened by a front matter: `kind` — `skill` or `tool` — a
   `description` and, for a skill, `default`. A *tool* defines the format of a structured answer the
   harness turns into a call whose result reaches the model with the next turn; a *skill* is
   description only — the rules of calling tools (`call_tool.md`) and the rules of the DAG

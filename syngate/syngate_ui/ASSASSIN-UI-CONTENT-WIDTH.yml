@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI-CONTENT]
+order: -10
+test: ~
+---
+Document width
+fills the whole width the splitter leaves beside the outline, with no maximum of its own, its left margin narrower than its right one.

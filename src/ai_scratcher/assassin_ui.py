@@ -10,7 +10,9 @@ tree under `syngate/`: the DAG with live status rollup, per-field item edits
 anchored at every item, and test / review / clear runs driven through `syngate.py`
 subprocesses with output streamed to the browser over SSE. Stamping stays in the
 syngate CLI code path, so the browser button and the terminal command are the same
-user action.
+user action. A change of the engine's own Python sources re-executes the server in
+place once no turn or run is live, keeping its port, token and chats; a changed page
+reloads itself in the browser.
 
 The server binds 127.0.0.1 only. Every request must carry the per-session
 token from the URL printed at startup (`X-Assassin-Token` header or `?token=`),
@@ -28,6 +30,7 @@ import os
 import re
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -53,6 +56,9 @@ RUN_COVERAGE = "syngate_coverage.jsonl"
 TURN_ROUTE = r"/api/turn/([A-Za-z0-9_\-]+:\d+)"
 # Project files opened from a link: git-tracked files are readable, only markdown is written.
 FILE_LIMIT = 1 << 20
+# The project files the mention hint offers: at most this many, the walk without git skipping hidden folders and these.
+FILES_LIMIT = 5000
+WALK_SKIPPED = {"node_modules", "__pycache__", "venv", "env", "dist", "build", "target", "site-packages"}
 # The chats of the items, kept next to the tree across server runs; a settled change is written this many seconds after the first.
 CHATS_FILE = "assassin_chats.json"
 LEGACY_CHATS_FILE = "syngate_chats.json"
@@ -64,6 +70,18 @@ TREE_OFF = "The tree is read-only for this chat: add, edit, move, rename and rem
 TREE_REFUSAL = "tree edits are off for this chat — switch Tree edit on"
 GIT_ABSENT = "git is not at hand for this project"
 # The request of the review commit's message, sent to the reviewed item's chat when no single commit names the review.
+# The message heading a turn whose anchored item's statement changed since the conversation's previous turn, or sent from the editor.
+STATEMENT_NOTE = "The statement of @{uid} now reads:\n\n{statement}"
+# The engine's own files: the page, read for every request, and the Python sources, watched so a change re-executes the server in place
+# once nothing runs; the restarted process takes the session token and the listening socket over from these variables.
+PAGE_FILE = Path(__file__).resolve().parent / "assassin_ui.html"
+ENGINE_DIR = Path(__file__).resolve().parent
+ENGINE_POLL = 1.0
+TOKEN_ENV = "ASSASSIN_TOKEN"
+LISTEN_ENV = "ASSASSIN_LISTEN_FD"
+RESTARTING = "the engine is restarting — send again in a moment"
+# Run in a fresh interpreter before a restart: every engine source compiles and the server imports.
+PREFLIGHT = "import sys\nfor path in sys.argv[1:]:\n    compile(open(path, encoding='utf-8').read(), path, 'exec')\nimport ai_scratcher.assassin_ui\n"
 REVIEW_MESSAGE = ("Formulate the commit message of the review that stamped {stamped}: answer in text with one line `Review: …` condensing what "
                   "these commits since the last review commit changed, newest first:\n{subjects}")
 
@@ -242,16 +260,17 @@ class Chat:
         self.setup = {}
         self.turn = None
         self.started = None
+        self.statement = None
 
     def conversation(self):
-        return {"started": self.started, "log": [dict(m) for m in self.log], "session": self.session, "setup": dict(self.setup)}
+        return {"started": self.started, "log": [dict(m) for m in self.log], "session": self.session, "setup": dict(self.setup), "statement": self.statement}
 
     def file(self):
         """Begin a new conversation: the live one joins the filed ones when it holds messages, the setup staying with the live one."""
         if self.log:
             self.archive.append(self.conversation())
             self.archive.sort(key=lambda stored: stored["started"] or 0)
-        self.log, self.reports, self.session, self.started = [], [], None, None
+        self.log, self.reports, self.session, self.started, self.statement = [], [], None, None, None
 
     def resume(self, index):
         """The filed conversation `index` becomes the live one, with its setup, the live one filed in its place."""
@@ -259,7 +278,7 @@ class Chat:
             raise ApiError(404, f"no conversation {index} of {self.uid}")
         stored = self.archive.pop(index)
         self.file()
-        self.log, self.session, self.started = stored["log"], stored["session"], stored["started"]
+        self.log, self.session, self.started, self.statement = stored["log"], stored["session"], stored["started"], stored.get("statement")
         self.setup = dict(stored["setup"]) or self.setup
 
     @staticmethod
@@ -306,7 +325,7 @@ class Chat:
         turns = record.get("turns")
         chat.turns = turns if isinstance(turns, int) else 0
         live = cls._conversation(record)
-        chat.log, chat.session, chat.setup, chat.started = live["log"], live["session"], live["setup"], live["started"]
+        chat.log, chat.session, chat.setup, chat.started, chat.statement = live["log"], live["session"], live["setup"], live["started"], live["statement"]
         chat.reports = [report for report in record.get("reports") or () if isinstance(report, str)]
         chat.archive = [cls._conversation(stored) for stored in record.get("archive") or () if isinstance(stored, dict) and isinstance(stored.get("log"), list)]
         return chat
@@ -316,7 +335,7 @@ class Chat:
         setup, started = stored.get("setup"), stored.get("started")
         return {"started": started if isinstance(started, (int, float)) and not isinstance(started, bool) else None,
                 "log": [cls._message(m) for m in stored.get("log") or () if isinstance(m, dict) and isinstance(m.get("role"), str) and isinstance(m.get("text"), str)],
-                "session": stored.get("session"),
+                "session": stored.get("session"), "statement": stored["statement"] if isinstance(stored.get("statement"), str) else None,
                 "setup": {key: value for key, value in (setup.items() if isinstance(setup, dict) else ()) if key in SETUP_KEYS}}
 
     @staticmethod
@@ -387,14 +406,24 @@ class JobRunner:
 
 
 class AssassinApp:
-    def __init__(self, root=None, syngate_dir=None, coverage=(), cli_prefix=None, build_dir=DEFAULT_BUILD_DIR):
+    def __init__(self, root=None, syngate_dir=None, coverage=(), cli_prefix=None, build_dir=DEFAULT_BUILD_DIR, token=None):
         self.root = syngatelib.find_root(root)
         self.syngate_dir = Path(syngate_dir) if syngate_dir else self.root / "syngate"
         self.run_coverage = str(self.root / RUN_COVERAGE)
         self.coverage = list(dict.fromkeys([*(str(p) for p in coverage), self.run_coverage]))
         self.cli_prefix = cli_prefix or [sys.executable, "-m", "ai_scratcher.syngate", "--root", str(self.root)]
         self.build_dir = build_dir
-        self.token = secrets.token_urlsafe(24)
+        self.token = token or secrets.token_urlsafe(24)
+        # Which run of the server this is: a page seeing it change knows the chats, turns and jobs it holds count anew.
+        self.boot = secrets.token_hex(8)
+        # The engine watch: the sources as this process loaded them, and `relaunch` -- the argv re-executing the server, set by `serve`;
+        # None keeps the engine from restarting itself. `execv` and `listener`, the listening socket, are what the restart hands over.
+        self.engine_loaded = engine_stamp()
+        self.engine = {"changed": [], "error": None, "requested": False, "restarting": False}
+        self._preflown = None
+        self.relaunch = None
+        self.listener = None
+        self.execv = os.execve
         self.jobs = JobRunner()
         self.chats_file = self.root / CHATS_FILE
         self.chats = self._read_chats()
@@ -489,6 +518,8 @@ class AssassinApp:
             "git": self.git,
             "uncommitted": sorted(uncommitted),
             "job": job.id if job and job.returncode is None else None,
+            "boot": self.boot,
+            "engine": self.engine_state(),
         }
 
     @staticmethod
@@ -575,6 +606,36 @@ class AssassinApp:
         text = self._text(path, rel)
         return {"path": rel, "text": text, "sha": hashlib.sha256(text.encode()).hexdigest(), "writable": writable}
 
+    def _walk(self):
+        """(the project-relative paths of a walk of the project, hidden and build folders skipped; whether it ended past `FILES_LIMIT`)."""
+        found = []
+        for folder, dirs, names in os.walk(self.root):
+            dirs[:] = sorted(d for d in dirs if not d.startswith((".", "cmake-build")) and d not in WALK_SKIPPED)
+            found += [(Path(folder) / name).relative_to(self.root).as_posix() for name in sorted(names)]
+            if len(found) > FILES_LIMIT:
+                return found, True
+        return found, False
+
+    def list_files(self):
+        """{files, truncated}: the project-relative files the mention hint offers -- the git-tracked ones while git is at hand, else a
+        bounded walk -- sorted, never one that resolves outside the project."""
+        root = self.root.resolve()
+        if self.git:
+            listed = gitlib.git(self.root, "ls-files", "-z")
+            names, cut = [name for name in listed.stdout.split("\0") if name] if listed.returncode == 0 else [], False
+        else:
+            names, cut = self._walk()
+        files = []
+        for rel in sorted(names):
+            path = root / rel
+            try:
+                inside = path.is_file() and path.resolve().is_relative_to(root)
+            except OSError:
+                continue
+            if inside:
+                files.append(rel)
+        return {"files": files[:FILES_LIMIT], "truncated": cut or len(files) > FILES_LIMIT}
+
     def file_shas(self, rels):
         shas = {}
         for rel in rels:
@@ -639,13 +700,14 @@ class AssassinApp:
         stored = synthetic.read_json(self.chats_file if self.chats_file.exists() else self.root / LEGACY_CHATS_FILE)
         return {uid: Chat.restore(uid, record) for uid, record in stored.items() if uid in known and isinstance(record, dict)}
 
-    def save_chats(self):
-        """Write the chats pending a write to `CHATS_FILE`, whole, at once."""
+    def save_chats(self, force=False):
+        """Write the chats pending a write -- or, `force`d, whatever is pending -- to `CHATS_FILE`, whole, at once."""
         with self._chat_lock:
             pending, self._writer = self._writer, None
-            if pending is None:
+            if pending is None and not force:
                 return
-            pending.cancel()
+            if pending is not None:
+                pending.cancel()
             draft = self.chats_file.with_suffix(".json.tmp")
             try:
                 draft.write_text(json.dumps({uid: chat.record() for uid, chat in self.chats.items()}, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -692,11 +754,16 @@ class AssassinApp:
 
     def start_turn(self, data):
         """Start one turn of the item's chat -- the typed text joins the log, marked as an `agent` message when a parent turn sent it,
-        a `statement` is the content itself and is not repeated, a `retry` resends it without logging it again, `fresh` files the live
-        conversation first -- as a job the page polls through `turn_snapshot`; -> `{"turn": "<UID>:<n>", "chat": …}`, the chat stamped
-        with the chats `version`."""
+        a `statement` is the content itself and is not repeated as the first message of a conversation, `fresh` filing the live one
+        first, and is announced into a conversation holding messages; a `retry` resends it without logging it again -- as a job the page
+        polls through `turn_snapshot`; -> `{"turn": "<UID>:<n>", "chat": …}`, the chat stamped with the chats `version`.
+        A turn of a conversation whose anchored statement changed since its previous turn is headed by the `STATEMENT_NOTE` message."""
         uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
+        item = self._load().get(uid)
+        current = item.description.strip() if item else None
         with self._chat_lock:
+            if self.engine["restarting"]:
+                raise ApiError(503, RESTARTING)
             chat = self._chat(uid)
             if chat.running:
                 raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
@@ -707,8 +774,17 @@ class AssassinApp:
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
             kept = chat.kept()
             history = [] if chat.session else kept[:-1] if data.get("retry") else kept
+            changed = chat.statement is not None and current is not None and current != chat.statement
+            note = STATEMENT_NOTE.format(uid=uid, statement=current) if chat.log and not data.get("retry") and current and (data.get("statement") or changed) else None
+            if note:
+                chat.log.append({"role": "user", "text": note, "statement": True})
+                text = note if data.get("statement") else f"{note}\n\n{text}"
+            elif data.get("statement") and not data.get("retry"):
+                text = current or text
             if not data.get("statement") and not data.get("retry"):
-                chat.log.append({"role": "user", "text": text, **({"agent": data["agent"]} if data.get("agent") else {})})
+                chat.log.append({"role": "user", "text": str(data.get("text") or ""), **({"agent": data["agent"]} if data.get("agent") else {})})
+            if current is not None:
+                chat.statement = current
             turn = chat.next_turn(chat.setup.get("connector"), self._notify)
             sent = "".join(chat.reports) + text if chat.session else text  # without a session the kept history carries the reports
             chat.reports = []
@@ -1000,6 +1076,8 @@ class AssassinApp:
         uids = data.get("uids")
         if not isinstance(uids, list) or not uids or not all(isinstance(u, str) and RUN_UID_RE.match(u) for u in uids):
             raise ApiError(400, "'uids' must be a non-empty list of UIDs or glob patterns")
+        if self.engine["restarting"]:
+            raise ApiError(503, RESTARTING)
         items = self._load()
         if action != "test" and not syngatelib.features(items)["review"]:
             raise ApiError(400, str(syngatelib.feature_off("review")))
@@ -1088,10 +1166,111 @@ class AssassinApp:
         threading.Thread(target=self.jobs.cancel, args=(job,), daemon=True).start()
         return {"ok": True}
 
+    # -- engine watch -------------------------------------------------------
+
+    def running(self):
+        """How many turns -- background subagents' among them -- and runs are live."""
+        with self._chat_lock:
+            turns = sum(chat.running for chat in self.chats.values())
+        job = self.jobs.current
+        return turns + (1 if job and job.returncode is None else 0)
+
+    def engine_state(self):
+        """What the page shows of the engine: the sources changed since this process loaded them, the error that keeps them from loading,
+        whether a restart was asked for or is under way, how many turns and runs it waits for and whether the engine restarts itself."""
+        return {**self.engine, "changed": list(self.engine["changed"]), "running": self.running(), "watch": self.relaunch is not None}
+
+    def check_engine(self):
+        """One look at the engine sources: once they changed since this process loaded them -- or a restart was asked for -- they are
+        compiled and imported in a fresh interpreter, once per state of theirs, and while that holds and nothing runs the server is
+        re-executed in place, a turn or run started meanwhile refused. -> whether it restarted (only a stub `execv` returns)."""
+        stamp = engine_stamp()
+        self.engine["changed"] = sorted(name for name in stamp.keys() | self.engine_loaded.keys() if stamp.get(name) != self.engine_loaded.get(name))
+        if self.relaunch is None or not (self.engine["changed"] or self.engine["requested"]):
+            self.engine["error"] = None
+            return False
+        if stamp != self._preflown:
+            self._preflown, self.engine["error"] = stamp, preflight()
+        if self.engine["error"]:
+            return False
+        with self._chat_lock:
+            if self.running():
+                return False
+            self.engine["restarting"] = True
+        self.restart()
+        return True
+
+    def watch_engine(self):
+        while True:
+            time.sleep(ENGINE_POLL)
+            try:
+                self.check_engine()
+            except Exception as err:
+                print(f"assassin: engine watch: {type(err).__name__}: {err}", file=sys.stderr)
+
+    def request_restart(self, stop=False):
+        """Ask for a restart of the engine whether its sources changed or not; `stop` stops the running turns and runs first, which it
+        otherwise waits for. -> the engine state."""
+        if self.relaunch is None:
+            raise ApiError(409, "this server does not restart itself (started with --no-reload)")
+        self.engine["requested"] = True
+        if stop:
+            with self._chat_lock:
+                running = [chat.turn.id for chat in self.chats.values() if chat.running and not chat.turn.stopped]
+            for key in running:
+                self.stop_turn(key)
+            if self.jobs.current and self.jobs.current.returncode is None:
+                threading.Thread(target=self.jobs.cancel, daemon=True).start()
+        return self.engine_state()
+
+    def restart(self):
+        """Re-execute the server in place: the chats written out, the session token and the listening socket handed to the new process
+        through the environment, so an open page goes on at the same URL."""
+        self.save_chats(force=True)
+        env = {**os.environ, TOKEN_ENV: self.token}
+        if self.listener is not None:
+            self.listener.set_inheritable(True)
+            env[LISTEN_ENV] = str(self.listener.fileno())
+        print("assassin: restarting the engine" + (f" on the change of {', '.join(self.engine['changed'])}" if self.engine["changed"] else ""), flush=True)
+        try:
+            self.execv(self.relaunch[0], self.relaunch, env)
+        except OSError as err:
+            self.engine.update(restarting=False, requested=False, error=f"the restart failed: {err}")
+
+
+def page_sha(page=None):
+    """The version of the page: the sha256 of its file as it is now, the first 16 hex digits."""
+    return hashlib.sha256(PAGE_FILE.read_bytes() if page is None else page).hexdigest()[:16]
+
 
 def _page_bytes(nonce):
-    page = (Path(__file__).resolve().parent / "assassin_ui.html").read_bytes()
-    return page.replace(b"<script>", b'<script nonce="' + nonce + b'">').replace(b"<style>", b'<style nonce="' + nonce + b'">')
+    """The page with its script and style nonced and its version on the root element, which the page compares with the served one."""
+    page = PAGE_FILE.read_bytes()
+    return (page.replace(b"<script>", b'<script nonce="' + nonce + b'">').replace(b"<style>", b'<style nonce="' + nonce + b'">')
+            .replace(b'<html lang="en">', b'<html lang="en" data-page="' + page_sha(page).encode() + b'">', 1))
+
+
+def engine_stamp():
+    """{file name: (mtime, size)} of every Python source of the engine as it is now."""
+    stamp = {}
+    for path in sorted(ENGINE_DIR.glob("*.py")):
+        try:
+            meta = path.stat()
+        except OSError:
+            continue
+        stamp[path.name] = (meta.st_mtime_ns, meta.st_size)
+    return stamp
+
+
+def preflight():
+    """None when every engine source compiles and the server imports in a fresh interpreter, else the error that ended it."""
+    sources = [str(path) for path in sorted(ENGINE_DIR.glob("*.py"))]
+    try:
+        done = subprocess.run([sys.executable, "-c", PREFLIGHT, *sources], cwd=Path(__file__).resolve().parent.parent,
+                              capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as err:
+        return f"{type(err).__name__}: {err}"
+    return None if done.returncode == 0 else (done.stderr.strip() or f"exit {done.returncode}")
 
 
 def _csp(nonce):
@@ -1171,7 +1350,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._json(200, {"fingerprint": self.app.fingerprint(),
                                  "job": job.id if job and job.returncode is None else None,
                                  "chats": self.app.chats_version,
+                                 "boot": self.app.boot, "page": page_sha(), "engine": self.app.engine_state(),
                                  "files": self.app.file_shas(parse_qs(urlsplit(self.path).query).get("file", []))})
+            elif path == "/api/files":
+                self._json(200, self.app.list_files())
             elif path == "/api/file":
                 self._json(200, self.app.read_file((parse_qs(urlsplit(self.path).query).get("path") or [""])[0]))
             elif path == "/api/chats":
@@ -1223,6 +1405,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._json(200, self.app.stop_turn(match.group(1)))
             elif (match := re.fullmatch(r"/api/job/(\d+)/cancel", path)):
                 self._json(200, self.app.cancel_job(int(match.group(1))))
+            elif path == "/api/engine":
+                self._json(200, self.app.request_restart(bool(payload.get("stop"))))
             else:
                 self._json(404, {"error": f"no route for POST {path}"})
         except ApiError as exc:
@@ -1261,10 +1445,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.flush()
 
 
-def make_server(app, port=DEFAULT_PORT):
+def make_server(app, port=DEFAULT_PORT, fd=None):
+    """The server of `app` on a loopback port, or -- given `fd` -- on the listening socket an earlier run of the engine handed over."""
     handler = type("BoundHandler", (_Handler,), {"app": app})
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler, bind_and_activate=fd is None)
+    if fd is not None:
+        server.socket.close()
+        server.socket = socket.socket(fileno=fd)
+        server.socket.set_inheritable(False)
+        server.server_address = server.socket.getsockname()
+        server.server_name, server.server_port = server.server_address[:2]
     server.daemon_threads = True
+    app.listener = server.socket
     return server
 
 
@@ -1292,17 +1484,24 @@ def bootstrap(root=None):
     return root
 
 
-def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_browser=True, root=None):
+def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_browser=True, root=None, reload=True, argv=()):
+    """Serve the page until Ctrl+C; with `reload`, the engine re-executes itself with `argv` on a change of its sources, the restarted
+    process taking the token and the listening socket over from the environment, which it then clears."""
+    token, fd = os.environ.pop(TOKEN_ENV, None), os.environ.pop(LISTEN_ENV, None)
     root = bootstrap(root)
     coverage = list(coverage) or [str(Path(root) / name) for name in DEFAULT_COVERAGE if (Path(root) / name).is_file()]
-    app = AssassinApp(root=root, coverage=coverage, build_dir=build_dir)
+    app = AssassinApp(root=root, coverage=coverage, build_dir=build_dir, token=token)
     try:
-        server = make_server(app, port)
-    except OSError as exc:
+        server = make_server(app, port, fd=int(fd) if fd else None)
+    except (OSError, ValueError) as exc:
         print(f"assassin: cannot bind 127.0.0.1:{port}: {exc}", file=sys.stderr)
         return 1
+    if reload:
+        app.relaunch = [sys.executable, "-m", "ai_scratcher.assassin_ui", *argv, *([] if "--no-browser" in argv else ["--no-browser"])]
+        threading.Thread(target=app.watch_engine, daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}/?token={app.token}"
-    print(f"assassin: serving AI Assassin at {url}", flush=True)
+    print(f"assassin: {'serving AI Assassin' if fd is None else 'the engine restarted, serving'} at {url}", flush=True)
+    open_browser = open_browser and fd is None
     if coverage:
         print(f"assassin: coloring statuses from {', '.join(coverage)}")
     else:
@@ -1328,8 +1527,10 @@ def main():
     parser.add_argument("--build-dir", default=DEFAULT_BUILD_DIR, help="build tree the test runner uses for test and review runs")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
     parser.add_argument("--root", help="managed project root (default: SYNGATE_ROOT, else the nearest ancestor of the working directory holding syngate/, else the working directory)")
+    parser.add_argument("--no-reload", action="store_true", help="do not restart the engine in place when its Python sources change")
     args = parser.parse_args()
-    return serve(port=args.port, coverage=args.coverage, build_dir=args.build_dir, open_browser=not args.no_browser, root=args.root)
+    return serve(port=args.port, coverage=args.coverage, build_dir=args.build_dir, open_browser=not args.no_browser, root=args.root,
+                 reload=not args.no_reload, argv=sys.argv[1:])
 
 
 if __name__ == "__main__":

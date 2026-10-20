@@ -1,0 +1,10 @@
+---
+parents: [AI-CHAT]
+order: 75
+sources: [src/ai_scratcher/assassin_ui.html, src/ai_scratcher/assassin_ui.py]
+test: {api: ~, page: ~}
+---
+Mention hint
+opens while `@` is typed in a description editor or a reply line, listing the items whose UID contains the text typed after it and the project files whose name contains it; a pick replaces the typed word with `@UID` or with the file's project-relative path, Esc closing the hint with the text as typed.
+
+Up and Down move the choice, Enter and Tab pick it, and the hint is absent while no entry matches.

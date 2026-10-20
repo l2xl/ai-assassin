@@ -6,6 +6,6 @@ test: {send: 332bf7a314ed8383e6af4aea4bac5101e94b00704a5d13f1aec5c7015647964c, d
 review: ef6996edd897ac7ebf430bb1b8f687a6548c52f95ffddb8f9fd2d6488de2ca69
 ---
 Description editor
-of an item is where its chat starts: entering the editor shows the chat and its controls, so the setup is chosen before the text is saved or sent; the `✓ done` pill and Esc save the statement and leave, hiding a chat the editor opened that holds no message.
+of an item is where its chat starts or goes on: entering the editor shows the chat and its controls — a new, empty conversation while the item's chat is hidden, the shown one otherwise — so the setup is chosen before anything is sent; editing alone sends nothing and begins no conversation, `▴ done` and Esc saving the statement and closing the editor with the chat.
 
-`➤ send` or Ctrl/⌘+Enter saves the statement and sends it as the first message of a new conversation of the item's chat, the previous one filed without a question — refused with a notice while a turn runs; entering the reply line instead saves the statement and waits for a message, nothing going to the AI.
+`➤ send` or Ctrl/⌘+Enter saves the statement and sends it, changed or not: as the first message of a new conversation where none is shown, the previous one filed without a question, else into the shown one as the statement's announcement; refused with a notice while a turn runs. Entering the reply line instead saves the statement and waits for a message.

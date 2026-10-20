@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-070]
+order: 30
+test: ~
+---
+Reply clear mark
+stands as an `✕` on the block's right border line, level with the reply line's first line, while the line of the open chat holds text, emptying the line and the text the tab keeps for it.

@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI]
+order: 2
+test: ~
+---
+Project port
+of the `assassin` command started without `--port` is derived from the project root, the same root asking for the same port above 8712, the next free port taken while it is held and an ephemeral one past them, so the servers of several projects run side by side.
+
+An explicit `--port` binds exactly that port or fails.

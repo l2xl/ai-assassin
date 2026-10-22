@@ -98,7 +98,7 @@ UI and CLI run the working copy rather than an installed snapshot:
 ```
 python3 -m venv .venv
 .venv/bin/pip install -e .
-.venv/bin/assassin                    # http://127.0.0.1:8712, tree = this checkout
+.venv/bin/assassin                    # http://127.0.0.1:<the project's own port above 8712>, tree = this checkout
 ```
 
 `bin/assassin` does the same in one step: it creates `.venv` on first use (with `uv` when present,

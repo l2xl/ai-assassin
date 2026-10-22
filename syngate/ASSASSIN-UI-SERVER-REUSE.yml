@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI]
+order: 3
+test: ~
+---
+Running server reuse
+has the `assassin` command started on a project root already served by a live server open the browser at that server's URL and exit, rather than start a second server on the same root.
+
+The server is found through `assassin_server.json` in the root, holding its pid, port and token, written once it listens and removed when it stops; a record whose process is gone or whose server does not answer is ignored and replaced.

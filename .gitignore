@@ -7,4 +7,6 @@ syngate_status.json
 site/
 assassin_chats.json
 assassin_chats.json.tmp
+assassin_server.json
+assassin_server.json.tmp
 syngate_chats.json

@@ -15,6 +15,7 @@ import json
 import os
 import select
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -171,6 +172,109 @@ def test_requests_without_token_or_loopback_host_are_refused(server):
     conn.close()
     status, _ = call(base, app, f"/api/tree?token={app.token}", token=False)
     assert status == 200  # EventSource cannot set headers; the query token is equivalent
+
+
+def _hold(port):
+    """A listening socket on the loopback `port`, or None when another process already holds it."""
+    held = socket.socket()
+    try:
+        held.bind(("127.0.0.1", port))
+    except OSError:
+        held.close()
+        return None
+    held.listen()
+    return held
+
+
+@pytest.mark.syngate("ASSASSIN-UI-PORT")
+def test_the_port_is_derived_from_the_project_root_and_an_explicit_port_is_bound_exactly(app, tmp_path, monkeypatch):
+    derived = assassin_ui.project_port(tmp_path)
+    assert derived == assassin_ui.project_port(tmp_path / "." ) == assassin_ui.project_port(str(tmp_path))
+    assert assassin_ui.DEFAULT_PORT < derived <= assassin_ui.DEFAULT_PORT + assassin_ui.PORT_SPAN
+    assert {assassin_ui.project_port(tmp_path / f"p{n}") for n in range(20)} != {derived}  # a hash of the root, not one port for all
+    ports = list(assassin_ui.project_ports(tmp_path))
+    assert ports[0] == derived and sorted(ports) == list(range(assassin_ui.DEFAULT_PORT + 1, assassin_ui.DEFAULT_PORT + assassin_ui.PORT_SPAN + 1))
+
+    holding = [_hold(derived)]
+    following = next(port for port in ports[1:] if (probe := _hold(port)) and not probe.close())
+    httpd = assassin_ui.make_server(app)  # the derived port held: the next free one of the range
+    assert httpd.server_address[1] == following
+    httpd.server_close()
+
+    monkeypatch.setattr(assassin_ui, "PORT_SPAN", 3)
+    holding += [_hold(port) for port in assassin_ui.project_ports(tmp_path)]
+    httpd = assassin_ui.make_server(app)  # the whole range held: an ephemeral port
+    assert httpd.server_address[1] not in set(assassin_ui.project_ports(tmp_path))
+    httpd.server_close()
+
+    taken = next(held for held in holding if held)
+    with pytest.raises(OSError):
+        assassin_ui.make_server(app, port=taken.getsockname()[1])  # an explicit port is that port or nothing
+    for held in holding:
+        if held:
+            held.close()
+    free = socket.socket()
+    free.bind(("127.0.0.1", 0))
+    port = free.getsockname()[1]
+    free.close()
+    httpd = assassin_ui.make_server(app, port=port)
+    assert httpd.server_address[1] == port
+    httpd.server_close()
+
+    seen = {}
+    monkeypatch.setattr(assassin_ui, "serve", lambda **kwargs: seen.update(kwargs) or 0)
+    monkeypatch.setattr(sys, "argv", ["assassin", "--no-browser"])
+    assassin_ui.main()
+    assert seen["port"] is None  # without --port the root decides
+    monkeypatch.setattr(sys, "argv", ["assassin", "--port", "9123"])
+    assassin_ui.main()
+    assert seen["port"] == 9123
+
+
+@pytest.mark.syngate("ASSASSIN-UI-SERVER-REUSE")
+def test_a_second_assassin_on_a_served_root_opens_the_running_server_and_a_dead_record_is_replaced(app, tmp_path, monkeypatch):
+    record, opened, made = tmp_path / assassin_ui.SERVER_FILE, [], []
+    monkeypatch.setattr(assassin_ui.webbrowser, "open", opened.append)
+    make_server = assassin_ui.make_server
+    monkeypatch.setattr(assassin_ui, "make_server", lambda app, port=None, fd=None: made.append(make_server(app, port, fd)) or made[-1])
+
+    def started():
+        before = len(made)
+        thread = threading.Thread(target=assassin_ui.serve, kwargs={"port": 0, "open_browser": False, "root": tmp_path, "reload": False}, daemon=True)
+        thread.start()
+        deadline = time.monotonic() + 10
+        while len(made) == before or not record.is_file() or json.loads(record.read_text())["port"] != made[-1].server_address[1]:
+            assert time.monotonic() < deadline, "the server never wrote its record"
+            time.sleep(0.02)
+        return made[-1], thread
+
+    def stopped(httpd, thread):
+        httpd.shutdown()
+        thread.join(10)
+        assert not record.exists()  # removed when the server stops
+
+    httpd, thread = started()
+    stored = json.loads(record.read_text())
+    assert stored == {"pid": os.getpid(), "port": httpd.server_address[1], "token": httpd.RequestHandlerClass.app.token}
+    url = f"http://127.0.0.1:{stored['port']}/?token={stored['token']}"
+    assert assassin_ui.serve(port=0, open_browser=True, root=tmp_path, reload=False) == 0
+    assert opened == [url] and len(made) == 1  # the running server is opened, no second one is bound
+    stopped(httpd, thread)
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    record.write_text(json.dumps({"pid": gone.pid, "port": stored["port"], "token": stored["token"]}))
+    httpd, thread = started()  # a record whose process is gone is ignored and replaced
+    assert json.loads(record.read_text())["pid"] == os.getpid() and len(made) == 2
+    silent = _hold(0)
+    silent_port = silent.getsockname()[1]
+    silent.close()
+    stopped(httpd, thread)
+
+    record.write_text(json.dumps({"pid": os.getpid(), "port": silent_port, "token": "stale"}))
+    httpd, thread = started()  # a live pid whose server does not answer is ignored and replaced
+    assert json.loads(record.read_text())["token"] == httpd.RequestHandlerClass.app.token and opened == [url]
+    stopped(httpd, thread)
 
 
 @pytest.mark.syngate("ASSASSIN-UI-BOOTSTRAP")

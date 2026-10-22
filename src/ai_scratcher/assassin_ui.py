@@ -24,6 +24,7 @@ import argparse
 import copy
 import hashlib
 import hmac
+import http.client
 import http.server
 import json
 import os
@@ -45,6 +46,8 @@ from . import syngatelib
 from . import synthetic
 
 DEFAULT_PORT = 8712
+# A project's own port lies among the PORT_SPAN ports above DEFAULT_PORT, chosen by a hash of its root.
+PORT_SPAN = 200
 DEFAULT_BUILD_DIR = "cmake-build-debug-clang"
 # UIDs and the glob patterns syngate.py accepts for batch review/clear, a `UID:binding` narrowing a test run to one binding.
 RUN_UID_RE = re.compile(r"^[A-Za-z0-9_\-?*\[\]!:]+$")
@@ -62,6 +65,10 @@ WALK_SKIPPED = {"node_modules", "__pycache__", "venv", "env", "dist", "build", "
 # The chats of the items, kept next to the tree across server runs; a settled change is written this many seconds after the first.
 CHATS_FILE = "assassin_chats.json"
 LEGACY_CHATS_FILE = "syngate_chats.json"
+# The record of the server serving the root -- its pid, port and token -- found by a second `assassin` on the same root, which opens
+# that server instead of starting one; a probe of it that gets no answer within this many seconds finds it dead.
+SERVER_FILE = "assassin_server.json"
+PROBE_TIMEOUT = 2.0
 WRITE_DELAY = 0.5
 # The harness's own permission, first among every connector's modes: whether a reply's add, edit, move, rename and remove calls
 # are applied; its reads -- query, context, skill -- always are.
@@ -1445,10 +1452,30 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.flush()
 
 
-def make_server(app, port=DEFAULT_PORT, fd=None):
-    """The server of `app` on a loopback port, or -- given `fd` -- on the listening socket an earlier run of the engine handed over."""
+def project_port(root):
+    """The port of the project at `root`: one of the PORT_SPAN ports above DEFAULT_PORT, by the sha256 of the resolved root."""
+    digest = hashlib.sha256(str(Path(root).resolve()).encode("utf-8", "surrogateescape")).digest()
+    return DEFAULT_PORT + 1 + int.from_bytes(digest[:8], "big") % PORT_SPAN
+
+
+def project_ports(root):
+    """Every port of the range, the project's own first, then the next ones, wrapping around."""
+    first = project_port(root) - DEFAULT_PORT - 1
+    return (DEFAULT_PORT + 1 + (first + step) % PORT_SPAN for step in range(PORT_SPAN))
+
+
+def make_server(app, port=None, fd=None):
+    """The server of `app` on the loopback `port`, else on the first free port of its project's range, else on an ephemeral one; or --
+    given `fd` -- on the listening socket an earlier run of the engine handed over."""
+    if port is None and fd is None:
+        for candidate in project_ports(app.root):
+            try:
+                return make_server(app, candidate)
+            except OSError:
+                continue
+        port = 0
     handler = type("BoundHandler", (_Handler,), {"app": app})
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler, bind_and_activate=fd is None)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port or 0), handler, bind_and_activate=fd is None)
     if fd is not None:
         server.socket.close()
         server.socket = socket.socket(fileno=fd)
@@ -1458,6 +1485,53 @@ def make_server(app, port=DEFAULT_PORT, fd=None):
     server.daemon_threads = True
     app.listener = server.socket
     return server
+
+
+def running_server(root):
+    """The URL of the live server the record in `root` names -- its process alive and its server answering the token -- else None."""
+    record = synthetic.read_json(Path(root) / SERVER_FILE)
+    pid, port, token = record.get("pid"), record.get("port"), record.get("token")
+    if not (type(pid) is int and pid > 0 and type(port) is int and 0 < port < 65536 and isinstance(token, str) and token):
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return None
+    except PermissionError:
+        pass
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=PROBE_TIMEOUT)
+        try:
+            conn.request("GET", "/api/fingerprint", headers={"X-Assassin-Token": token})
+            if conn.getresponse().status != 200:
+                return None
+        finally:
+            conn.close()
+    except (OSError, http.client.HTTPException):
+        return None
+    return f"http://127.0.0.1:{port}/?token={token}"
+
+
+def write_server_record(root, port, token):
+    """Write the record of this process's server on `port` into `root`, whole, at once."""
+    path = Path(root) / SERVER_FILE
+    draft = path.with_suffix(".json.tmp")
+    try:
+        draft.write_text(json.dumps({"pid": os.getpid(), "port": port, "token": token}), encoding="utf-8")
+        os.replace(draft, path)
+    except OSError as err:
+        print(f"assassin: server record not saved to {path}: {err}", file=sys.stderr)
+
+
+def remove_server_record(root, token):
+    """Remove the record in `root` while it is still this process's server's, holding `token`."""
+    path = Path(root) / SERVER_FILE
+    record = synthetic.read_json(path)
+    if record.get("pid") == os.getpid() and record.get("token") == token:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def bootstrap(root=None):
@@ -1484,18 +1558,26 @@ def bootstrap(root=None):
     return root
 
 
-def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_browser=True, root=None, reload=True, argv=()):
-    """Serve the page until Ctrl+C; with `reload`, the engine re-executes itself with `argv` on a change of its sources, the restarted
-    process taking the token and the listening socket over from the environment, which it then clears."""
+def serve(port=None, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_browser=True, root=None, reload=True, argv=()):
+    """Serve the page until Ctrl+C on `port`, else on the project's own port (see `make_server`); with `reload`, the engine re-executes itself with `argv` on a change of its sources, the restarted
+    process taking the token and the listening socket over from the environment, which it then clears. A root already served by a live
+    server (see `running_server`) has the browser opened at that server instead; a restarted engine is that server itself."""
     token, fd = os.environ.pop(TOKEN_ENV, None), os.environ.pop(LISTEN_ENV, None)
     root = bootstrap(root)
+    running = None if fd else running_server(root)
+    if running:
+        print(f"assassin: {root} is already served at {running}", flush=True)
+        if open_browser:
+            webbrowser.open(running)
+        return 0
     coverage = list(coverage) or [str(Path(root) / name) for name in DEFAULT_COVERAGE if (Path(root) / name).is_file()]
     app = AssassinApp(root=root, coverage=coverage, build_dir=build_dir, token=token)
     try:
         server = make_server(app, port, fd=int(fd) if fd else None)
     except (OSError, ValueError) as exc:
-        print(f"assassin: cannot bind 127.0.0.1:{port}: {exc}", file=sys.stderr)
+        print(f"assassin: cannot bind 127.0.0.1{'' if port is None else f':{port}'}: {exc}", file=sys.stderr)
         return 1
+    write_server_record(root, server.server_address[1], app.token)
     if reload:
         app.relaunch = [sys.executable, "-m", "ai_scratcher.assassin_ui", *argv, *([] if "--no-browser" in argv else ["--no-browser"])]
         threading.Thread(target=app.watch_engine, daemon=True).start()
@@ -1516,13 +1598,15 @@ def serve(port=DEFAULT_PORT, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_brow
     finally:
         app.jobs.cancel()
         app.save_chats()
+        remove_server_record(root, app.token)
         server.server_close()
     return 0
 
 
 def main():
     parser = argparse.ArgumentParser(prog="assassin", description=__doc__)
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"listen port on 127.0.0.1 (default {DEFAULT_PORT}, 0 = ephemeral)")
+    parser.add_argument("--port", type=int, help=f"listen port on 127.0.0.1, bound exactly or failing; 0 = ephemeral (default: the project's own "
+                                                 f"port above {DEFAULT_PORT}, derived from its root, the next free one while it is held, an ephemeral one past them)")
     parser.add_argument("--coverage", action="append", default=[], help="syngate_coverage.jsonl file(s) to color statuses; repeatable (default: well-known local files)")
     parser.add_argument("--build-dir", default=DEFAULT_BUILD_DIR, help="build tree the test runner uses for test and review runs")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")

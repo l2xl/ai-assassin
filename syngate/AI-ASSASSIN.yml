@@ -2,7 +2,7 @@
 parents: []
 sources: [pyproject.toml]
 test: enabled
-review: af3f7b7995b9fab9e25ad6d738c0bcf5651a477bb01206596c6b3864302f9681
+review: enabled
 ---
 AI Assassin
 is a general-purpose AI assistant built around iterative analysis of the user–AI dialog and its synthesis into the directed acyclic graph of items that constructs the per-replica context, made of the Syngate subsystem holding the graph and its gate, the Synthetic AI harness core and the AI Assassin UI joining them.

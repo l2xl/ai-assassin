@@ -1,0 +1,9 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 7
+test: {tab: ~, page: ~}
+---
+Hidden surf tab refusal
+answers every request, `open` included, with an error and no page info while the surf tab is out of the user's sight — its window minimized, the tab hidden, neither the active tab of its window nor in a split view, or its page reporting itself hidden — until the user shows it again or closes it.
+
+`open`, `close` and `status` go by the tab's state; a page action asks its page too, in the very script that plays it.

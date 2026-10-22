@@ -1,0 +1,7 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 50
+test: {capture: ~, fit: ~, paint: ~}
+---
+Screenshot request
+answers the visible part of the surf tab, activated in its window first and captured once its visible top frame has painted twice over the masks — never awaiting a frame out of sight — as a JPEG image scaled to the viewport's CSS pixels, or below them to fit the request's longest edge and area, with the viewport size, the device pixel scale and the image scale, image pixels per CSS pixel.

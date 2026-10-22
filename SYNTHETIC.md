@@ -119,6 +119,12 @@ is one non-interactive turn of the chosen connector.
   statuses recolor, a run live elsewhere refuses the call — and its outcome comes back like a
   query's result: one line per leaf binding with pass/fail, then the output of every failed routine.
   Review stamping stays the user's act: there is no review call.
+- **The user's browser goes through the WebSurf tool** (`prompts/websurf.md`, `websurf`), always
+  offered: `{"tool": "websurf", "action": "open", "url": "…"}` drives the surf tab of the browser
+  extension attached to the server, its answer coming back like a query's result, the page info and
+  DOM fenced as untrusted and a screenshot as an image of the next prompt — the one case where a
+  results prompt carries images, which the connection receives with the text. The actions, the page
+  events, the guard and the Interactive WebSurf switch are in [BROWSER_EXTENSION.md](BROWSER_EXTENSION.md).
 - **Git goes through the git tool** (`prompts/git.md`, `gitlib`), offered to a turn only while git
   is at hand for the project — the `git` command found and the project root inside a work tree, read
   once when the server starts; otherwise the library handed to the connector lacks it.

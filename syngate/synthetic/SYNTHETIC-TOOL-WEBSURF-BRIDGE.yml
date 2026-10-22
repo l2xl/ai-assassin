@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-WEBSURF]
+order: -10
+test: {welcome: ~, refuse: ~, single: ~}
+---
+WebSurf bridge
+of the harness accepts a WebSocket at `/websurf` on its own port from a browser extension's `Origin` addressing a loopback host alone, attaches the extension once its first message is a version 3 `hello` carrying the session token and closes it on anything else, and keeps it until its socket closes, one extension attached at a time and every `result` handed to the request of its `id`.

@@ -1,0 +1,10 @@
+---
+parents: [BROWSER-EXTENSION]
+order: -10
+sources: [websurf-extension/bridge.js]
+test: {hello: ~, answer: ~, ping: ~, untimed: ~, gone: ~, unheld: ~}
+---
+WebSurf bridge
+of each session connects out to the `/websurf` WebSocket of its harness origin, introduces itself as protocol version 3 with the token its Assassin tab's URL carries, keeps the socket alive with pings, and answers each surf request with a result of the same id once the harness has welcomed it, no request waiting on a page load or a set time.
+
+A page action answers when its document goes away under it, and runs as it comes, so none holds back an `open` or `close`, which run one at a time within their session.

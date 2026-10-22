@@ -1,0 +1,10 @@
+---
+parents: [BROWSER-EXTENSION]
+order: -20
+sources: [websurf-extension/sessions.js]
+test: {discover: ~, follow: ~, token: ~, release: ~, persist: ~, status: ~}
+---
+Session map
+of the extension is read from the URLs of the browser's tabs — a tab at `http://` on a loopback literal, path `/`, with a non-empty `token`, never a surf tab, belonging to the session of its origin — each session's bridge opening with its first tab, replaced by a newer token of its origin, reopened by the alarm once dropped and closed with its last tab, its surf tab then released as an ordinary tab.
+
+The map's tokens, tab ids and placements outlive a restart of the background in the browser's session storage, in its local storage only where it has none; the options page lists the sessions read only, without their tokens, and the badge counts those connected.

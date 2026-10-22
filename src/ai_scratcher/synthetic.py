@@ -142,7 +142,8 @@ QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
 RUNS = {"test": ("uid",)}
 DELEGATIONS = {"agent": ("uid", "prompt")}
 GITS = {"git": ("command",)}
-CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS}
+SURFS = {"websurf": ("action",)}
+CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **SURFS}
 GIT_TOOL = "git"
 EDITABLE = ("description", "sources", "tests")
 QUERY_ROUNDS = 8
@@ -253,6 +254,10 @@ def is_git(call):
     return call["tool"] in GITS
 
 
+def is_surf(call):
+    return call["tool"] in SURFS
+
+
 def offered_library(git, library=None):
     """The library a turn is offered: the git tool only while git is at hand for the project; without a `library` given, the shipped one,
     read from the prompt files at every access."""
@@ -347,7 +352,7 @@ def apply_call(items, anchor, call, syngate_dir=None):
     rather than a silently unreviewed item."""
     at = lambda value: anchor if value == "@" else value
     tool, uid = call["tool"], at(call.get("uid"))
-    if tool in RUNS or tool in DELEGATIONS or tool in GITS:
+    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in SURFS:
         raise syngatelib.tree_error(f"{tool} runs through the page's harness, not against the tree")
     if tool == "skill":
         skill = skills_of(load_prompts()).get(call["name"])
@@ -387,9 +392,10 @@ def apply_call(items, anchor, call, syngate_dir=None):
 
 
 def query(connectors, items, uid, text, connector, model, effort, modes=(), session=None, history=(), root=None, on_step=None, stopped=None,
-          library=None):
+          library=None, images=()):
     """(reply text, session id) of one exchange anchored at `uid`, sent through the named connection with the exact model, effort and call modes,
     every step of the turn reaching `on_step` as it happens; `stopped` tells the connection whether the turn was stopped meanwhile.
+    The `images` -- each `{media_type, data}`, the data in base64 -- go with the text, handed to the dispatch only when there are any.
     The seed context -- its key sources read from `root` -- grows by the statements the text references; without a session to resume,
     the kept `history` heads the text. The prompt `library` (the shipped one by default) heads the seed context as the default prompt, or,
     for a connection with native library delivery, only by its default skills and is handed to the connection's dispatch."""
@@ -409,7 +415,8 @@ def query(connectors, items, uid, text, connector, model, effort, modes=(), sess
     head = native_prompt(library) if native else default_prompt(library)
     context = seed_context(items, uid, root=root, head=head) + referenced(items, text, syngatelib.walk(items, uid, descendants=True))
     return connection.dispatch(context, text if session else transcript(history, text), model=model, effort=effort, modes=modes, session=session,
-                              on_step=on_step, **({"stopped": stopped} if stopped else {}), **({"library": library} if native else {}))
+                              on_step=on_step, **({"stopped": stopped} if stopped else {}), **({"library": library} if native else {}),
+                              **({"images": list(images)} if images else {}))
 
 
 def result_text(content):
@@ -623,6 +630,14 @@ def close(proc):
         pass
 
 
+def message_content(text, images=()):
+    """The content of a user message: the plain text, or, with `images`, its text block followed by one base64 image block each."""
+    if not images:
+        return text
+    return [{"type": "text", "text": text},
+            *({"type": "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}} for image in images)]
+
+
 def write_skill_plugin(folder, library):
     """Write the skills on request of `library` into `folder` as a Claude Code plugin, each a `skills/<name>/SKILL.md` whose front matter
     carries the skill's name and description over its text. -> whether there is any skill to hand to the CLI."""
@@ -693,12 +708,12 @@ class claude_code_connector:
                 "modes": [{"id": mode, "label": label, "hint": hint, "default": default, "advanced": advanced}
                           for mode, (label, hint, default, advanced, _, _) in self.modes.items()]}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None, images=()):
         """(answer, session id) of one non-interactive `claude -p` turn, the answer being the structured output shaped by
         the `answer_schema` of the prompt `library` (the shipped one by default), else the reply text; the seed context is the
         appended system prompt and `session` continues an earlier one. The library's skills on request go to the CLI as the
         skills of a plugin folder, its tools as the calls of the answer schema; neither is in the seed context. The text goes in on stdin as the user message of a stream-json input, which
-        keeps the stdin open for an `interrupt`. The turn lasts until the process exits: a subagent or workflow launched in
+        keeps the stdin open for an `interrupt`; with `images` the message is the text block followed by their base64 image blocks. The turn lasts until the process exits: a subagent or workflow launched in
         it is awaited by the CLI, which answers again on its report, and the answer of the turn is that last one.
         Its events stream into `on_step` as steps while it runs; once it exits, the subagents' own turns are read from the
         session's transcript, the project files it changed, from snapshots taken before and after, follow as a diff step and the
@@ -732,7 +747,7 @@ class claude_code_connector:
                                   start_new_session=True) as done:
                 self.live[ident] = done
                 try:
-                    send(done, {"type": "user", "message": {"role": "user", "content": text}})
+                    send(done, {"type": "user", "message": {"role": "user", "content": message_content(text, images)}})
                     if stopped():
                         self.interrupt(ident)
                     for line in done.stdout:

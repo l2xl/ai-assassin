@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- AI Assassin
+     Copyright (c) 2026 l2xl (l2xl/at/proton.me)
+     Distributed under the Intellectual Property Reserve License, v2 (IPRL) -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Assassin WebSurf</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; max-width: 44em; margin: 2em auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { text-align: left; padding: .4em .6em; border-bottom: 1px solid #ccc; }
+    button { margin: 1.5em .5em 0 0; padding: .4em 1em; font: inherit; }
+    #empty, #access { margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>AI Assassin WebSurf</h1>
+  <p>Nothing to set up: every AI Assassin page open in this browser — the URL <code>assassin</code> prints — is served,
+    each with a surf tab of its own, for as long as one of its tabs stays open.</p>
+  <table id="sessions" hidden>
+    <thead><tr><th>AI Assassin</th><th>Bridge</th><th>Surf tab</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p id="empty">No AI Assassin page is open in this browser.</p>
+  <button type="button" id="grant">Grant site access</button>
+  <div id="access"></div>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -62,6 +62,12 @@ def make_item(syngate_dir, uid, description, parents=(), header="", order=0, tes
     (syngate_dir / f"{uid}.yml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
 
 
+@pytest.fixture(autouse=True)
+def x11_desktop(monkeypatch):
+    """Pins the tiling method of every app to `browser`, as on X11, so the desktop the suite runs on changes no expectation."""
+    monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
+
+
 @pytest.fixture
 def syngate_tree(tmp_path):
     """Yields (syngate_dir, make_item); load with syngatelib.load_tree(syngate_dir) once built."""

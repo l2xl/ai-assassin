@@ -1,0 +1,10 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 5
+sources: [websurf-extension/placement.js]
+test: {split: ~, tiled: ~, tab: ~, session: ~, compositor: ~}
+---
+Surf tab placement
+puts a surf tab that takes no previous one's place beside its session's Assassin tab — split with it where the browser offers native split view, else in a new window tiled against that tab's window along its longer side — and opens it as the active tab of the current window, or of the previous surf tab's window, when no Assassin tab of its session is open.
+
+The browser tiles the window under the `browser` tiling method alone; under `kwin` and `none` the Assassin window is neither resized nor moved, the new one left to the desktop under `none` (placement `window`), and under `kwin` the `open` answer names the titles the compositor tiling finds both windows by: the new window's label and, while it is the active tab of its window, the Assassin tab's.

@@ -1,0 +1,7 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 2
+test: ~
+---
+Close request
+closes the surf tab and answers once it is closed, its closing reaching the harness as the `closed` page event.

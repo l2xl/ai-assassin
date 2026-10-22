@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "AI Assassin WebSurf",
+  "version": "0.1.0",
+  "description": "Lets the AI Assassin harness drive one tab of your browser, with your sessions, network and location: read it, see it and, where you permit, operate it.",
+  "minimum_chrome_version": "121",
+  "permissions": ["tabs", "scripting", "storage", "alarms", "webNavigation", "webRequest"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "action": {
+    "default_title": "AI Assassin WebSurf"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "websurf@ai-assassin",
+      "strict_min_version": "121.0"
+    }
+  }
+}

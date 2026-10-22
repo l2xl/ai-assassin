@@ -1,0 +1,7 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 20
+test: {whole: ~, selector: ~, state: ~, limit: ~}
+---
+DOM query
+answers the live DOM of the surf tab's top frame — each element a CSS selector matches, with their count, else the whole document — serialized with the current state of its form controls and without scripts, styles and comments, cut to its limit.

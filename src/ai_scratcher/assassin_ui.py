@@ -44,6 +44,8 @@ from urllib.parse import parse_qs, urlsplit
 from . import gitlib
 from . import syngatelib
 from . import synthetic
+from . import tiling
+from . import websurf
 
 DEFAULT_PORT = 8712
 # A project's own port lies among the PORT_SPAN ports above DEFAULT_PORT, chosen by a hash of its root.
@@ -76,6 +78,15 @@ TREE_MODE = {"id": "tree", "label": "Tree edit", "hint": "add, edit, move and re
 TREE_OFF = "The tree is read-only for this chat: add, edit, move, rename and remove are refused — answer in text and say what you would change."
 TREE_REFUSAL = "tree edits are off for this chat — switch Tree edit on"
 GIT_ABSENT = "git is not at hand for this project"
+# The server settings, kept next to the tree, one section per feature: `websurf` holds the WebSurf host lists `allow` and `block`.
+SETTINGS_FILE = "assassin_settings.json"
+# The harness's Interactive WebSurf permission, listed after every connector's modes while a browser is attached: whether a reply's
+# websurf `fill` and `mouse` act on the surf tab; the passive actions are always on. Neither it nor the tree mode ever reaches a connector.
+SURF_MODE = {"id": "websurf", "label": "Interactive WebSurf", "hint": "type and click in the surf tab of your browser — WebSurf fill and mouse; opening, "
+             "reading and looking at pages stay on", "default": False, "advanced": False}
+HARNESS_MODES = ("tree", "websurf")
+SURF_OFF = ("Interactive WebSurf is off for this chat: fill and mouse are refused, open, close, status, query, screenshot and wait stay on — "
+            "switch Interactive WebSurf on to act")
 # The request of the review commit's message, sent to the reviewed item's chat when no single commit names the review.
 # The message heading a turn whose anchored item's statement changed since the conversation's previous turn, or sent from the editor.
 STATEMENT_NOTE = "The statement of @{uid} now reads:\n\n{statement}"
@@ -180,12 +191,13 @@ def agent_steps(steps, skip=()):
 
 class Turn:
     """One chat exchange run on its own thread: the page awaits its outcome by polling, re-attaching after a reload, and may stop it.
-    Its steps are recorded as they happen, every change announced through `changed`."""
+    Its steps are recorded as they happen, every change announced through `changed`; `parent` is the turn that delegated it."""
 
-    def __init__(self, turn_id, connector, changed=lambda: None):
+    def __init__(self, turn_id, connector, changed=lambda: None, parent=None):
         self.id = turn_id
         self.connector = connector
         self.changed = changed
+        self.parent = parent
         self.thread = None
         self.outcome = None
         self.stopped = False
@@ -298,9 +310,9 @@ class Chat:
     def running(self):
         return self.turn is not None and self.turn.outcome is None
 
-    def next_turn(self, connector, changed):
+    def next_turn(self, connector, changed, parent=None):
         self.turns += 1
-        self.turn = Turn(f"{self.uid}:{self.turns}", connector, changed)
+        self.turn = Turn(f"{self.uid}:{self.turns}", connector, changed, parent)
         return self.turn
 
     def kept(self):
@@ -438,12 +450,27 @@ class AssassinApp:
         self._chat_lock = threading.Condition()
         self._writer = None
         self.connectors = {name: connector(cwd=self.root) for name, connector in synthetic.CONNECTORS.items()}
+        self.settings_file = self.root / SETTINGS_FILE
+        self.websurf = websurf.bridge(self.token)
+        # How a new surf window is set beside the Assassin window, read once from the desktop: it goes out with every `open` but `browser`.
+        self.tiling = tiling.method()
         self.detect_git()
 
     def detect_git(self):
         """Read once whether git is at hand for the project: it decides the library a turn is offered."""
         self.git = gitlib.at_hand(self.root)
         self.library = synthetic.offered_library(self.git)
+
+    def settings(self, section):
+        """One feature's section of the server settings, read from `SETTINGS_FILE` at every use: {} while the file is missing or malformed
+        or holds no such section."""
+        value = synthetic.read_json(self.settings_file).get(section)
+        return value if isinstance(value, dict) else {}
+
+    def surf_lists(self):
+        """(allow, block): the WebSurf host lists of the server settings, each the strings of its list; empty while it names none."""
+        section = self.settings("websurf")
+        return tuple([entry for entry in section[key] if isinstance(entry, str)] if isinstance(section.get(key), list) else [] for key in ("allow", "block"))
 
     # -- model ------------------------------------------------------------
 
@@ -461,6 +488,8 @@ class AssassinApp:
             stat.update(f"{path}\0{meta.st_mtime_ns}\0{meta.st_size}\n".encode())
         if self.git:
             stat.update(gitlib.state(self.root).encode("utf-8", "surrogateescape"))
+        if self.websurf.attached is not None:
+            stat.update(b"websurf attached\n")
         return stat.hexdigest()
 
     def _blocked(self, items, uids, discovered, uncommitted):
@@ -511,6 +540,7 @@ class AssassinApp:
         for entry in payload.values():
             counts[entry["test"]] = counts.get(entry["test"], 0) + 1
         job = self.jobs.current
+        harness = [SURF_MODE] if self.websurf.attached is not None else []
         return {
             "fingerprint": self.fingerprint(),
             "items": payload,
@@ -521,7 +551,7 @@ class AssassinApp:
             "coverage": {"files": self._coverage_files(), "errors": coverage_errors},
             "build_dir": self.build_dir,
             "features": syngatelib.features(items),
-            "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, *settings["modes"]]} for name, connector in self.connectors.items()},
+            "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, *settings["modes"], *harness]} for name, connector in self.connectors.items()},
             "git": self.git,
             "uncommitted": sorted(uncommitted),
             "job": job.id if job and job.returncode is None else None,
@@ -759,11 +789,12 @@ class AssassinApp:
                     del chat.log[index]
             return self._changed(chat)
 
-    def start_turn(self, data):
+    def start_turn(self, data, parent=None):
         """Start one turn of the item's chat -- the typed text joins the log, marked as an `agent` message when a parent turn sent it,
         a `statement` is the content itself and is not repeated as the first message of a conversation, `fresh` filing the live one
         first, and is announced into a conversation holding messages; a `retry` resends it without logging it again -- as a job the page
-        polls through `turn_snapshot`; -> `{"turn": "<UID>:<n>", "chat": …}`, the chat stamped with the chats `version`.
+        polls through `turn_snapshot`, delegated by the `parent` turn from its start; -> `{"turn": "<UID>:<n>", "chat": …}`, the chat
+        stamped with the chats `version`.
         A turn of a conversation whose anchored statement changed since its previous turn is headed by the `STATEMENT_NOTE` message."""
         uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
         item = self._load().get(uid)
@@ -792,7 +823,7 @@ class AssassinApp:
                 chat.log.append({"role": "user", "text": str(data.get("text") or ""), **({"agent": data["agent"]} if data.get("agent") else {})})
             if current is not None:
                 chat.statement = current
-            turn = chat.next_turn(chat.setup.get("connector"), self._notify)
+            turn = chat.next_turn(chat.setup.get("connector"), self._notify, parent)
             sent = "".join(chat.reports) + text if chat.session else text  # without a session the kept history carries the reports
             chat.reports = []
             exchange = {"uid": uid, "text": sent, "session": chat.session, "history": history, **chat.setup}
@@ -889,11 +920,15 @@ class AssassinApp:
         A rename carries the item's chat to the new UID, and the exchange with it when the item is the anchor.
         The `tree` mode is the harness's own: without it the text is headed by `TREE_OFF`, the tree calls of a reply are refused and the
         connector never sees the mode. A git call runs whatever the modes, through the git tool's guard, and comes back like a query's result.
+        A websurf call passes the WebSurf guard and goes to the attached browser, its answer coming back like a query's result, a screenshot
+        as an image of the next prompt; its `fill` and `mouse` need the `websurf` mode, the harness's own Interactive WebSurf switch, and
+        its `wait` is answered by the harness. Once the turn has surfed, every next prompt also carries the page events since the previous one.
         The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
         modes = list(data.get("modes") or ())
-        tree = "tree" in modes
+        tree, interactive = "tree" in modes, "websurf" in modes
+        events, images = websurf.watch(self.websurf), []
         if not tree and text.strip():
             text = TREE_OFF + "\n" + text
         halted = lambda: turn is not None and turn.stopped
@@ -910,8 +945,10 @@ class AssassinApp:
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
-                                                 data.get("effort"), modes=[mode for mode in modes if mode != "tree"], session=session,
-                                                 history=history, root=self.root, on_step=on_step, stopped=halted if turn else None, library=self.library)
+                                                 data.get("effort"), modes=[mode for mode in modes if mode not in HARNESS_MODES], session=session,
+                                                 history=history, root=self.root, on_step=on_step, stopped=halted if turn else None, library=self.library,
+                                                 images=images)
+                images = []
             except synthetic.query_error as err:
                 raise ApiError(400, str(err)) from None
             except synthetic.connection_error as err:
@@ -945,6 +982,15 @@ class AssassinApp:
                     results.append(line)
                     if records:
                         shown.append(line)
+                    continue
+                if synthetic.is_surf(call):
+                    try:
+                        line, shot = self._surf(call, interactive, turn, halted, events)
+                    except ApiError as err:
+                        refusal = denied(websurf.label(call), err)
+                        break
+                    results.append(line)
+                    images += shot
                     continue
                 if call["tool"] in synthetic.TOOLS and not tree:
                     refusal = denied(f"{call['tool']} {named(call)}", ApiError(403, TREE_REFUSAL))
@@ -982,9 +1028,9 @@ class AssassinApp:
             batch_step(results, payload)
             applied += shown
             calls += payload
-            if refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) for call in payload) and not runs and not delegations:
+            if refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_surf(call) for call in payload) and not runs and not delegations:
                 return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
-            text = synthetic.RESULTS_PREAMBLE + "\n".join(results)
+            text = synthetic.RESULTS_PREAMBLE + "\n".join(results) + websurf.events_text(events.take(), *self.surf_lists())
         raise ApiError(422, "\n".join([*applied, "answer refused: the exchange kept querying"]), session=session)
 
     def _git(self, call):
@@ -997,19 +1043,65 @@ class AssassinApp:
             raise ApiError(403, str(err)) from None
         return f"- git {call['command']}:\n{gitlib.run(self.root, words)}", records
 
+    def _surf(self, call, interactive, turn=None, halted=None, events=None):
+        """Send a websurf call of an answer to the attached browser once the guard passes it -- a `fill` or `mouse` only while the
+        Interactive WebSurf switch is on, an `open` or `close` only while no other running turn holds the surf tab, an `open` with the
+        tiling method but `browser` and, under `kwin`, its new window tiled off the turn -- or await the next page event of the turn's
+        `events` watch for a `wait`; the request is a `tool` step of the `turn`: its action and target, then its outcome and the size of
+        the answer. -> (the line telling the answer, the images it attaches)."""
+        if call.get("action") in websurf.INTERACTIVE and not interactive:
+            raise ApiError(403, SURF_OFF)
+        allow, block = self.surf_lists()
+        events = events or websurf.watch(self.websurf)
+        try:
+            request = websurf.guard(call, allow, block)
+            if self.websurf.attached is None:
+                raise websurf.refused(websurf.ABSENT)
+            if request["action"] in ("open", "close"):
+                self.websurf.hold(turn)
+        except websurf.refused as err:
+            raise ApiError(403, str(err)) from None
+        if request["action"] == "open" and self.tiling != "browser":
+            request["tiling"] = self.tiling
+        step = {"kind": "tool", "name": "websurf", "input": websurf.step_input(request), "result": None, "seconds": None, "at": turn.elapsed() if turn else 0}
+        if turn:
+            turn.add_step(step)
+        started = time.monotonic()
+        try:
+            if request["action"] == "wait":
+                seen = websurf.plural(events.wait(request.get("seconds"), halted), "page event")
+                step.update(result=seen, size=len(seen))
+                return f"- {websurf.label(request)}: {seen}", []
+            answer = self.websurf.surf(request, halted)
+            events.sent(answer)
+            if request.get("tiling") == "kwin" and answer.result.get("ok"):
+                tiling.tile_later(answer.result.get("tile"))
+            step["size"] = answer.size
+            told = websurf.report(request, answer.result, allow, block)
+            step["result"] = websurf.summary(request, answer.result)
+            return told
+        except websurf.refused as err:
+            step["result"] = f"refused: {err}"
+            raise ApiError(403, str(err)) from None
+        finally:
+            step["seconds"] = round(time.monotonic() - started, 2)
+            if turn:
+                turn.add_step(step)
+
     def _delegate(self, items, anchor, data, calls, turn, results):
         """Every agent call of a batch as a turn of its item's chat with the call's prompt, in the setup of `data` the call may override,
         all running in parallel and awaited -- a stop of the parent `turn` starts none more and stops the running ones. Each child's
         report joins `results` and its transcript the parent's steps as an agent step; a call marked `background` is answered at once
-        instead and not awaited -- see `_watch`; a child switches the `tree` mode on only when the parent has it;
+        instead and not awaited -- see `_watch`; a child switches a harness mode -- `tree`, `websurf` -- on only when the parent has it;
         -> (error, line) of the call refused, which starts none after it."""
         started, refusal = [], None
+        withheld = [mode for mode in HARNESS_MODES if mode not in (data.get("modes") or ())]
         for call in calls:
             child = synthetic.call_target(anchor, call)
             setup = {**{key: data[key] for key in SETUP_KEYS if key in data}, **{key: call[key] for key in ("model", "effort", "modes") if key in call}}
-            if "tree" not in (data.get("modes") or ()):
-                own = setup["modes"] if "modes" in setup else self.chats[child].setup.get("modes") if child in self.chats else ()
-                setup["modes"] = [mode for mode in own or () if mode != "tree"]
+            own = setup["modes"] if "modes" in setup else self.chats[child].setup.get("modes") if child in self.chats else ()
+            if "tree" in withheld or set(own or ()) & set(withheld):
+                setup["modes"] = [mode for mode in own or () if mode not in withheld]
             try:
                 if turn and turn.stopped:
                     raise ApiError(409, "turn stopped")
@@ -1017,7 +1109,7 @@ class AssassinApp:
                     raise ApiError(409, "the anchored item runs this turn — delegate to another item or do the work in this turn")
                 if child not in items:
                     raise ApiError(404, f"unknown UID '{child}'")
-                key = self.start_turn({**setup, "uid": child, "text": call["prompt"], "agent": turn.id if turn else anchor})["turn"]
+                key = self.start_turn({**setup, "uid": child, "text": call["prompt"], "agent": turn.id if turn else anchor}, parent=turn)["turn"]
             except ApiError as err:
                 refusal = (err, f"agent {child}")
                 break
@@ -1344,6 +1436,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if path == "/favicon.ico":
             self._send(200, "image/svg+xml", FAVICON, extra=[("Cache-Control", "max-age=86400")])
             return
+        if path == websurf.PATH:
+            self._websurf()
+            return
         if not self._authorized():
             return
         try:
@@ -1422,6 +1517,25 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             pass
         except Exception as exc:
             self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
+
+    def _websurf(self):
+        """The WebSurf bridge: a WebSocket upgrade from a browser extension on a loopback host, refused otherwise, then served by the
+        app's bridge on this handler's thread until it closes -- the session token travels in its first message, not in the URL."""
+        if urlsplit("//" + (self.headers.get("Host") or "")).hostname not in LOOPBACK_HOSTS:
+            self._json(403, {"error": "requests must address a loopback host"})
+            return
+        problem = websurf.upgrade_refusal(self.headers)
+        if problem:
+            self._json(403, {"error": problem})
+            return
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", websurf.accept_key(self.headers["Sec-WebSocket-Key"]))
+        self.end_headers()
+        self.wfile.flush()
+        self.close_connection = True
+        self.app.websurf.serve(websurf.peer(self.connection, self.rfile, self.wfile))
 
     def _job_snapshot(self, job_id):
         job = self.app.jobs.get(job_id)

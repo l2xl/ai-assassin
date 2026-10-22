@@ -1,0 +1,8 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+test: {pending: ~, scheme: ~, place: ~}
+---
+Open request
+loads its http or https URL with the new surf tab in the previous one's place — its window, its index and its placement — opened before that one is closed, and answers as soon as the tab exists with the page info of its pending document, the load reaching the harness as page events; any other scheme is refused.
+
+A previous surf tab in a split view is closed first, its successor placed anew like the first one.

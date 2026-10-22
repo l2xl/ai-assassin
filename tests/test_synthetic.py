@@ -425,8 +425,8 @@ def test_the_answer_schema_carries_every_tool_call_and_the_structured_output_is_
     assert schema == synthetic.ANSWER_SCHEMA and schema["properties"]["kind"]["enum"] == ["text", "calls"]
     shapes = {shape["properties"]["tool"]["const"]: shape["required"] for shape in schema["properties"]["calls"]["items"]["anyOf"]}
     assert shapes == {tool: ["tool", *fields] for tool, fields in synthetic.CALLS.items()}
-    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"} and set(synthetic.DELEGATIONS) == {"agent"} and set(synthetic.GITS) == {"git"}
-    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS) | set(synthetic.DELEGATIONS) | set(synthetic.GITS)
+    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"} and set(synthetic.DELEGATIONS) == {"agent"} and set(synthetic.GITS) == {"git"} and set(synthetic.SURFS) == {"websurf"}
+    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS) | set(synthetic.DELEGATIONS) | set(synthetic.GITS) | set(synthetic.SURFS)
     structured = tmp_path / "structured_stub.py"
     structured.write_text(STUB_STRUCTURED)
     answer, session = synthetic.claude_code_connector(cli=(sys.executable, str(structured)), cwd=tmp_path).dispatch("", "Go.")

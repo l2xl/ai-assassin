@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-011]
+order: 30
+test: {offer: ~, refuse: ~}
+---
+Interactive WebSurf permission
+switch of the chat is the harness's own, offered while a browser extension is attached, after the connector's switches and off by default: with it off a websurf `fill` or `mouse` is refused while the passive actions stay on in every turn, and a delegated turn cannot switch it on while its parent's is off.

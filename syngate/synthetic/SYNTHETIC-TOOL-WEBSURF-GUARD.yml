@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-WEBSURF]
+test: {scheme: ~, allowlist: ~, blocklist: ~, private: ~, origin: ~, landed: ~, event: ~, action: ~, size: ~}
+---
+WebSurf guard
+of the harness refuses a websurf call before anything reaches the browser unless its action is known with well-typed fields, an `open` URL is http or https and the origin the call names — an `open` URL's, a page action's own `origin` — passes the host lists of the server settings: a blocked origin never, with an allowlist only a listed one, a private, loopback or link-local host only by an exact allow entry; it caps `max_chars`, and withholds an answer or a page event whose page is on an origin the lists refuse but for that origin.

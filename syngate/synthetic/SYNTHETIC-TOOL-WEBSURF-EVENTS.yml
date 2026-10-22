@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-WEBSURF]
+order: 10
+test: {next: ~, own: ~, failed: ~}
+---
+Page events
+the attached extension reports reach a turn that has surfed with its next prompt — every one recorded since its previous prompt, those its own requests caused included, a failed navigation told with the browser's error.

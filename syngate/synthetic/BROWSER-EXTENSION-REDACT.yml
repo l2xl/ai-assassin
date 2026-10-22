@@ -1,0 +1,7 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 60
+test: {query: ~, screenshot: ~, fill: ~}
+---
+Sensitive element redaction
+keeps credentials from crossing to the harness: the value of every password, hidden, credential- or card-autocompleting field and token meta element is stubbed `[redacted]` in a DOM query, masked in a screenshot and never filled.

@@ -1,0 +1,7 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 30
+test: {input: ~, select: ~, refuse: ~}
+---
+Fill request
+sets the value of the first element its selector matches as typing does — focused, through the native value setter, then bubbling `input` and `change` events — for a text field, a text area, a select or an editable element, and refuses any other, disabled or read-only one.

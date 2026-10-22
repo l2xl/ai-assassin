@@ -1,0 +1,8 @@
+---
+parents: [BROWSER-EXTENSION-TAB]
+order: 10
+sources: [websurf-extension/events.js]
+test: {load: ~, failed: ~, history: ~, closed: ~, other: ~}
+---
+Page events
+of the surf tab — each top-level document loaded, each top-level navigation failed with the browser's error, each URL change within a document and the tab's closing — are sent to the harness as `page` frames carrying the page info, whoever caused them, its HTTP status and content type taken from the main frame's last response; no other tab is ever reported.

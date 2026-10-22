@@ -1,0 +1,8 @@
+---
+parents: [BROWSER-EXTENSION]
+order: -5
+sources: [websurf-extension/surf.js, websurf-extension/page.js]
+test: {replace: ~, status: ~, absent: ~}
+---
+Surf tab
+of a session is the one tab the extension drives for it: each `open` creates it anew and closes the one before, each answer but that of `close` carries its page info — final URL, title, HTTP status and content type — that a `status` request answers alone, and while none is open every request but `open` is refused.

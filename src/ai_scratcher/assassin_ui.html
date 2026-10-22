@@ -1302,7 +1302,7 @@ const firstLine = (text) => String(text ?? "").trim().split("\n")[0];
 const brief = (value) => firstLine(value && typeof value === "object" ? Object.values(value).find((v) => typeof v === "string") ?? JSON.stringify(value) : value);
 const pending = (value) => (value == null ? " …" : "");
 const kilo = (n) => (n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
-const READS = ["query", "context", "skill"];
+const READS = ["query", "context", "skill", "websurf"];
 const FILE_STATUS = { A: "added", M: "changed", D: "deleted" };
 
 // The header line: the tally of the steps, the wall time, then the cost and tokens when the connector's closing usage step names them.

@@ -2,7 +2,10 @@
 parents: [BROWSER-EXTENSION-TAB]
 order: 5
 sources: [websurf-extension/placement.js]
-test: {split: ~, tiled: ~, tab: ~, session: ~, compositor: ~}
+test: {split: c3698060b5d74120faca6be1b34d3ef981e740a28c0cfce064ff1a27cbe17a4c, tiled: 63066af1bb98ba7b15c4c4030fbe2bb8b6001b8147193988dae222339a110112,
+  tab: 981c77726e4d5d9470dc544c994281babd0391b10229a32e5d1cec80d2cecdef, session: d4ac6417a61f785236a2971d4f59d8a52ac98a40407b5628648635515d87bdc3,
+  compositor: 0b63e5af097abd06e0effa7ad3c672210583cd02ffad67f40c9d2ee069696af9}
+review: 150d5cd65c3bc6c7c40fb28312358cfe77931b34395636bef1204a3da2b85d18
 ---
 Surf tab placement
 puts a surf tab that takes no previous one's place beside its session's Assassin tab — split with it where the browser offers native split view, else in a new window tiled against that tab's window along its longer side — and opens it as the active tab of the current window, or of the previous surf tab's window, when no Assassin tab of its session is open.

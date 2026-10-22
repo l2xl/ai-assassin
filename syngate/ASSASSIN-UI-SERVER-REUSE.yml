@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 3
-test: ~
+test: 744f0cee74763032b153c4da427227e95cfa3bd3227fa25319d703e77d75f44d
+review: 0a44fb9bfc089481cc387395fe73998387395335a3d073338cf9498a23912954
 ---
 Running server reuse
 has the `assassin` command started on a project root already served by a live server open the browser at that server's URL and exit, rather than start a second server on the same root.

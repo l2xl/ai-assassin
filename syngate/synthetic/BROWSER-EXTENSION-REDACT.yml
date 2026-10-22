@@ -1,7 +1,9 @@
 ---
 parents: [BROWSER-EXTENSION-TAB]
 order: 60
-test: {query: ~, screenshot: ~, fill: ~}
+test: {query: 017cdf4650f2cc5829bee5f202429b97edd91b8c4192408737894afefb935aa7, screenshot: f3066ae83da98e89bbc6a84756eb9b34865fb75f4d79c6c04104f8d3a70707de,
+  fill: 52c597ed8974c74ca5aea2e8041707404a9e6f09240ed79abb785348fc3bcd52}
+review: 04352e9778c2eda84f9244c9b7e1e9e0061f55b089fd44516fe13a97dbed3a3c
 ---
 Sensitive element redaction
 keeps credentials from crossing to the harness: the value of every password, hidden, credential- or card-autocompleting field and token meta element is stubbed `[redacted]` in a DOM query, masked in a screenshot and never filled.

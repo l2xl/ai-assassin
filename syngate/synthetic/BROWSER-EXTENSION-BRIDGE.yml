@@ -2,7 +2,10 @@
 parents: [BROWSER-EXTENSION]
 order: -10
 sources: [websurf-extension/bridge.js]
-test: {hello: ~, answer: ~, ping: ~, untimed: ~, gone: ~, unheld: ~}
+test: {hello: e5b1a3c37e58b0acd838e9ba6cbd213110c7d64ca132537bebdacd0140b1593f, answer: f2d192fd8c230994034d0de89defe212a92ac482ff46d97830f505d141326515,
+  ping: 10586aeb600590781594964cdfda51c83786158767d6c9ac766e1609811f2bc9, untimed: 587dc7b4bbaf2926b62d7b5d6804fa3d4e4f5b81e5aeb090f3861421024466be,
+  gone: ed4ea06273f18f58896720762e9224d439b5a00cccc5bc9bd9a7b8ca07e4fba1, unheld: 813105f80e007ee8e33e861bc7c6d5bf82b13cbdba07b9192aaeecfc9762e7e6}
+review: 4810d696d60b7afa4b852d4dc857e9ce589d1d223ff169646b661f971182c6db
 ---
 WebSurf bridge
 of each session connects out to the `/websurf` WebSocket of its harness origin, introduces itself as protocol version 3 with the token its Assassin tab's URL carries, keeps the socket alive with pings, and answers each surf request with a result of the same id once the harness has welcomed it, no request waiting on a page load or a set time.

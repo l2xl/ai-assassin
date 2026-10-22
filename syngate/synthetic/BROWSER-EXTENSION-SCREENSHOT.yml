@@ -1,7 +1,9 @@
 ---
 parents: [BROWSER-EXTENSION-TAB]
 order: 50
-test: {capture: ~, fit: ~, paint: ~}
+test: {capture: 6922d1f1a7ae00b66520b45b65a9f8d3bb3dc073bdad2767e7f582792c82386d, fit: 7c6e88ed4bf4fb51961a6447a7ffcf87a1359ca868ba151f1f420fce8b799042,
+  paint: 6bb664a34689ed37a409303f3e9b676b6659b8813258a92eb8183b1a8de6f83d}
+review: e2fe55a76b2f799b3ebe7461aee1b9d8408116ebb2b3a67093f657b4f2783b2f
 ---
 Screenshot request
 answers the visible part of the surf tab, activated in its window first and captured once its visible top frame has painted twice over the masks — never awaiting a frame out of sight — as a JPEG image scaled to the viewport's CSS pixels, or below them to fit the request's longest edge and area, with the viewport size, the device pixel scale and the image scale, image pixels per CSS pixel.

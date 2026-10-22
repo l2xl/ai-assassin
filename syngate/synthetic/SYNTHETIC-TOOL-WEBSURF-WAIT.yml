@@ -1,7 +1,9 @@
 ---
 parents: [SYNTHETIC-TOOL-WEBSURF]
 order: 20
-test: {ready: ~, arrive: ~, seconds: ~, stop: ~}
+test: {ready: f7d7227240fe4888cff4f0fe7066cad211c8422c34ecb7db75fd18f20fcddf79, arrive: 12a9875f8d62e37190b5d1fd84369f52474427b9a8a323ee26895832b7be2d25,
+  seconds: 25463862fdad27c500e96cbdfc18d07431b9633ae92c8e0826009cea6c647dcb, stop: 9d15c5e62f0cdfffc6731701415123ec1d9896e2293d4975f544201e8f735a09}
+review: ecc70afc32b230be31a08af99095874128a2cded97913babe4ad8bc8b0ff95a0
 ---
 WebSurf wait
 is the harness's own websurf action, never sent to the browser: it answers with the number of page events seen once one newer than the turn's last websurf call and its previous prompt is recorded — at once when one is — and is refused sooner on the turn's stop, the browser detaching or past the `seconds` it names.

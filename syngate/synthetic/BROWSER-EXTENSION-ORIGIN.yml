@@ -1,7 +1,8 @@
 ---
 parents: [BROWSER-EXTENSION-TAB]
 order: 8
-test: {check: ~, request: ~}
+test: {check: 6e601ac4b534a6ae2517a73854e30e3506f4d9cd1113c32b2dcaa5ef6e02f05d, request: b3abce41a13885989c2c839d0d64bba48f4f4468c0160df8476c6ac400dc9dfb}
+review: 6676335663e4f1962ab16acf88446bf33d61da26d59bafe7aef004aac499d71e
 ---
 Page action origin check
 plays a `query`, `screenshot`, `fill` or `mouse` request only in a top-level document of the origin it names, checked in the script that plays it, and refuses it otherwise with an error naming the document's own origin, the page info attached.

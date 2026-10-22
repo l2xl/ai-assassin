@@ -1,7 +1,9 @@
 ---
 parents: [SYNTHETIC-TOOL-WEBSURF]
 order: 30
-test: {other: ~, child: ~, lapse: ~}
+test: {other: e6d1faa9fc17eb98ec196afe29ed7ba88a9c6a50c625a180991d7a11e0c4aa38, child: 9d95b1bf7a018a7e23df29314d292a80f41512c50700b4f3b62210490361f7a8,
+  lapse: 1620c51e0c837f3c5a00592dc6ee0331b94aa186c12874da84b0cb07aba3fd9c}
+review: 89352981aaac772539491890dd1f23b6916422e0ecfc4443c81ba15b7610a793
 ---
 Surf tab hold
 of the harness refuses a websurf `open` or `close` while another running turn holds the surf tab — the last turn whose `open` or `close` passed, unless the caller descends from it by delegation — naming that turn, every turn's page actions passing; the hold lapses as its turn ends, and a call of no turn takes none.

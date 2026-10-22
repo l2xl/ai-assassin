@@ -2,7 +2,10 @@
 parents: [BROWSER-EXTENSION]
 order: -20
 sources: [websurf-extension/sessions.js]
-test: {discover: ~, follow: ~, token: ~, release: ~, persist: ~, status: ~}
+test: {discover: a9f73f03db7c9e52caded3d9af798770bddff841a09928171b8042057fe84482, follow: ab2f58a4d57d3e2752197a5bceb874441ee0ddfa34c269bde4fb408fe24c805a,
+  token: 68463eb37b006dafcd617807ccea29b09978e2290f063a86547923f5c81644f9, release: 292425cc95fb893d3e11f701da5ca081e40a208b17f426f673c6bcaa07cbc060,
+  persist: d7564653877f7f478235d25951ff253064f015ecf706cb4482c54b44a5e80e8f, status: 3ecbef60ac42cc7ffc8781c10b34fd49911d4ef6740eae98f34f86ba35437ac0}
+review: 6ad2863c96d77918742fa40cd36db985cf3544d8e0c6b9f20952af25ad1cf5b4
 ---
 Session map
 of the extension is read from the URLs of the browser's tabs — a tab at `http://` on a loopback literal, path `/`, with a non-empty `token`, never a surf tab, belonging to the session of its origin — each session's bridge opening with its first tab, replaced by a newer token of its origin, reopened by the alarm once dropped and closed with its last tab, its surf tab then released as an ordinary tab.

@@ -1,7 +1,8 @@
 ---
 parents: [BROWSER-EXTENSION-TAB]
 order: 2
-test: ~
+test: 06d94f75b763d1fc540a08bda64fbdb547d2c488446bfa6eaee2dfa3f150b13a
+review: e493b35ad20ab86340d7c75238046f050f3a7ecc27b4bac309e03329b3691a24
 ---
 Close request
 closes the surf tab and answers once it is closed, its closing reaching the harness as the `closed` page event.

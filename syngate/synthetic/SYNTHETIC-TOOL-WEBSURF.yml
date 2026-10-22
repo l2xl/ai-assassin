@@ -2,7 +2,9 @@
 parents: [SYNTHETIC-TOOLS, BROWSER-EXTENSION]
 order: 50
 sources: [src/ai_scratcher/prompts/websurf.md, src/ai_scratcher/websurf.py]
-test: {run: ~, absent: ~, image: ~, stop: ~}
+test: {run: a070934257c7a2fe029333eb4d37987c00ca55424b615930cddcde8794e3f77b, absent: bd51c9f80c35c15dbbf4b62dbd919db4bc1b2ea7495b57a9b371164a0a4a0ff3,
+  image: e0f1f954346e1522579174b2885241858512dbb8b07f343d5dc672315857924c, stop: bef67aca09d5e7ec369d9e6fffdd2ef79cb891c34041a18788a0fafefbf63b61}
+review: 1206e838e8717eeadda9010bb69cf3c677f987e8b3913ae3d8591f26c8494851
 ---
 WebSurf tool
 sends each `websurf` call of an answer — `{"tool": "websurf", "action": "open", "url": "https://example.com/page"}` — as a surf request to the browser extension attached to the harness, its answer, awaited with no time limit until it comes, the browser detaches or the turn stops, coming back as the next prompt, the page info and DOM fenced as untrusted content and a screenshot as an image; every answer carrying websurf calls is one round of the turn, each call a chat step showing its action, target and size; with no browser attached the call is refused.

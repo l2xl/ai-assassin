@@ -1,7 +1,10 @@
 ---
 parents: [BROWSER-EXTENSION-TAB]
 order: 40
-test: {move: ~, click: ~, drag: ~, wheel: ~, played: ~}
+test: {move: 05edeff296560033742c251c699e7d2bc50b45e8808923de2bfa871678b9330f, click: f436e0da4f088efdab87fc3256205efb1db3fcb4e33159b35d4ac14670afaf9b,
+  drag: 1b1a6cdfce1629405ab9532b8b15a6f591569e4dabfe2994912198ad3bf42875, wheel: df73a554c24b8b52d28e6895a7755a3e8f5b4bff51b380af39a2e787d7ab0a75,
+  played: ce5096a713457ab20159bd69f44261d82bc677b53d7bd355ffa9cd2abd6723b5}
+review: 900caea69aa3a0b58fffa724c287b402c7e17a553130c6e79e836e4919424c3c
 ---
 Mouse request
 plays its sequence of steps — moves, presses, releases, clicks, double clicks, wheel turns and pauses, at viewport points or selector targets — as the user's pointer would from where the previous request left it: a move as a path of pointer moves with the hover transitions it crosses, a click where a press and its release hit one element, an HTML5 drag from a draggable element, and it answers once they have played, with the page info as it then is.

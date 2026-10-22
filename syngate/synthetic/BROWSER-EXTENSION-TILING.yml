@@ -1,7 +1,9 @@
 ---
 parents: [BROWSER-EXTENSION-PLACEMENT]
 sources: [src/ai_scratcher/tiling.py]
-test: {method: ~, script: ~, halves: ~, call: ~}
+test: {method: c99e4b481fdec4c958efd2c76497dc72a21da7b8af7160f2ddb0ca4741c37c6c, script: 0e90d169c18d555df7de086bdf0aee1f94b1e17ba30b228c03bb98f60cb8ef50,
+  halves: 11135f5f6920766f09218491d92de46042d6895c7898cc740726ff957e6dd2c3, call: 783933b51a67ffaf9e77d3dc4cae990151260592e06a824324c93df257ce0890}
+review: 92e6663bb8304c6219c4033d7fdd74c1ec825859602a6fec93ca6a7d52882283
 ---
 Compositor tiling
 of the harness sets a new surf window and its session's Assassin window side by side where the browser cannot position its windows: under KDE Plasma on Wayland it loads a KWin script over D-Bus that finds both windows by their titles and gives them the two halves of the Assassin window's screen work area along its longer side.

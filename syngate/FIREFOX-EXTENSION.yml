@@ -1,7 +1,8 @@
 ---
 parents: [BROWSER-EXTENSION]
 order: 10
-test: ~
+test: f9f28c5823a77d741de06acee1a2554f5ebd91b7fa85510edf66ffad438d0617
+review: a06a9a4856ce0d28e8698f91c1a08078069447a2f926fc1475ef8755a88fe35b
 ---
 Firefox build
 loads from the same folder as a temporary add-on in Firefox 121 and later, running the background as a module event page under its gecko id, with an extension-page policy that leaves loopback `ws://` un-upgraded.

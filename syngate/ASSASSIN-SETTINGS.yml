@@ -2,7 +2,8 @@
 parents: [AI-ASSASSIN]
 order: 80
 sources: [src/ai_scratcher/assassin_ui.py]
-test: ~
+test: 1c387f6df7705ac25435032bd7ff3e3f875ad665238c67bc8b8fa2825ed23d50
+review: e7192092454949ac5cd0c48be5a0c217a2cb59fcb8fbb8a80bbf8f3e9e9d4814
 ---
 Server settings
 are read from `assassin_settings.json` beside the tree at every use, an edit taking effect without a restart and a missing or malformed file reading as no settings, each feature keeping its own section.

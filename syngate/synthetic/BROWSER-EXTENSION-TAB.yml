@@ -2,7 +2,9 @@
 parents: [BROWSER-EXTENSION]
 order: -5
 sources: [websurf-extension/surf.js, websurf-extension/page.js]
-test: {replace: ~, status: ~, absent: ~}
+test: {replace: c193e99c3d3f974753da9bbbe90ebc5dc4e9ebc0c984c2c79c5a71416d7363c5, status: beb1088d6417d9d6d24bd2b30cf7cbb4770d2e076744b0739b82afc1fe385e8d,
+  absent: cf7e9c6844a07250a6404b327bcdc1fe6a2a648dc22e2ca771211a26512372f6}
+review: f04669404ba511764f4942cf5ed59689ac4161bf396f15fb109222dfd8f818ed
 ---
 Surf tab
 of a session is the one tab the extension drives for it: each `open` creates it anew and closes the one before, each answer but that of `close` carries its page info — final URL, title, HTTP status and content type — that a `status` request answers alone, and while none is open every request but `open` is refused.

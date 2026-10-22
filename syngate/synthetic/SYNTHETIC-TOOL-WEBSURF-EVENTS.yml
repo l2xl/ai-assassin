@@ -1,7 +1,9 @@
 ---
 parents: [SYNTHETIC-TOOL-WEBSURF]
 order: 10
-test: {next: ~, own: ~, failed: ~}
+test: {next: 7abab5943630367647293db857e0fe134166c2f305d57ac0fea497ef13aad7d6, own: 8923c422c3085d0717866612d804e48b8e15f6ff8d46bb86ba9ec02e884f78cb,
+  failed: 57bea3fd82eaf71e12339e312379dc7e5f5b21efaa1674c156c0acc6a0fc0b15}
+review: 0d1012120436c61596ec7ad06b151250a369ef6f1406c1f87a484d5a87ebcc5d
 ---
 Page events
 the attached extension reports reach a turn that has surfed with its next prompt — every one recorded since its previous prompt, those its own requests caused included, a failed navigation told with the browser's error.

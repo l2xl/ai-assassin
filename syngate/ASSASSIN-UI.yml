@@ -1,7 +1,7 @@
 ---
 parents: [AI-ASSASSIN]
 sources: [src/ai_scratcher/assassin_ui.py, src/ai_scratcher/assassin_ui.html]
-review: ed17db1aa7723c7230a7cbf4b4eb7a1711657a722254e50fcfd43d9b47ce7b17
+review: a8a930689fe714c59cfd324a568048e2d3b30207d1dc081e96783b9a0ce3f476
 ---
 AI Assassin UI
 is the local browser application of AI Assassin: the outline of the DAG, the document of its items and the AI chat anchored at each item.

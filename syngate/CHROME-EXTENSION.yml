@@ -1,6 +1,7 @@
 ---
 parents: [BROWSER-EXTENSION]
-test: ~
+test: baf1b75e9cd42f6f1c304db11891f01c4fa610ad4bffc25f9e0d3cd34ffa3b26
+review: 3bd33ea4bfee6c9ca79930051c87253a4cb49b5637e617d6f48181eae4166100
 ---
 Chrome build
 loads unpacked from `websurf-extension/` in Chrome 121 and later, running the background as a module service worker.

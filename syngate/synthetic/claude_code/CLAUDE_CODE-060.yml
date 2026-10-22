@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 60
-test: 49c674fda1103dad909244e00e7b372fb03be4eb68592fad0794ef9b266ddd52
-review: 98da5a843f40da6e6f4067ed924c5ff33a51fafa1096387884fdf3a10b868601
+test: 5f16715686f2f74b9440dfbae0b49143ec87714199e6a337efed87f6ed690a95
+review: a5ae8f6d73786c8d702dae1c3e9f704a225de0261bd887126ac173c79550f669
 ---
 Answer schema
 of the Claude Code connector hands the calls of the tool library to the turn as the JSON schema of its structured answer, that structured output returned in place of the reply text.

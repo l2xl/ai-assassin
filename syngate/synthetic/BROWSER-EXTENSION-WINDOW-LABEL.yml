@@ -1,7 +1,8 @@
 ---
 parents: [BROWSER-EXTENSION-PLACEMENT]
 order: -10
-test: ~
+test: 6abb558723cb2af47b9f6b112267624fbff14518d4002910bd9bf486416ed1d2
+review: c77c4b09a5fc5056932c6f633d5f117fd24bfa22655cb62812226db6ceea5b60
 ---
 Surf window label
 `WebSurf <port> · ` — `<port>` that of its session's harness origin — prefixes the title of every surf window the extension creates where the browser takes `windows.create({titlePreface})`, so the user sees which server's AI drives the window; in Chrome, which takes none, it goes unlabelled.

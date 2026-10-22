@@ -1,7 +1,8 @@
 ---
 parents: [BROWSER-EXTENSION]
 order: -3
-test: {requests: ~, events: ~}
+test: {requests: f6ebf6e92f9e93607b70e3c61704b072974508e5fe6e9a71b9e697176402f75b, events: d2610d81a79500e47d86f5683fc5d3a611e9c1cfc904dc8348317a1b48934f3e}
+review: 26724cb7f74cf2863d0a824f5b448f3d21ae3180a28c14d69bf1b30ef47640ff
 ---
 Session isolation
 keeps two AI Assassin servers open in one browser apart: the requests of a session's bridge act on its own surf tab alone, and the page events of a surf tab go to the bridge of the session owning it alone.

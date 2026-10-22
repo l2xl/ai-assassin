@@ -2,7 +2,8 @@
 parents: [AI-ASSASSIN]
 order: 70
 sources: [websurf-extension/manifest.json, websurf-extension/background.js, websurf-extension/options.js]
-test: ~
+test: 5c67244f56b8875df45f351bb3f902d22a175c21b8b420ccb933615490470c62
+review: 96eeabe23a47a14ad4869c421c27ad7e8aa666788d31b16c273078ef5d564e55
 ---
 Browser extension
 of AI Assassin serves the WebSurf AI tool of every AI Assassin server open in the user's own browser with a tab of that browser, where pages load as the user would load them — with their sessions, network identity and location — for the AI to read, see and, where permitted, operate, bounded by a harness-hosted guard; installing it is the whole setup.

@@ -1,7 +1,8 @@
 ---
 parents: [MIXROUTE]
 order: 20
-test: ~
+test: bee370f22df63ed2a0623ce054019bfc1f78daf55f5e279e81d27f1dd0259930
+review: b451cc4fb970ef9018519f161f5dafbeaf75e2be61bfd86b1a7aa50a45f20680
 ---
 Connector offer
 lists the MixRoute connector among the page's connectors only while an API key is set.

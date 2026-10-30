@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-TOOL-WEBSURF]
 order: 50
 sources: [src/ai_scratcher/assassin_ui.py]
-test: ~
+test: 955b30c885d54efea227111848f9f96827ca7562b904b8368692ac9744356a0a
+review: 71704570a110332844d45fc5965efab356077de914002e2ed0d483b2d7cb2d97
 ---
 Surf round budget
 of a turn that has surfed is `websurf.rounds` of the server settings — 40 without one — rounds in place of the read loop's bound, the results prompt telling the rounds left once three or fewer remain and a round past them refused.

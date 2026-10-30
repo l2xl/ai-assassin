@@ -1,8 +1,8 @@
 ---
 parents: [AI_CHAT-011]
 order: 10
-test: 33ac95bc7e424fe47e2d7662235f2983640f6241b8ee930641ac83deeb1f3ce9
-review: 057f93012db59ee2a912c1080a5a420c7bbdc08f048503a94532ebfcb8a43b25
+test: 6481a089004f3adb41f8f33fce31848ef9aa7886cc5400e32bdc8f41e33c1522
+review: bfbcdbd7cbef74fbd32e0fd7f42230109027c76e35160ce51a3fe37f1134646f
 ---
 Edit files permission
 switch of the chat is on by default and lets the patch calls of a reply change project files; the connector itself has no edit tools.

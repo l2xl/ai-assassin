@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-WEBSURF]
 order: 60
-test: ~
+test: 6407bb39a0ec93a189b440e758d39a8deeaf8e07ad90384a53e977bb7a57c608
+review: 8d031b5d5d3c253a5424c3028400d486910aa9faca23b24f4f1e909435059939
 ---
 Recovery guidance
 of the WebSurf tool's text tells the turn that a refusal ends its batch alone — the calls after it did not run — and comes back with what the surf tab shows, how to go on — look again, change what was wrong, send the rest of the batch anew — what is the user's to settle, and that its rounds are bounded.

@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-TOOL-PATCH]
 order: 20
 sources: [src/ai_scratcher/patchlib.py]
-test: ~
+test: 6ade3d9c680e69c41c36ef52d1586cc89b9954b3526eee7b6eb3663368a24bb6
+review: c30a30785c0b66b002099591dff41c3de26678b2cd716b2a41e81f66d8659b85
 ---
 Patch guard
 A patch shall be refused when a path it names is under syngate/, leaves the project, is a symbolic link or has no a/ or b/ name.

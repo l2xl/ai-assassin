@@ -1,7 +1,8 @@
 ---
 parents: [MIXROUTE]
 order: 90
-test: ~
+test: 155d1f9c3cddde0d07f5d969a5fb4975004985fa336d2577745463675248e39c
+review: bb7b0cf4a1f5d832d685277586829bb9700922da0e67026bac8f7a5341b9ea99
 ---
 MixRoute error reporting
 fails a turn as a connection error naming the HTTP status and the API's message, an error in the stream or a missing API key the same way.

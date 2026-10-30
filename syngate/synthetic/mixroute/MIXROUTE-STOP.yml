@@ -1,7 +1,8 @@
 ---
 parents: [MIXROUTE]
 order: 80
-test: ~
+test: ab830dd161278b20c21a7b55b162d4180232aeb964821d7dba0dbba2db0114a3
+review: 6c59edf293b986679b28018653e634e9145d1032913a3674c4308727622c2e04
 ---
 MixRoute interruption
 ends a dispatch the instant the stop is received as a connection error, the response closed and the session left as it was; a stop before the request is sent sends none.

@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-TOOL-PATCH]
 order: 10
 sources: [src/ai_scratcher/prompts/patch.md, src/ai_scratcher/patchlib.py]
-test: ~
+test: 5b7fa19bf7e1ff84feb89953be0216d05ecef0fefa47fa853bf6e30f55a33d65
+review: 268de236866f8860f25e27f4e4e4f32004b0b9d7d4d22b708b0cd4ab3d1580d3
 ---
 Patch application
 A patch call shall apply its whole unified diff to the project files through git, every section or none, the refusal naming the section that failed.

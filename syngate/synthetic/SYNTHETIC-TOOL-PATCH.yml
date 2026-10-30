@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOLS]
 order: 45
+review: 3bf178588e6b3a2d4c25df0ffeee6dc563e4f8a10f8dc071efb852c5f256073c
 ---
 Patch tool
 Changes project files of an answer by a unified diff applied with git, the switch Edit files gating it; syngate items are never in its reach.

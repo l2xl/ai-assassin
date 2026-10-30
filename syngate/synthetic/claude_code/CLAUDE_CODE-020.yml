@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE, AI_CHAT-PERMISSION-EDIT]
 order: 20
-test: 32c372545b714b6b60e29d227e12bb5964d455073724c6f2f8c8ef0b94d3e1a5
-review: 75d05fc23411069635d554dc13d43d9bd07365540e16e4a34ecaa3b465ad4920
+test: 45f207e1ced006fe08e856ab0324eaaece28dc47737f80aa4b4df2260c744de0
+review: 372eb516c3d2757dda8b2eee36fe823179a72ab723508222fccd13b4e9662162
 ---
 Project edit mode
 instructs the Claude Code connector to call `claude` without an edit mode of its own: project files change only through the patch call of the harness.

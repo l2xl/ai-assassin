@@ -1,7 +1,8 @@
 ---
 parents: [MIXROUTE]
 order: 37
-test: ~
+test: b43032ae28327ffd0beda52dc8c37a0be42b24391a1c7090c76b609f8d2a6fc5
+review: 2834807814dd3cdc4b753495a853f41ee378d445e3bcc6b68e763337b8237f73
 ---
 Automatic model selection
 offers the model `auto` first, ahead of the models of the settings, and as the default model only when `default_model` names it; a turn of `auto` goes with the `smart_routing` section's `api_key`, else the connection's key, and MixRoute's smart routing picks the Simple, Complex or Ultra tier by the complexity of each request. `auto` lists no efforts.

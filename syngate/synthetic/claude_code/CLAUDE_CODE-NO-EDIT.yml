@@ -2,7 +2,8 @@
 parents: [CLAUDE_CODE]
 order: 30
 sources: [src/ai_scratcher/synthetic.py]
-test: ~
+test: 252392be480ff90842c6e031e587327306100aa3a988de83fddd3fcf37620855
+review: f5d0db26bd5d9bdc524fe276ff1a63fbb6f77260a94cc32a83da0d63ff0f62bc
 ---
 Own edit tools off
 The Claude Code connector shall be called with its Edit, MultiEdit, Write and NotebookEdit tools denied in every mode, so project files change only through the patch call.

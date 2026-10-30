@@ -1,7 +1,8 @@
 ---
 parents: [MIXROUTE]
 order: 60
-test: {schema: ~}
+test: {schema: a53722197ab9203b29aa044ac52e20dd8334121f88c0a70dffec494598db7a37}
+review: 145f4f95fe8366cce986023eefd70749aa7d2b1081cc73697d1e101874e8b87f
 ---
 MixRoute answer schema
 goes as the `json_schema` response format built from the library's tools, a JSON object answered — bare or fenced — being the structured answer and any other content the reply text; the `structured` setting off sends none.

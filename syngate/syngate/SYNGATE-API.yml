@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE, SYNTHETIC-TOOL-SYNGATE]
 order: -20
-test: ~
+test: a72fbed94d5879af7e0cdbf21d97b20b8011d61504d482755f641ee67d352aa2
+review: 96e9caafc4905605e20c2f881b8d48e377fa46bb06748005565689c1bcc60878
 ---
 Syngate API
 

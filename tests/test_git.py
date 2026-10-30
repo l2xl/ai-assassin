@@ -80,7 +80,7 @@ def test_the_git_tool_is_offered_only_while_git_finds_a_work_tree_around_the_pro
     offered = assassin_ui.AssassinApp(root=root, syngate_dir=syngate_dir)
     offered.connectors = {"echo": Scripted()}
     assert offered.git and offered.library is synthetic.LIBRARY and offered.build_model()["git"] is True
-    assert [mode["id"] for mode in offered.build_model()["connectors"]["echo"]["modes"]] == ["tree", "edit"]  # always offered, no switch of its own
+    assert [mode["id"] for mode in offered.build_model()["connectors"]["echo"]["modes"]] == ["tree", "patch", "edit"]  # always offered, no switch of its own
     shutil.rmtree(root / ".git")
     bare = assassin_ui.AssassinApp(root=root, syngate_dir=syngate_dir)
     tools = [shape["properties"]["tool"]["const"] for shape in synthetic.answer_schema(bare.library)["properties"]["calls"]["items"]["anyOf"]]

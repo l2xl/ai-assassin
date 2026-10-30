@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-SKILLS]
+order: 40
+test: ~
+---
+Seed context skill
+is a default skill stating the format of the seed context — the `# Prompt`, `@UID`, `# Design` and `# Source` headings of what it holds — and that what the context includes is not read again.

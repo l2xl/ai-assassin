@@ -132,28 +132,73 @@ async function query(api, request, config, state) {
 
 /**
  * Answers the visible part of the surf tab, activated in its window -- the inactive pane of a split view takes the front -- with every
- * visible sensitive element masked in every frame, as a JPEG fitted by `fit`, with the viewport, its device pixel scale and the image's.
+ * visible sensitive element masked in every frame, the frames that could not be masked covered whole, as a JPEG fitted by `fit`, with
+ * the viewport, its device pixel scale and the image's, and the number of frames `covered` where any is.
  */
 async function screenshot(api, request, config, state, tab) {
   await api.tabs.update(tab.id, { active: true });
-  let top, captured, away = false;
+  let top, captured, covered = 0, away = false;
+  const leaving = (e) => { away = Boolean(e.gone); throw e; };
   try {
-    const frames = await inject(api, tab.id, 'mask', { on: true, origin: request.origin }, true).catch((e) => { away = Boolean(e.gone); throw e; });
+    const { frames, failed } = await maskFrames(api, tab.id, request.origin).catch(leaving);
     top = topResult(frames);
+    if (!top.hidden && !top.error && failed.length) {
+      const hid = await inPage(api, tab.id, 'cover', { origin: request.origin }).catch(leaving);
+      if (hid.hidden || hid.error) top = hid; else covered = hid.covered || 0;
+    }
     // the boxes laid in any frame are painted by two frames of the top one, which a frame out of sight would never render
-    if (!top.hidden && !top.error && frames.some((frame) => frame.result && frame.result.masked > 0)) {
-      const painted = await inPage(api, tab.id, 'paint', { origin: request.origin }).catch((e) => { away = Boolean(e.gone); throw e; });
+    if (!top.hidden && !top.error && (covered || frames.some((frame) => frame.result && frame.result.masked > 0))) {
+      const painted = await inPage(api, tab.id, 'paint', { origin: request.origin }).catch(leaving);
       if (painted.hidden || painted.error) top = painted;
     }
     if (!top.hidden && !top.error) captured = await api.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
   } finally {
     // the boxes go with a document that went away; one still there has them taken away, as its going answers that too
-    if (!away) await inject(api, tab.id, 'mask', { on: false }, true).catch(() => {});
+    if (!away) await unmask(api, tab.id).catch(() => {});
   }
   const refused = await refusal(api, state, top);
   if (refused) return refused;
   const { image, scale: imageScale } = await fit(captured, top.viewport, request);
-  return { ok: true, page: await pageInfo(api, state), image, viewport: top.viewport, scale: top.scale, image_scale: imageScale };
+  return { ok: true, page: await pageInfo(api, state), image, viewport: top.viewport, scale: top.scale, image_scale: imageScale, ...(covered ? { covered } : {}) };
+}
+
+/** The ids of the frames of the tab as the browser lists them now, none for a tab it does not know. */
+async function frameIds(api, tabId) {
+  return ((await api.webNavigation.getAllFrames({ tabId })) || []).map((frame) => frame.frameId);
+}
+
+/**
+ * Lays the masks in every frame of the tab: in one injection, or, where the browser refuses that for any frame -- one that went away
+ * under the script, as a page's transient frames do, whose answer Firefox cannot return -- frame by frame, each failure its own. The top
+ * frame's failure is the screenshot's. Returns the injection results and the ids of the frames still there that laid no masks.
+ */
+async function maskFrames(api, tabId, origin) {
+  try {
+    return { frames: await inject(api, tabId, 'mask', { on: true, origin }, true), failed: [] };
+  } catch (e) {
+    if (e.gone) throw e;
+    const frames = [], failed = [];
+    for (const frameId of await frameIds(api, tabId)) {
+      try {
+        frames.push(...await inject(api, tabId, 'mask', { on: true, origin }, false, frameId));
+      } catch (err) {
+        if (err.gone || frameId === 0) throw err;
+        failed.push(frameId);
+      }
+    }
+    const left = new Set(await frameIds(api, tabId));
+    return { frames, failed: failed.filter((frameId) => left.has(frameId)) };
+  }
+}
+
+/** Takes the masks away in every frame: in one injection, else frame by frame, a frame refusing it left as it is. */
+async function unmask(api, tabId) {
+  try {
+    await inject(api, tabId, 'mask', { on: false }, true);
+  } catch (e) {
+    if (e.gone) throw e;
+    for (const frameId of await frameIds(api, tabId)) await inject(api, tabId, 'mask', { on: false }, false, frameId).catch(() => {});
+  }
 }
 
 /**
@@ -202,11 +247,11 @@ async function inPage(api, tabId, action, options) {
 }
 
 /**
- * Returns the injection results of `pageAction` played in the tab's top frame, or in every frame with `allFrames`, or throws an error
- * marked `gone` once the tab's document goes away while it plays -- a new document committed in its top frame, or the tab closed --
- * as the browser may never answer for it.
+ * Returns the injection results of `pageAction` played in the tab's top frame, in every frame with `allFrames` or in the one frame
+ * `frameId`, or throws an error marked `gone` once the tab's document goes away while it plays -- a new document committed in its top
+ * frame, or the tab closed -- as the browser may never answer for it.
  */
-async function inject(api, tabId, action, options, allFrames = false) {
+async function inject(api, tabId, action, options, allFrames = false, frameId = null) {
   let stop;
   const gone = new Promise((resolve, reject) => {
     const away = (why) => reject(Object.assign(new Error(`the page went away while the ${action} played: ${why}`), { gone: true }));
@@ -220,7 +265,7 @@ async function inject(api, tabId, action, options, allFrames = false) {
     };
   });
   try {
-    const target = allFrames ? { tabId, allFrames: true } : { tabId };
+    const target = frameId != null ? { tabId, frameIds: [frameId] } : allFrames ? { tabId, allFrames: true } : { tabId };
     return await Promise.race([api.scripting.executeScript({ target, func: pageAction, args: [action, options] }), gone]);
   } finally {
     stop();

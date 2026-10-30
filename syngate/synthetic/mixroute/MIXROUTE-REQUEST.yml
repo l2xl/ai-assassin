@@ -1,0 +1,7 @@
+---
+parents: [MIXROUTE]
+order: 40
+test: ~
+---
+Chat request
+of the MixRoute connector carries the API key as the bearer token, the seed context as the system message, then the session's earlier messages and the user's text, a turn's images following that text as `data:` URL image parts.

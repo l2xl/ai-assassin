@@ -1,0 +1,7 @@
+---
+parents: [MIXROUTE]
+order: 20
+test: ~
+---
+Connector offer
+lists the MixRoute connector among the page's connectors only while an API key is set.

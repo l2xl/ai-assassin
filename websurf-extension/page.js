@@ -3,7 +3,7 @@
 // Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
 /**
- * Returns the outcome of one surf action played in the page -- `query`, `fill`, `mouse`, `mask` or `paint` -- or `{error}`, or `{hidden}` where
+ * Returns the outcome of one surf action played in the page -- `query`, `fill`, `mouse`, `mask`, `cover` or `paint` -- or `{error}`, or `{hidden}` where
  * the page is not visible. It is injected by `scripting.executeScript` into the extension's isolated world, so it is self-contained: it
  * sees the page's DOM, not its scripts, and keeps the pointer in that world's globals from one request to the next while the document
  * lives. In the top frame it plays only in a visible document of the origin `options.origin` names, so what it acts on is what the
@@ -129,35 +129,44 @@ export async function pageAction(action, options) {
     return [...root.querySelectorAll('input, textarea'), ...shadows.flatMap(fields)];
   }
 
-  /**
-   * Lays an opaque box over every visible sensitive field, in the top layer above any dialog, or takes the boxes away; returns the viewport
-   * size and scale. It awaits no frame: a frame out of sight never renders one, so the top frame's `paint` awaits them for the capture.
-   */
-  function mask({ on }) {
-    if (globalThis.__websurfMask) globalThis.__websurfMask.remove();
-    globalThis.__websurfMask = null;
-    let masked = 0;
-    if (on) {
-      const layer = document.createElement('div');
-      layer.setAttribute('popover', 'manual');
-      layer.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;'
-        + 'background:transparent;overflow:visible;pointer-events:none;z-index:2147483647';
-      for (const el of fields(document)) {
-        const r = el.getBoundingClientRect();
-        if (!sensitive(el) || r.width <= 0 || r.height <= 0 || r.bottom <= 0 || r.right <= 0 || r.top >= window.innerHeight || r.left >= window.innerWidth) continue;
-        const box = document.createElement('div');
-        box.style.cssText = `position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;background:#000`;
-        layer.appendChild(box);
-        masked += 1;
-      }
-      if (masked) {
+  /** Lays an opaque box over every element of `elements` in sight, in the top layer above any dialog, laid with the first; returns how many. */
+  function boxes(elements) {
+    let laid = 0;
+    for (const el of elements) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0 || r.bottom <= 0 || r.right <= 0 || r.top >= window.innerHeight || r.left >= window.innerWidth) continue;
+      if (!globalThis.__websurfMask) {
+        const layer = document.createElement('div');
+        layer.setAttribute('popover', 'manual');
+        layer.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;'
+          + 'background:transparent;overflow:visible;pointer-events:none;z-index:2147483647';
         document.documentElement.appendChild(layer);
         globalThis.__websurfMask = layer;
         // a popover not shown is hidden: without the top layer the boxes stay plain, above all but dialogs
         try { layer.showPopover(); } catch (e) { layer.removeAttribute('popover'); }
       }
+      const box = document.createElement('div');
+      box.style.cssText = `position:absolute;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;background:#000`;
+      globalThis.__websurfMask.appendChild(box);
+      laid += 1;
     }
+    return laid;
+  }
+
+  /**
+   * Lays an opaque box over every visible sensitive field, or takes every box away; returns the viewport size and scale. It awaits no
+   * frame: a frame out of sight never renders one, so the top frame's `paint` awaits them for the capture.
+   */
+  function mask({ on }) {
+    if (globalThis.__websurfMask) globalThis.__websurfMask.remove();
+    globalThis.__websurfMask = null;
+    const masked = on ? boxes(fields(document).filter(sensitive)) : 0;
     return { viewport: { width: window.innerWidth, height: window.innerHeight }, scale: window.devicePixelRatio, masked };
+  }
+
+  /** Lays a box over every frame element in sight, keeping the masks laid -- for the frames the extension could not mask; returns how many. */
+  function cover() {
+    return { covered: boxes([...document.querySelectorAll('iframe, frame, embed, object')]) };
   }
 
   /** Resolves once the masks laid are painted, by the second frame of the top frame -- found visible, so its frames come. */
@@ -365,12 +374,13 @@ export async function pageAction(action, options) {
   }
 
   try {
-    const refused = ['query', 'fill', 'mouse', 'mask', 'paint'].includes(action) && !(action === 'mask' && !options.on) && refusal(options.origin);
+    const refused = ['query', 'fill', 'mouse', 'mask', 'cover', 'paint'].includes(action) && !(action === 'mask' && !options.on) && refusal(options.origin);
     if (refused) return refused;
     if (action === 'query') return query(options);
     if (action === 'fill') return fill(options);
     if (action === 'mouse') return await mouse(options);
     if (action === 'mask') return mask(options);
+    if (action === 'cover') return cover();
     if (action === 'paint') return await paint();
     return { error: `unknown page action ${action}` };
   } catch (e) {

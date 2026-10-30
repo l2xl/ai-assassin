@@ -4,7 +4,7 @@ description: How an answer asks the harness to run tools and how their results c
 default: true
 ---
 # Tool calls
-An answer is either plain text or exactly one list of tool calls and nothing else, never both. A structured answer is the object `{"kind": "text", "text": "…"}` or `{"kind": "calls", "calls": [...]}`; a plain one carries the list in a single fenced block tagged `syngate`:
+An answer is plain text, or tool calls, or text said beside tool calls. A structured answer is the object `{"kind": "text", "text": "…"}` or `{"kind": "calls", "calls": [...], "text": "…"}`, the `text` optional beside the calls; a plain one carries the list in a single fenced block tagged `syngate`, the prose around that block being its text:
 ```syngate
 [{"tool": "query", "uid": "@"},
  {"tool": "skill", "name": "syngate"}]

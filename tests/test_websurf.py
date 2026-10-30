@@ -227,10 +227,6 @@ def test_a_websurf_call_is_sent_to_the_attached_browser_and_its_answer_comes_bac
     steps = surf_steps(outcome)
     assert [step["input"] for step in steps] == [{"action": "open", "url": NEWS}, {"action": "query", "origin": ORIGIN, "selector": "main"}]
     assert all(step["seconds"] is not None and step["size"] > 0 for step in steps) and steps[1]["result"].endswith("chars")
-
-    app.connectors = {"echo": Scripted(*[calls(surf("status"), surf("status"))] * synthetic.QUERY_ROUNDS)}
-    outcome = turn(base, app, "LEAF-001", "Keep looking.", modes=ON)  # every answer carrying websurf calls is one round of the turn
-    assert outcome["error"].endswith("answer refused: the exchange kept querying") and len(browser.heard) == 2 + 2 * synthetic.QUERY_ROUNDS
     browser.close()
 
 
@@ -285,6 +281,18 @@ def test_a_screenshot_sized_for_the_model_comes_back_as_an_image_with_the_next_p
     browser.close()
 
 
+@pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF", "covered")
+def test_a_screenshot_that_covered_frames_tells_the_turn_so(server):
+    base, app = server
+    browser = attached(base, app, lambda frame: {**tab(frame), "covered": 2} if frame["action"] == "screenshot" else tab(frame))
+    app.connectors = {"echo": (seeing := Seeing(calls(surf("screenshot", origin=ORIGIN)), text("Seen.")))}
+    outcome = turn(base, app, "LEAF-001", "Look.", modes=ON)
+    assert outcome["reply"] == "Seen." and surf_steps(outcome)[0]["result"] == "200 · 2000×1000 CSS px, image scale 0.784 · 2 frames covered"
+    assert seeing.heard[1]["text"].endswith("\n2 frames of the page are covered black: the extension could not mask the fields inside them — read them with `query` instead.")
+    assert seeing.images[1] == [{"media_type": "image/jpeg", "data": JPEG}]
+    browser.close()
+
+
 @pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF", "stop")
 def test_an_answer_is_awaited_with_no_time_limit_until_the_turn_stops(server):
     base, app = server
@@ -299,6 +307,63 @@ def test_an_answer_is_awaited_with_no_time_limit_until_the_turn_stops(server):
     assert outcome["error"] == "turn stopped" and surf_steps(outcome)[0]["result"] == "refused: turn stopped"
     assert app.websurf.pending == {} and app.websurf.attached is not None  # the bridge stays; the page goes on
     browser.close()
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-FAILED")
+def test_a_failed_answer_comes_back_as_the_refusal_of_its_call_with_the_page_the_tab_shows_and_the_turn_goes_on(server):
+    base, app = server
+    settings(app, websurf={"block": ["https://*.bank.example"]})
+    errors = ["no element matches #q", "the page went away while the fill played: a new document committed in the surf tab",
+              "the surf tab is hidden (its window is minimized): every request is refused until the user shows it again or closes it"]
+    failures = iter([{"ok": False, "error": errors[0], "page": info(NEWS)}, {"ok": False, "error": errors[1], "page": info(BANK, "Bank")}, {"ok": False, "error": errors[2]}])
+    browser = attached(base, app, lambda frame: next(failures) if frame["action"] == "fill" else tab(frame))
+    fill = surf("fill", origin=ORIGIN, selector="#q", value="x")
+    app.connectors = {"echo": (scripted := Scripted(calls(fill, surf("query", origin=ORIGIN)), calls(surf("query", origin=ORIGIN, selector="form")), calls(fill), calls(fill),
+                                                    text("Found the form.")))}
+    outcome = turn(base, app, "LEAF-001", "Fill the form.", modes=ON)
+    missing, gone, hidden = (f"- websurf fill #q refused: {error}" for error in errors)
+    assert outcome["reply"] == "\n".join([missing, gone, hidden, "Found the form."])  # the chat reads the error alone; the turn went on
+    assert [frame["action"] for frame in browser.heard] == ["fill", "query", "fill", "fill"]  # the refusal ended its batch: the next answer's query went
+    told = scripted.heard[1]["text"]
+    assert told.startswith(synthetic.RESULTS_PREAMBLE + missing + "\n" + websurf.SHOWS + "\n")
+    assert fences(told) == [(websurf.SHOWS, [f"url: {NEWS}", "title: News", "status: 200", "content_type: text/html"])]
+    assert [step for step in outcome["steps"] if step["kind"] == "calls"][0]["lines"] == [told[len(synthetic.RESULTS_PREAMBLE):]]  # the step shows what the model read
+    assert scripted.heard[3]["text"] == synthetic.RESULTS_PREAMBLE + gone + f"\n{websurf.SHOWS} a page on https://login.bank.example, blocked by the host lists of the server settings"
+    assert scripted.heard[4]["text"] == synthetic.RESULTS_PREAMBLE + hidden  # a hidden tab's refusal carries no page
+    assert "secret" not in "".join(heard["text"] for heard in scripted.heard)
+    assert [step["result"] for step in surf_steps(outcome)] == [f"refused: {errors[0]}", f"200 · 1 match · {len(DOM)} chars", f"refused: {errors[1]}", f"refused: {errors[2]}"]
+    browser.close()
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-ROUNDS")
+def test_a_turn_that_has_surfed_runs_up_to_the_surf_round_budget_and_is_told_the_rounds_left_as_they_run_low(server):
+    base, app = server
+    assert websurf.ROUNDS == 40 and synthetic.QUERY_ROUNDS < websurf.ROUNDS
+    notice = synthetic.ROUNDS_LEFT.partition("{left}")[0].strip()
+    last = lambda scripted, index: scripted.heard[index]["text"].rpartition("\n")[2]
+    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("open", url="ftp://example.com/"))] * websurf.ROUNDS))}
+    outcome = turn(base, app, "LEAF-001", "Keep trying.", modes=ON)  # refused by the guard before any browser: nothing surfed, the read loop's bound holds
+    assert outcome["error"].endswith("answer refused: the exchange kept querying") and len(scripted.heard) == synthetic.QUERY_ROUNDS
+    assert last(scripted, synthetic.QUERY_ROUNDS - 1) == synthetic.ROUNDS_LEFT.format(left=1).strip()
+    browser = attached(base, app)
+    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("status"))] * websurf.ROUNDS))}
+    outcome = turn(base, app, "LEAF-001", "Keep looking.", modes=ON)
+    assert outcome["error"].endswith(synthetic.ROUNDS_OUT.format(rounds=websurf.ROUNDS)) and len(browser.heard) == len(scripted.heard) == websurf.ROUNDS
+    assert not any(notice in scripted.heard[index]["text"] for index in range(websurf.ROUNDS - synthetic.ROUNDS_WARNING))
+    assert [last(scripted, index) for index in range(websurf.ROUNDS - synthetic.ROUNDS_WARNING, websurf.ROUNDS)] == [synthetic.ROUNDS_LEFT.format(left=left).strip() for left in (3, 2, 1)]
+    settings(app, websurf={"rounds": 2})
+    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("status"))] * 3))}
+    outcome = turn(base, app, "LEAF-001", "Look twice.", modes=ON)
+    assert outcome["error"].endswith(synthetic.ROUNDS_OUT.format(rounds=2)) and len(scripted.heard) == 2 and last(scripted, 1) == synthetic.ROUNDS_LEFT.format(left=1).strip()
+    browser.close()
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-RECOVERY")
+def test_the_websurf_tool_text_tells_the_turn_how_to_go_on_after_a_refusal():
+    told = synthetic.LIBRARY["websurf"].text
+    for phrase in ("not your task", "the calls after it did not run", "what the surf tab shows", "send the rest of the batch anew", "theirs to settle",
+                   "one round of your turn", f"{websurf.ROUNDS} once you surf", "`seconds`"):
+        assert phrase in told, phrase
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-BRIDGE", "welcome")
@@ -697,18 +762,18 @@ def test_the_interactive_websurf_switch_is_the_harness_own_offered_while_a_brows
     app.connectors = {"echo": (native := Native()), "claude": synthetic.claude_code_connector()}
     modes = lambda name: [(mode["id"], mode["default"], mode.get("advanced")) for mode in app.build_model()["connectors"][name]["modes"]]
     detached = app.fingerprint()
-    assert modes("echo") == [("tree", True, False), ("edit", True, None)]  # nothing to act on without a browser
+    assert modes("echo") == [("tree", True, False), ("patch", True, False), ("edit", True, None)]  # nothing to act on without a browser
     browser = attached(base, app)
     assert app.fingerprint() != detached  # the page re-reads the model as a browser attaches
-    assert modes("echo") == [("tree", True, False), ("edit", True, None), ("websurf", False, False)]
-    assert [mode[0] for mode in modes("claude")] == ["tree", "edit", "internet", "bash", "workflows", "websurf"]
+    assert modes("echo") == [("tree", True, False), ("patch", True, False), ("edit", True, None), ("websurf", False, False)]
+    assert [mode[0] for mode in modes("claude")] == ["tree", "patch", "internet", "bash", "workflows", "websurf"]
     assert assassin_ui.SURF_MODE["label"] == "Interactive WebSurf" and "websurf" not in app._setup("LEAF-001")["modes"]
     turn(base, app, "LEAF-001", "Off.", modes=["tree"])
     turn(base, app, "LEAF-001", "On.", modes=ON)
     assert all("websurf" in library for library in native.libraries)  # the tool is always offered, its passive actions always on
     assert [heard["modes"] for heard in native.heard] == [[], ["edit"]]  # the switch never reaches the connector
     browser.close()
-    assert settle(lambda: app.websurf.attached is None) and app.fingerprint() == detached and [mode[0] for mode in modes("echo")] == ["tree", "edit"]
+    assert settle(lambda: app.websurf.attached is None) and app.fingerprint() == detached and [mode[0] for mode in modes("echo")] == ["tree", "patch", "edit"]
 
 
 @pytest.mark.syngate("AI_CHAT-PERMISSION-WEBSURF", "refuse")

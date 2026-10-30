@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOLS]
+order: 45
+---
+Patch tool
+Changes project files of an answer by a unified diff applied with git, the switch Edit files gating it; syngate items are never in its reach.

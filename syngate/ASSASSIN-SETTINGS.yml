@@ -1,7 +1,6 @@
 ---
 parents: [AI-ASSASSIN]
 order: 80
-sources: [src/ai_scratcher/assassin_ui.py]
 test: 1c387f6df7705ac25435032bd7ff3e3f875ad665238c67bc8b8fa2825ed23d50
 review: e7192092454949ac5cd0c48be5a0c217a2cb59fcb8fbb8a80bbf8f3e9e9d4814
 ---

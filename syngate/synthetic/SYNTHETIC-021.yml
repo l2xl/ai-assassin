@@ -1,7 +1,6 @@
 ---
-parents: [SYNTHETIC-020]
-order: 10
-test: cce943d03b24c371bef6ef3956be19f14a15dd27b42f6035ec425baf1a995234
-review: c2fe1c8a45a7f7be3531f63e1a735d3ffde77f5e665b28be47bbb18715915005
+parents: [SYNTHETIC]
+order: 55
+test: ~
 ---
 The results of the query, context, test and agent calls of an applied answer shall go back into the same session as the next prompt, the exchange continuing until an answer carries no read, no run and no delegation

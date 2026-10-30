@@ -198,7 +198,11 @@ The **page info** is `{url, title, status, content_type}`: the final URL after r
 title, the HTTP status and `Content-Type` of the main document — `null` where the browser reported
 none, as for a document restored from the back/forward cache or one still loading. A failed request
 answers `ok: false` with its `error` and, where the tab is still there, the page info — but for the
-refusal of a hidden surf tab, which carries none.
+refusal of a hidden surf tab, which carries none. The harness hands such an answer to the turn as the
+refusal of its call: the browser's error, then, under *The surf tab shows:*, the page info fenced — the
+page's origin alone where the host lists refuse it — so the turn reads where the tab stands; the
+refusal ends its batch and comes back as the next prompt for the turn to look again and go on, the chat
+step keeping the error alone.
 
 The **page actions** — `query`, `screenshot`, `fill` and `mouse` — carry the `origin`
 (`scheme://host[:port]`, as `URL.origin` serializes it) of the page they are meant for. Each plays
@@ -272,7 +276,15 @@ navigation or route change it started reaches the AI as page events, awaited wit
 a split view, the one surf tab in sight that is not the active tab — lays an opaque box over every
 visible sensitive element in every frame, without awaiting a frame there — a frame scrolled out of
 sight never renders one —, has the visible top frame await two animation frames (`paint`) so the
-boxes are painted, captures the visible tab (`tabs.captureVisibleTab`) and takes the boxes away. The capture is scaled to the CSS pixels of the viewport, or below that to fit
+boxes are painted, captures the visible tab (`tabs.captureVisibleTab`) and takes the boxes away. The
+masks go into every frame in one injection; where the browser refuses that for any frame — Firefox
+rejects the whole injection when one frame's answer cannot be returned, as for a frame that went away
+under the script, which a page like Gmail churns all the time — they are laid frame by frame, each
+failure its own: the top frame's failure is the screenshot's, and every other frame still there that
+laid no masks is **covered** whole, a box over its frame element in the top frame (`cover`), the answer
+counting them as `covered` and the harness telling the AI to read such frames with `query` instead. The
+boxes are taken away the same way, frame by frame where one injection is refused, so none is left on
+the page. The capture is scaled to the CSS pixels of the viewport, or below that to fit
 the request's `max_edge` (longest side) and `max_pixels` (area), and encoded as a JPEG at quality 80:
 the harness sets both to what the model sees unscaled, so a point of the image the model names maps
 straight back to the viewport. The answer carries the image as a data URL, the viewport size in CSS
@@ -360,7 +372,7 @@ stopped — replaces it at once for a newer token of its origin and closes it wi
   `cc-exp`, `cc-exp-month` or `cc-exp-year`; a `meta` whose `name` contains `csrf` or `token`. A
   `query` replaces their value — the attribute and the live value — with `[redacted]`, keeping the
   element; a `screenshot` masks the visible ones with opaque boxes in the top layer, above dialogs,
-  inside shadow roots too; a `fill` refuses them.
+  inside shadow roots too, and covers whole a frame it could not mask; a `fill` refuses them.
 - **Isolated world.** `page.js` runs in the extension's isolated world: the page's scripts can
   neither see nor call it.
 - **Authenticated first.** No request is played and no page event sent before the harness's
@@ -396,15 +408,22 @@ stopped — replaces it at once for a newer token of its origin and closes it wi
   attached as an image.
 - **Visible.** Every request is a chat step showing its action, its target and the size of its
   answer; an answer is awaited until it comes, the browser detaches or the turn stops.
+- **Bounded rounds.** Every answer carrying websurf calls is one round of the turn. A turn that has
+  surfed — got a browser's answer or waited for a page event — runs up to `websurf.rounds` of the
+  server settings, 40 without one (`websurf.ROUNDS`), in place of the read loop's
+  `synthetic.QUERY_ROUNDS`; the results prompt names the rounds left once three or fewer remain, and
+  a round past the bound is refused, ending the turn. The tool's text tells the AI to batch what
+  belongs together into one answer.
 
 The host lists are the `websurf` section of the server settings file `assassin_settings.json`
 (@ASSASSIN-SETTINGS), read at every use:
-`{"websurf": {"allow": ["https://example.com", "https://*.example.org", "http://192.168.1.10:8080"], "block": ["https://*.bank.example"]}}`.
+`{"websurf": {"allow": ["https://example.com", "https://*.example.org", "http://192.168.1.10:8080"], "block": ["https://*.bank.example"], "rounds": 60}}`.
 An entry is an exact origin (the default port may be left out), `scheme://*.domain[:port]` for a
 domain and its subdomains, or `*` for any origin; a wildcard never admits an internal host. `block`
 wins over `allow`; an empty or missing `allow` admits every public origin, so with no settings WebSurf
 reaches the public web and nothing internal. Hosts are judged as written, the numeric IPv4 forms a
-browser accepts (`127.1`, `2130706433`) included; names are not resolved.
+browser accepts (`127.1`, `2130706433`) included; names are not resolved. `rounds`, a positive
+integer, bounds the rounds of a turn that surfs.
 
 ## Install in developer mode
 

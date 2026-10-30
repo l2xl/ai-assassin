@@ -40,7 +40,10 @@ is one non-interactive turn of the chosen connector.
   messages as a transcript heading the text. The Claude Code connector runs the local `claude` CLI
   with the call modes — each listed with its label, hint, default and whether it is advanced, for
   the page's permission switches — as its permission mode and allowed tools; its models and
-  efforts are the ones the page offers. The Tree edit permission is the harness's
+  efforts are the ones the page offers. The MixRoute connector calls the OpenAI-compatible chat
+  completions API of MixRoute over HTTPS, set up by the `mixroute` section of the server settings
+  and offered while an API key is set; it lists no call modes, its turns working the project through
+  the harness's tool calls alone ([MIXROUTE.md](MIXROUTE.md)). The Tree edit permission is the harness's
   own, on by default: while it is off a reply's add, edit, move, rename and remove calls are refused
   (`tree edits are off for this chat — switch Tree edit on`), the refusal going back to the model as
   its next prompt; query, context, skill, test and agent stay allowed — reading the tree is the rail
@@ -60,7 +63,8 @@ is one non-interactive turn of the chosen connector.
   prompt, the way a query's result comes back.
 - **Library delivery.** A connection declares `library_delivery`: `text`, the default prompt above
   merged into the seed context, or `native`, the connection processing the library through the
-  provider's own skill and tool configuration, its dispatch receiving the library as an argument.
+  provider's own skill and tool configuration; the dispatch of a connection declaring either receives
+  the library as an argument — a `text` one building its answer schema from it.
   A tool's front matter lists its `calls` — each with its `required` string fields and `optional`
   JSON-schema properties — so a tool added to the library needs no change of the connector. The
   Claude Code connector is `native`: the seed prompt carries the default skills and the item
@@ -111,7 +115,9 @@ is one non-interactive turn of the chosen connector.
   description, parents, sources, children in sibling order and kind; `{"tool": "context", "uid"}`
   its seed context; `{"tool": "skill", "name"}` the named skill. What a batch read goes back into
   the same session as the next prompt and the exchange continues with the next answer, for a
-  bounded number of rounds (`synthetic.QUERY_ROUNDS`).
+  bounded number of rounds — `synthetic.QUERY_ROUNDS`, or `websurf.rounds` of the server settings
+  (`websurf.ROUNDS`, 40, without one) once the turn has surfed — the results prompt naming the rounds
+  left once `synthetic.ROUNDS_WARNING` or fewer remain, a round past the bound refused.
 - **Test runs go through the page's runner.** `{"tool": "test", "uid", "name"}` runs the routines
   bound to the leaves under the item, `name` narrowing a leaf to one binding (the CLI spelling
   `syngate test UID:binding`); every `test` call of a batch joins one run after the batch's other

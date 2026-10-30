@@ -467,6 +467,23 @@ def test_the_masks_are_laid_without_awaiting_a_frame_and_painted_by_two_frames_o
         assert run["runs"][0]["result"] == refused and run["runs"][0]["log"] == []  # never left awaiting a page it may not paint
 
 
+@pytest.mark.syngate("BROWSER-EXTENSION-SCREENSHOT", "cover")
+def test_a_cover_lays_a_box_over_every_frame_element_in_sight_keeping_the_masks_laid():
+    dom = _doc(_el("input", id="pass", type="password", rect=[100, 200, 300, 30]), _el("iframe", id="chat", rect=[600, 100, 300, 400]),
+               _el("iframe", id="helper", rect=[0, 0, 0, 0]), _el("embed", id="player", rect=[100, 500, 200, 100]), _el("iframe", id="far", rect=[100, 3000, 300, 100]))
+    run = _page(dom, [("mask", {"on": True}), ("cover", {}), ("mask", {"on": False})])
+    masked, covered, off = run["runs"]
+    box = lambda css: tuple(int(re.search(rf"{side}:(\d+)px", css)[1]) for side in ("left", "top", "width", "height"))
+    assert masked["result"]["masked"] == 1 and covered["result"] == {"covered": 2}
+    [boxes] = covered["layers"]
+    assert sorted(box(css) for css in boxes) == [(100, 200, 300, 30), (100, 500, 200, 100), (600, 100, 300, 400)]
+    assert off["layers"] == []
+    alone = _page(_doc(_el("iframe", id="chat", rect=[600, 100, 300, 400])), [("cover", {})])
+    assert alone["runs"][0]["result"] == {"covered": 1} and ["showPopover", "div"] in alone["runs"][0]["log"]
+    assert _page(dom, [("cover", {"origin": "https://other.example"})])["runs"][0]["result"] == {"error": _elsewhere("https://example.org", "https://other.example")}
+    assert _page(dom, [("cover", {})], visibility="hidden")["runs"][0]["result"] == {"hidden": "its page is not visible"}
+
+
 # -- origin -------------------------------------------------------------------
 
 def _elsewhere(here, asked):

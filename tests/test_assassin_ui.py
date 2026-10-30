@@ -885,12 +885,12 @@ def test_the_reply_line_waits_under_every_item_outside_the_tab_order_with_its_hi
     hint = f"getComputedStyle({LEAF_BLOCK}.querySelector('.chat-input'), '::placeholder').color"
     assert page.eval(hint) == "rgba(0, 0, 0, 0)"  # the hint is there for the hover, invisible at rest
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
-    assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, OPEN_HINT, 0, 6]]  # send with setup, three permissions, the advanced list, hide
+    assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, OPEN_HINT, 0, 7]]  # send with setup, four permissions, the advanced list, hide
     page.wait(f"{hint} === {json.dumps(css_color(page, '--dim'))}")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-hide').click()")
     assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, REST_HINT, -1, 0]]
     edit_leaf(page, "It shall leaf, edited.")
-    assert page.eval(rest)[1] == [True, OPEN_HINT, 0, 7]  # the save mark joins the strip while editing
+    assert page.eval(rest)[1] == [True, OPEN_HINT, 0, 8]  # the save mark joins the strip while editing
 
 
 @pytest.mark.syngate("AI_CHAT-REPLY-HINT")
@@ -948,7 +948,7 @@ def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_stat
     page = item_page(server, chrome)
     edit_leaf(page, "It shall leaf better.")
     controls = f"[...{LEAF_BLOCK}.querySelectorAll('.block-ai .chat-send, .block-ai .chat-setup, .block-ai .chat-mode, .block-ai .chat-advanced')].length"
-    assert page.eval(controls) == 6  # send, setup, the three permission switches and the advanced list, before anything is sent
+    assert page.eval(controls) == 7  # send, setup, the four permission switches and the advanced list, before anything is sent
     pick(page, "model", "model-b")
     page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-send').click()")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
@@ -1337,22 +1337,22 @@ class PlainConnector(EchoConnector):
 @pytest.mark.syngate("AI_CHAT-PERMISSION-INTERNET")
 def test_the_permission_switches_show_their_labels_defaults_and_state_colors(server, chrome):
     page = open_chat(server, chrome, echo=EchoConnector(), claude=synthetic.claude_code_connector())
-    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit", "true"], ["Internet", "true"]]  # the harness's own Tree edit permission heads the connector's modes, on; the advanced one is not a pill
+    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit files", "true"], ["Edit", "true"], ["Internet", "true"]]  # the harness's own Tree edit and Edit files permissions head the connector's modes, on; the advanced one is not a pill
     look = "[...document.querySelectorAll('.block-ai .chat-mode')].map((el) => [el.className, getComputedStyle(el).color, getComputedStyle(el.querySelector('.ball')).backgroundColor])"
     accent, dim = css_color(page, "--accent"), css_color(page, "--dim")
-    assert [entry[1:] for entry in page.eval(look)] == [[accent, accent], [accent, accent], [accent, accent]]
-    assert [entry[0] for entry in page.eval(look)] == ["pill chat-mode on", "pill chat-mode on", "pill chat-mode on"]  # one pill class, the state a modifier
+    assert [entry[1:] for entry in page.eval(look)] == [[accent, accent]] * 4
+    assert [entry[0] for entry in page.eval(look)] == ["pill chat-mode on"] * 4  # one pill class, the state a modifier
     assert page.eval("document.querySelector('.chat-mode[data-chat-mode=\"edit\"]').title") == "Edit: edit hint — allowed in this chat, click to switch"
     page.eval("document.querySelector('.chat-mode[data-chat-mode=\"edit\"]').click()")
-    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit", "false"], ["Internet", "true"]]
+    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit files", "true"], ["Edit", "false"], ["Internet", "true"]]
     assert page.eval("[getComputedStyle(document.querySelector('.chat-mode[data-chat-mode=\"edit\"]')).color, getComputedStyle(document.querySelector('.chat-mode[data-chat-mode=\"edit\"] .ball')).backgroundColor]") == [dim, dim]
     send(page, "LEAF-001", "Go.")
     page.wait("document.querySelector('.chat-msg.ai')")
     assert page.eval("document.querySelector('.chat-msg.ai').textContent").endswith("|Go.|model-a|low|internet|None")
     pick(page, "connector", "claude")
-    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit files", "true"], ["Internet", "true"]]  # the Claude Code connector's own switches and defaults
+    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit files", "true"], ["Internet", "true"]]  # the harness's switches, then the Claude Code connector's own, which has no edit mode
     assert page.eval("[...document.querySelectorAll('.block-ai .chat-mode')].map((el) => el.title.split(' — ')[0])") == [
-        "Tree edit: add, edit, move and remove items; reading the tree stays on", "Edit files: change project files without asking", "Internet: search and fetch the web"]
+        "Tree edit: add, edit, move and remove items; reading the tree stays on", f"Edit files: {assassin_ui.PATCH_MODE['hint']}", "Internet: search and fetch the web"]
 
 
 def advanced_entries(page):
@@ -1376,7 +1376,7 @@ def test_the_advanced_list_gathers_the_connectors_own_switches_off_by_default(se
     assert page.eval("getComputedStyle(document.querySelector('.chat-advanced')).color") == css_color(page, "--accent")
     assert advanced_entries(page) == [["● Workflows", "menuitemcheckbox", "true", "workflows hint"]]
     page.eval("document.getElementById('status-menu').hidePopover()")
-    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit", "true"], ["Internet", "true"]]  # the switch row is untouched
+    assert page.eval(MODES) == [["Tree edit", "true"], ["Edit files", "true"], ["Edit", "true"], ["Internet", "true"]]  # the switch row is untouched
     send(page, "LEAF-001", "Go.")
     page.wait("document.querySelector('.chat-msg.ai')")
     assert page.eval("document.querySelector('.chat-msg.ai').textContent").endswith("|Go.|model-a|low|edit,internet,workflows|None")  # the advanced mode travels like any other
@@ -1805,7 +1805,7 @@ def _chat(server, *replies, uid="ROOT"):
 
 
 @pytest.mark.syngate("AI_CHAT-040")
-def test_a_tree_call_answer_is_applied_to_the_tree_and_a_mixed_one_refused(server, syngate_tree):
+def test_a_tree_call_answer_is_applied_to_the_tree_with_or_without_text_beside_its_calls(server, syngate_tree):
     syngate_dir, _ = syngate_tree
     calls = [{"tool": "add", "uid": "NEW-001", "description": "New branch\n\nIt groups.", "kind": "branch"},
              {"tool": "add", "uid": "NEW-002", "parent": "NEW-001", "description": "New leaf\n\nIt shall be new.\n"},
@@ -1820,13 +1820,11 @@ def test_a_tree_call_answer_is_applied_to_the_tree_and_a_mixed_one_refused(serve
     assert items["LEAF-001"].parents == ["NEW-001"] and items["LEAF-001"].tests == {None: None}
     status, result = _chat(server, "Just talking.")
     assert (status, result["reply"]) == (200, "Just talking.")
-    with pytest.raises(urllib.error.HTTPError) as refused:
-        _chat(server, "Applying:\n```syngate\n" + json.dumps(calls[:1]) + "\n```")
-    body = json.loads(refused.value.read())
-    assert refused.value.code == 422 and body["session"] == "session-2" and "never both" in body["error"]
+    status, result = _chat(server, "Applying:\n```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-004", "description": "D"}]) + "\n```\nDone.")
+    assert (status, result["reply"]) == (200, "- added NEW-004 under ROOT")  # the text beside the calls is a message of the turn, the calls apply
     status, result = _chat(server, "```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-003", "description": "D"}, {"tool": "remove", "uid": "@"}]) + "\n```", "Root stays.")
     assert status == 200 and result["reply"].startswith("- added NEW-003 under ROOT\n- remove ROOT refused: ROOT still has children") and result["reply"].endswith("\nRoot stays.")
-    assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "NEW-001", "NEW-003", "ROOT"]  # the refusal ended the batch and came back as the next prompt
+    assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "NEW-001", "NEW-003", "NEW-004", "ROOT"]  # the refusal ended the batch and came back as the next prompt
 
 
 @pytest.mark.syngate("SYNGATE-API-RENAME", "chat")
@@ -2431,9 +2429,9 @@ def test_the_keys_walk_the_focused_pane_tab_reaches_the_selected_row_its_tools_a
     enter_reply(page, "LEAF-001")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
     assert tab(page) == "pill" and page.eval("document.activeElement.classList.contains('chat-hide')")  # Tab from the reply line reaches the state pill first
-    strip = [tab(page) for _ in range(6)]
-    assert strip == ["chat-send", "rev", "pill", "pill", "pill", "pill"]  # then send, setup, the three permissions and the advanced list
-    assert page.eval("[...document.querySelectorAll('.block-ai .pill.chat-mode, .block-ai .pill.chat-advanced')].length + 3") == 7 and page.eval("document.activeElement.classList.contains('chat-advanced')")
+    strip = [tab(page) for _ in range(7)]
+    assert strip == ["chat-send", "rev", "pill", "pill", "pill", "pill", "pill"]  # then send, setup, the four permissions and the advanced list
+    assert page.eval("[...document.querySelectorAll('.block-ai .pill.chat-mode, .block-ai .pill.chat-advanced')].length + 3") == 8 and page.eval("document.activeElement.classList.contains('chat-advanced')")
     send(page, "LEAF-001", "Slow one")
     page.wait(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-stop')")
     page.eval(f"{LEAF_BLOCK}.focus()")

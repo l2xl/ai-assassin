@@ -1,0 +1,7 @@
+---
+parents: [MIXROUTE]
+order: 90
+test: ~
+---
+MixRoute error reporting
+fails a turn as a connection error naming the HTTP status and the API's message, an error in the stream or a missing API key the same way.

@@ -22,10 +22,12 @@ against CSRF and DNS rebinding for localhost tools that run subprocesses.
 
 import argparse
 import copy
+import functools
 import hashlib
 import hmac
 import http.client
 import http.server
+import itertools
 import json
 import os
 import re
@@ -42,6 +44,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from . import gitlib
+from . import patchlib
 from . import syngatelib
 from . import synthetic
 from . import tiling
@@ -77,14 +80,20 @@ WRITE_DELAY = 0.5
 TREE_MODE = {"id": "tree", "label": "Tree edit", "hint": "add, edit, move and remove items; reading the tree stays on", "default": True, "advanced": False}
 TREE_OFF = "The tree is read-only for this chat: add, edit, move, rename and remove are refused — answer in text and say what you would change."
 TREE_REFUSAL = "tree edits are off for this chat — switch Tree edit on"
+# The harness's Edit files permission, listed after the tree mode: whether a reply's `patch` call -- a unified diff of project files -- is
+# applied; the tree files are never in reach of it. Neither it nor the tree mode ever reaches a connector.
+PATCH_MODE = {"id": "patch", "label": "Edit files", "hint": "apply the diffs of the reply to project files; syngate items are not in reach",
+              "default": True, "advanced": False}
+PATCH_REFUSAL = "project file edits are off for this chat — switch Edit files on"
 GIT_ABSENT = "git is not at hand for this project"
-# The server settings, kept next to the tree, one section per feature: `websurf` holds the WebSurf host lists `allow` and `block`.
+# The server settings, kept next to the tree, one section per feature: `websurf` holds the WebSurf host lists `allow` and `block`,
+# `mixroute` the setup of the MixRoute connector.
 SETTINGS_FILE = "assassin_settings.json"
 # The harness's Interactive WebSurf permission, listed after every connector's modes while a browser is attached: whether a reply's
 # websurf `fill` and `mouse` act on the surf tab; the passive actions are always on. Neither it nor the tree mode ever reaches a connector.
 SURF_MODE = {"id": "websurf", "label": "Interactive WebSurf", "hint": "type and click in the surf tab of your browser — WebSurf fill and mouse; opening, "
              "reading and looking at pages stay on", "default": False, "advanced": False}
-HARNESS_MODES = ("tree", "websurf")
+HARNESS_MODES = ("tree", "patch", "websurf")
 SURF_OFF = ("Interactive WebSurf is off for this chat: fill and mouse are refused, open, close, status, query, screenshot and wait stay on — "
             "switch Interactive WebSurf on to act")
 # The request of the review commit's message, sent to the reviewed item's chat when no single commit names the review.
@@ -449,8 +458,11 @@ class AssassinApp:
         self.chats_version = 0
         self._chat_lock = threading.Condition()
         self._writer = None
-        self.connectors = {name: connector(cwd=self.root) for name, connector in synthetic.CONNECTORS.items()}
         self.settings_file = self.root / SETTINGS_FILE
+        # A connector naming a settings section is set up by it, read at every use.
+        self.connectors = {name: connector(cwd=self.root, **({"config": functools.partial(self.settings, connector.settings_section)}
+                                                             if getattr(connector, "settings_section", None) else {}))
+                           for name, connector in synthetic.CONNECTORS.items()}
         self.websurf = websurf.bridge(self.token)
         # How a new surf window is set beside the Assassin window, read once from the desktop: it goes out with every `open` but `browser`.
         self.tiling = tiling.method()
@@ -460,6 +472,10 @@ class AssassinApp:
         """Read once whether git is at hand for the project: it decides the library a turn is offered."""
         self.git = gitlib.at_hand(self.root)
         self.library = synthetic.offered_library(self.git)
+
+    def offered(self):
+        """(name, connector) of every connector the page offers: those that are not set up -- a MixRoute one without an API key -- left out."""
+        return [(name, connector) for name, connector in self.connectors.items() if getattr(connector, "available", lambda: True)()]
 
     def settings(self, section):
         """One feature's section of the server settings, read from `SETTINGS_FILE` at every use: {} while the file is missing or malformed
@@ -471,6 +487,11 @@ class AssassinApp:
         """(allow, block): the WebSurf host lists of the server settings, each the strings of its list; empty while it names none."""
         section = self.settings("websurf")
         return tuple([entry for entry in section[key] if isinstance(entry, str)] if isinstance(section.get(key), list) else [] for key in ("allow", "block"))
+
+    def surf_rounds(self):
+        """The rounds a turn that has surfed may run: `websurf.rounds` of the server settings, else `websurf.ROUNDS`."""
+        rounds = self.settings("websurf").get("rounds")
+        return rounds if type(rounds) is int and rounds > 0 else websurf.ROUNDS
 
     # -- model ------------------------------------------------------------
 
@@ -551,7 +572,7 @@ class AssassinApp:
             "coverage": {"files": self._coverage_files(), "errors": coverage_errors},
             "build_dir": self.build_dir,
             "features": syngatelib.features(items),
-            "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, *settings["modes"], *harness]} for name, connector in self.connectors.items()},
+            "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, PATCH_MODE, *settings["modes"], *harness]} for name, connector in self.offered()},
             "git": self.git,
             "uncommitted": sorted(uncommitted),
             "job": job.id if job and job.returncode is None else None,
@@ -919,19 +940,21 @@ class AssassinApp:
         A `turn` stopped while a round is out ends the exchange there, what was applied so far staying applied.
         A rename carries the item's chat to the new UID, and the exchange with it when the item is the anchor.
         The `tree` mode is the harness's own: without it the text is headed by `TREE_OFF`, the tree calls of a reply are refused and the
-        connector never sees the mode. A git call runs whatever the modes, through the git tool's guard, and comes back like a query's result.
+        connector never sees the mode. The `patch` mode is the same for the project's files: without it a patch call is refused. A git call runs whatever the modes, through the git tool's guard, and comes back like a query's result.
         A websurf call passes the WebSurf guard and goes to the attached browser, its answer coming back like a query's result, a screenshot
         as an image of the next prompt; its `fill` and `mouse` need the `websurf` mode, the harness's own Interactive WebSurf switch, and
-        its `wait` is answered by the harness. Once the turn has surfed, every next prompt also carries the page events since the previous one.
+        its `wait` is answered by the harness. Once the turn has surfed, every next prompt also carries the page events since the previous one,
+        and the turn runs up to `surf_rounds` rounds in place of the read loop's `QUERY_ROUNDS`, told the rounds left once few remain.
         The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
         modes = list(data.get("modes") or ())
-        tree, interactive = "tree" in modes, "websurf" in modes
-        events, images = websurf.watch(self.websurf), []
+        tree, patch, interactive = "tree" in modes, "patch" in modes, "websurf" in modes
+        events, images, rounds = websurf.watch(self.websurf), [], self.surf_rounds()
         if not tree and text.strip():
             text = TREE_OFF + "\n" + text
         halted = lambda: turn is not None and turn.stopped
+        bound = lambda: rounds if events.surfed else synthetic.QUERY_ROUNDS
 
         def batch_step(lines, batch=()):
             if turn and lines:
@@ -941,7 +964,10 @@ class AssassinApp:
             batch_step(lines, batch)
             return ApiError(409, "\n".join([*applied, *shown, "turn stopped"]), session=session)
 
-        for _ in range(synthetic.QUERY_ROUNDS):
+        for done in itertools.count():
+            if done >= bound():
+                out = synthetic.ROUNDS_OUT.format(rounds=bound()) if events.surfed else "answer refused: the exchange kept querying"
+                raise ApiError(422, "\n".join([*applied, out]), session=session)
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
@@ -963,7 +989,7 @@ class AssassinApp:
                 raise ApiError(422, f"answer refused: {err}", session=session) from None
             if kind == "chat":
                 return {"ok": True, "reply": "\n".join([*applied, payload]), "session": session, **({"calls": calls} if calls else {})}
-            items, results, shown, refusal = self._load(), [], [], None
+            items, results, shown, refusal, detail = self._load(), [], [], None, ""
             named = lambda call: synthetic.call_target(uid, call)
             denied = lambda line, err: f"- {line} refused: {err}"
             runs = [call for call in payload if synthetic.is_run(call)]
@@ -983,11 +1009,23 @@ class AssassinApp:
                     if records:
                         shown.append(line)
                     continue
+                if synthetic.is_patch(call):
+                    if not patch:
+                        refusal = denied("patch", ApiError(403, PATCH_REFUSAL))
+                        break
+                    try:
+                        line = self._patch(call)
+                    except ApiError as err:
+                        refusal = denied("patch", err)
+                        break
+                    results.append(line)
+                    shown.append(line)
+                    continue
                 if synthetic.is_surf(call):
                     try:
                         line, shot = self._surf(call, interactive, turn, halted, events)
                     except ApiError as err:
-                        refusal = denied(websurf.label(call), err)
+                        refusal, detail = denied(websurf.label(call), err), err.extra.get("detail", "")  # the model reads the detail, the chat the line
                         break
                     results.append(line)
                     images += shot
@@ -1023,15 +1061,24 @@ class AssassinApp:
             if halted():
                 raise stopped(results, payload, shown)
             if refusal:
-                results.append(refusal)
+                results.append(refusal + detail)
                 shown.append(refusal)
             batch_step(results, payload)
             applied += shown
             calls += payload
             if refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_surf(call) for call in payload) and not runs and not delegations:
                 return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
-            text = synthetic.RESULTS_PREAMBLE + "\n".join(results) + websurf.events_text(events.take(), *self.surf_lists())
-        raise ApiError(422, "\n".join([*applied, "answer refused: the exchange kept querying"]), session=session)
+            text = (synthetic.RESULTS_PREAMBLE + "\n".join(results) + websurf.events_text(events.take(), *self.surf_lists())
+                    + synthetic.rounds_left(bound() - done - 1))
+
+    def _patch(self, call):
+        """Apply the unified diff of a patch call to the project's files through the patch tool's guard, all of it or none. -> the line
+        telling the paths it changed; a refusal is an `ApiError` carrying git's message for the section that failed."""
+        try:
+            changed = patchlib.apply(self.root, call["diff"])
+        except patchlib.refused as err:
+            raise ApiError(403, str(err)) from None
+        return f"- patch changed {', '.join(changed)}"
 
     def _git(self, call):
         """Run a git call of an answer through the tool's guard. -> (the line telling its outcome, whether it records)."""
@@ -1048,7 +1095,8 @@ class AssassinApp:
         Interactive WebSurf switch is on, an `open` or `close` only while no other running turn holds the surf tab, an `open` with the
         tiling method but `browser` and, under `kwin`, its new window tiled off the turn -- or await the next page event of the turn's
         `events` watch for a `wait`; the request is a `tool` step of the `turn`: its action and target, then its outcome and the size of
-        the answer. -> (the line telling the answer, the images it attaches)."""
+        the answer. -> (the line telling the answer, the images it attaches); a refusal is an `ApiError` whose `detail` is what the AI
+        reads past its message -- the page a failed answer tells."""
         if call.get("action") in websurf.INTERACTIVE and not interactive:
             raise ApiError(403, SURF_OFF)
         allow, block = self.surf_lists()
@@ -1082,7 +1130,7 @@ class AssassinApp:
             return told
         except websurf.refused as err:
             step["result"] = f"refused: {err}"
-            raise ApiError(403, str(err)) from None
+            raise ApiError(403, str(err), detail=err.detail) from None
         finally:
             step["seconds"] = round(time.monotonic() - started, 2)
             if turn:
@@ -1254,7 +1302,7 @@ class AssassinApp:
         settings = connector.settings()
         default = settings.get("default") or {}
         return {"connector": name, "model": default.get("model") or settings["models"][0]["id"], "effort": default.get("effort") or next(iter(settings["efforts"]), None),
-                "modes": [mode["id"] for mode in [TREE_MODE, *settings["modes"]] if mode.get("default")]}
+                "modes": [mode["id"] for mode in [TREE_MODE, PATCH_MODE, *settings["modes"]] if mode.get("default")]}
 
     def cancel_job(self, job_id):
         job = self.jobs.get(job_id)

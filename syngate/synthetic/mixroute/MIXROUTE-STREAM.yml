@@ -1,0 +1,7 @@
+---
+parents: [MIXROUTE]
+order: 70
+test: ~
+---
+MixRoute event streaming
+records the reasoning the stream exposes as a reasoning step growing as it comes, and closes the turn with a usage step of its wall time and the token counts of the closing usage chunk.

@@ -153,7 +153,7 @@ def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_requ
 def test_the_tool_call_skill_is_a_default_skill_stating_the_answer_format_and_the_result_round_trip():
     skill = synthetic.SKILLS["call_tool"]
     assert skill.default and skill.text.startswith("# Tool calls\n")
-    for phrase in ('{"kind": "text", "text": "…"}', '{"kind": "calls", "calls": [...]}', "```syngate", "never both",
+    for phrase in ('{"kind": "text", "text": "…"}', '{"kind": "calls", "calls": [...]', "```syngate", "text said beside tool calls",
                    "applied in order", "first refused one stops the batch", "next prompt"):
         assert phrase in skill.text
 
@@ -185,6 +185,14 @@ def test_the_task_routing_skill_is_a_default_skill_carrying_a_request_to_the_bes
     for phrase in ("change of the project", "fits it best", "the anchored item, the items of its seed context and those the exchange names by `@UID`",
                    "asking for no change stays in the anchored chat", "already states", "becomes a new item first", "`add`", "UID semantic",
                    '{"tool": "agent"', "own chat and context", "Only when the fit is the anchored item itself"):
+        assert phrase in skill.text
+
+
+@pytest.mark.syngate("SYNTHETIC-SKILL-SEED")
+def test_the_seed_context_skill_is_a_default_skill_stating_the_headings_of_the_seed_and_that_what_it_holds_is_not_read_again():
+    skill = synthetic.SKILLS["seed_context"]
+    assert skill.default and skill.text.startswith("# Seed context\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    for phrase in ("# Prompt <path>", "# Tree features", "`@UID`", "# Design <path>", "# Source <path>", "already read", "do not open, grep or query again"):
         assert phrase in skill.text
 
 
@@ -288,7 +296,7 @@ def test_claude_code_settings_list_models_by_display_name_efforts_and_modes():
     assert all(model["efforts"] == list(synthetic.CLAUDE_MODEL_EFFORTS[model["id"]]) for model in settings["models"])
     assert not [model for model in settings["models"] if model["name"].startswith("claude")]
     assert [(mode["id"], mode["label"], mode["hint"], mode["default"], mode["advanced"]) for mode in settings["modes"]] == [
-        ("edit", "Edit files", "change project files without asking", True, False), ("internet", "Internet", "search and fetch the web", True, False),
+        ("internet", "Internet", "search and fetch the web", True, False),
         ("bash", "Raw command", "run shell commands", False, True), ("workflows", "Workflows", "run workflow scripts", False, True)]
 
 
@@ -340,10 +348,11 @@ def _mode_argv(tmp_path, modes):
 
 
 @pytest.mark.syngate("CLAUDE_CODE-020")
-def test_edit_mode_accepts_project_file_edits(tmp_path):
-    argv = _mode_argv(tmp_path, ["edit"])
-    assert argv[argv.index("--permission-mode") + 1] == "acceptEdits" and argv[argv.index("--allowedTools") + 1] == "Agent"
-    assert "--permission-mode" not in _mode_argv(tmp_path, [])
+def test_claude_code_has_no_edit_mode_of_its_own_and_never_accepts_edits(tmp_path):
+    assert "edit" not in synthetic.claude_code_connector.modes
+    for modes in ([], list(synthetic.claude_code_connector.modes)):
+        argv = _mode_argv(tmp_path, modes)
+        assert "--permission-mode" not in argv and "acceptEdits" not in argv
 
 
 @pytest.mark.syngate("CLAUDE_CODE-030")
@@ -358,9 +367,8 @@ def test_internet_mode_allows_the_web_tools(tmp_path):
 def test_workflows_mode_allows_the_workflow_tool(tmp_path):
     argv = _mode_argv(tmp_path, ["workflows"])
     assert argv[argv.index("--allowedTools") + 1] == "Agent,Workflow"
-    combined = _mode_argv(tmp_path, ["edit", "internet", "workflows"])
+    combined = _mode_argv(tmp_path, ["internet", "workflows"])
     assert combined[combined.index("--allowedTools") + 1] == "Agent,WebSearch,WebFetch,Workflow"
-    assert combined[combined.index("--permission-mode") + 1] == "acceptEdits"
 
 
 @pytest.mark.syngate("CLAUDE_CODE-BASH-MODE")
@@ -368,7 +376,7 @@ def test_raw_command_mode_allows_the_shell_tool(tmp_path):
     argv = _mode_argv(tmp_path, ["bash"])
     assert argv[argv.index("--allowedTools") + 1] == "Agent,Bash" and "--permission-mode" not in argv
     assert argv[argv.index("--disallowedTools") + 1] == ",".join(synthetic.claude_code_connector.denied)  # the tree stays closed to the shell too
-    bare = _mode_argv(tmp_path, ["edit", "internet"])
+    bare = _mode_argv(tmp_path, ["internet", "workflows"])
     assert "Bash" not in bare[bare.index("--allowedTools") + 1]
 
 
@@ -387,25 +395,9 @@ def test_the_seed_context_is_the_appended_system_prompt(tmp_path, syngate_tree):
 
 @pytest.mark.syngate("CLAUDE_CODE-TREE-GUARD")
 def test_tree_files_are_denied_to_read_and_edit_in_every_mode(tmp_path):
-    for modes in ([], ["edit"], ["edit", "internet", "workflows"]):
+    for modes in ([], ["internet"], ["internet", "bash", "workflows"]):
         argv = _mode_argv(tmp_path, modes)
-        assert argv[argv.index("--disallowedTools") + 1] == "Read(syngate/**),Edit(syngate/**),Write(syngate/**)"
-
-
-@pytest.mark.syngate("SYNTHETIC-020")
-def test_an_answer_is_text_or_one_block_of_tree_calls_never_both():
-    calls = [{"tool": "add", "uid": "AREA-030", "parent": "@", "description": "D"}, {"tool": "remove", "uid": "AREA-020"},
-             {"tool": "move", "uid": "AREA-010", "to": "AREA", "before": "AREA-030"}]
-    block = "```syngate\n" + json.dumps(calls) + "\n```"
-    prose = "Plain prose, even with ```json\n[]\n``` inside."
-    assert synthetic.parse_reply(prose) == ("chat", prose)
-    assert synthetic.parse_reply(f"\n{block}\n\n") == ("calls", calls)
-    for mixed in (f"Here you go:\n{block}", f"{block}\nDone.", f"{block}\n{block}"):
-        with pytest.raises(synthetic.protocol_error, match="never both"):
-            synthetic.parse_reply(mixed)
-    for malformed in ("[{", "[]", '{"tool": "add"}', '[{"tool": "rename", "uid": "X"}]', '[{"tool": "add", "uid": "X", "sources": ["a"]}]', '[{"tool": "move", "uid": "X"}]'):
-        with pytest.raises(synthetic.protocol_error):
-            synthetic.parse_reply(f"```syngate\n{malformed}\n```")
+        assert {"Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)"} <= set(argv[argv.index("--disallowedTools") + 1].split(","))
 
 
 # Stub `claude` answering through structured output, the reply text being something else entirely.
@@ -425,8 +417,6 @@ def test_the_answer_schema_carries_every_tool_call_and_the_structured_output_is_
     assert schema == synthetic.ANSWER_SCHEMA and schema["properties"]["kind"]["enum"] == ["text", "calls"]
     shapes = {shape["properties"]["tool"]["const"]: shape["required"] for shape in schema["properties"]["calls"]["items"]["anyOf"]}
     assert shapes == {tool: ["tool", *fields] for tool, fields in synthetic.CALLS.items()}
-    assert set(synthetic.QUERIES) == {"query", "context", "skill"} and set(synthetic.RUNS) == {"test"} and set(synthetic.DELEGATIONS) == {"agent"} and set(synthetic.GITS) == {"git"} and set(synthetic.SURFS) == {"websurf"}
-    assert set(synthetic.CALLS) == set(synthetic.TOOLS) | set(synthetic.QUERIES) | set(synthetic.RUNS) | set(synthetic.DELEGATIONS) | set(synthetic.GITS) | set(synthetic.SURFS)
     structured = tmp_path / "structured_stub.py"
     structured.write_text(STUB_STRUCTURED)
     answer, session = synthetic.claude_code_connector(cli=(sys.executable, str(structured)), cwd=tmp_path).dispatch("", "Go.")
@@ -434,8 +424,7 @@ def test_the_answer_schema_carries_every_tool_call_and_the_structured_output_is_
     assert synthetic.parse_reply(answer) == ("calls", [{"tool": "query", "uid": "@"}])
     assert synthetic.parse_reply({"kind": "text", "text": "Talk."}) == ("chat", "Talk.")
     for mixed in ({"kind": "text", "text": "Both.", "calls": [{"tool": "remove", "uid": "X"}]}, {"kind": "calls", "text": "Both.", "calls": [{"tool": "remove", "uid": "X"}]}):
-        with pytest.raises(synthetic.protocol_error, match="never both"):
-            synthetic.parse_reply(mixed)
+        assert synthetic.parse_reply(mixed) == ("calls", [{"tool": "remove", "uid": "X"}])  # the text beside the calls is split off
     with pytest.raises(synthetic.protocol_error, match="missing"):
         synthetic.parse_reply({"kind": "calls", "calls": [{"tool": "context"}]})
 
@@ -983,3 +972,24 @@ def test_the_project_files_a_turn_changed_are_its_diff_step_from_snapshots_befor
     (project / ".gitignore").write_text("build/\n")
     _, steps, _ = _announced(_streaming(tmp_path, [{"write": "build/out.o", "text": "binary"}, {"write": "keep.txt", "text": "kept\n"}]), "Go.")
     assert [(file["path"], file["status"]) for file in steps[-1]["files"]] == [("keep.txt", "M")]
+
+
+@pytest.mark.syngate("SYNTHETIC-SEED-DESIGN")
+def test_the_design_files_the_statements_link_follow_them_each_once_under_a_design_line(tmp_path, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "DESIGN.md").write_text("# Design\nWhole.\n")
+    (tmp_path / "docs" / "PART.md").write_text("Part.")
+    make_item(syngate_dir, "ROOT", "Root\n\n[DESIGN.md](DESIGN.md), [web](https://example.com/X.md)\n", parents=())
+    make_item(syngate_dir, "SIDE-A", "Side A\n\n[part](docs/PART.md#usage) and [again](DESIGN.md), [gone](docs/GONE.md)\n", parents=("ROOT",))
+    make_item(syngate_dir, "LEAF-001", "It shall leaf, see [part](docs/PART.md).\n", parents=("SIDE-A",), tests=None)
+    items, errors = syngatelib.load_tree(syngate_dir)
+    assert not errors
+    statements = synthetic.seed_context(items, "ROOT", root=tmp_path).split("\n# Design ")[0]
+    design = "\n# Design DESIGN.md\n````\n# Design\nWhole.\n````\n"
+    part = "\n# Design docs/PART.md\n````\nPart.\n````\n"
+    assert synthetic.seed_context(items, "ROOT", root=tmp_path) == statements + design + part  # each linked file once, a missing one and a URL left out
+    assert synthetic.seed_context(items, "LEAF-001", root=tmp_path) == synthetic.seed_context(items, "ROOT", root=tmp_path)  # the same selection
+    items["SIDE-A"].sources.append("docs/PART.md")
+    seed = synthetic.seed_context(items, "ROOT", root=tmp_path)
+    assert seed.endswith(design + "\n# Source docs/PART.md\n````\nPart.\n````\n") and "# Design docs/PART.md" not in seed  # a key source is not repeated as a design file

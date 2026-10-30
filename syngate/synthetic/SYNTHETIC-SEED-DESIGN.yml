@@ -1,0 +1,9 @@
+---
+parents: [SYNTHETIC]
+order: 70
+test: ~
+---
+Design file sections
+follow the statements in the seed context: each project file the selected statements link, one no key source already lists, sits under its own `# Design <path>` line holding its text in a fence, as a source does under `# Source`.
+
+A linked file that does not exist is left out.

@@ -75,16 +75,20 @@ const api = {
     onRemoved: removed,
   },
   windows: { get: async (id) => { checks.push(['windows.get', id]); return { id, state: 'normal', ...windows.get(id) }; } },
-  webNavigation: nav,
+  // the frames of the tab as each getAllFrames call lists them, the last list standing
+  webNavigation: { ...nav, getAllFrames: async () => ((cfg.frames || [[0]]).length > 1 ? cfg.frames.shift() : (cfg.frames || [[0]])[0]).map((frameId) => ({ frameId })) },
   webRequest: { onCompleted: responses },
   scripting: {
+    // an injection into one frame answers as `perFrame` scripts it for `<action> <frameId>`, any other as `inPage` scripts the action; a `reject` throws
     executeScript: async ({ target, func, args }) => {
       calls.push(['scripting.executeScript', target, func.name, ...args]);
-      const reply = (cfg.inPage || {})[args[0] === 'mask' ? `mask ${args[1].on}` : args[0]] || {};
+      const key = args[0] === 'mask' ? `mask ${args[1].on}` : args[0], frameId = target.frameIds ? target.frameIds[0] : 0;
+      const reply = (target.frameIds ? (cfg.perFrame || {})[`${key} ${frameId}`] : (cfg.inPage || {})[key]) || {};
       if (reply.navigate) navigate(target.tabId, reply.navigate.url, reply.navigate);
       if (reply.close !== undefined) setTimeout(() => close(target.tabId), reply.close);
       if (reply.hang) return new Promise(() => {});
-      const injections = [{ frameId: 0, result: reply.result || {} }];
+      if (reply.reject) throw new Error(reply.reject);
+      const injections = [{ frameId, result: reply.result || {} }];
       if (target.allFrames) injections.unshift({ frameId: 4, result: { viewport: { width: 300, height: 150 }, scale: 1, masked: 0 } });
       return injections;
     },
@@ -392,6 +396,33 @@ def test_a_screenshot_is_scaled_below_the_css_pixels_to_fit_the_longest_edge_and
     for (width, height), limits, result in zip(sizes, asked, results):
         assert width * height <= limits.get("max_pixels", width * height) and max(width, height) <= limits.get("max_edge", 1280)
         assert result["viewport"] == {"width": 1280, "height": 720} and result["scale"] == 2
+
+
+@pytest.mark.syngate("BROWSER-EXTENSION-SCREENSHOT", "frames")
+def test_a_frame_the_browser_cannot_mask_in_one_injection_is_masked_frame_by_frame_the_failing_ones_still_there_covered_whole():
+    lost = "Script '<anonymous code>' result is non-structured-clonable data"  # Firefox, for a frame gone under the script
+    masked = {"viewport": {"width": 1280, "height": 720}, "scale": 1, "masked": 0}
+    on, off, origin = {"on": True, "origin": ORIGIN}, {"on": False}, {"origin": ORIGIN}
+    run = _surf([{"action": "screenshot", "origin": ORIGIN}], tabs=SURF_TAB, state={"tabId": 7},
+                inPage={"mask true": {"reject": lost}, "mask false": {"reject": lost}, "cover": {"result": {"covered": 1}}},
+                perFrame={"mask true 0": {"result": masked}, "mask true 4": {"reject": lost}, "mask true 9": {"reject": lost}, "mask true 12": {"result": {**masked, "masked": 1}}},
+                frames=[[0, 4, 9, 12], [0, 4, 12]])
+    assert _plain(run["results"]) == [{"ok": True, "page": OLD_PAGE, "image": _jpeg(1280, 720), "viewport": {"width": 1280, "height": 720}, "scale": 1, "image_scale": 1, "covered": 1}]
+    injected = [c[1:] for c in run["calls"] if c[0] == "scripting.executeScript"]
+    assert injected == [[{"tabId": 7, "allFrames": True}, "pageAction", "mask", on], *([{"tabId": 7, "frameIds": [frame]}, "pageAction", "mask", on] for frame in (0, 4, 9, 12)),
+                        [{"tabId": 7}, "pageAction", "cover", origin], [{"tabId": 7}, "pageAction", "paint", origin],
+                        [{"tabId": 7, "allFrames": True}, "pageAction", "mask", off], *([{"tabId": 7, "frameIds": [frame]}, "pageAction", "mask", off] for frame in (0, 4, 12))]
+    assert [c[0] for c in run["calls"]].index("tabs.captureVisibleTab") < [c[0] for c in run["calls"]].index("createImageBitmap")
+
+    gone = _surf([{"action": "screenshot", "origin": ORIGIN}], tabs=SURF_TAB, state={"tabId": 7}, inPage={"mask true": {"reject": lost}},
+                 perFrame={"mask true 0": {"result": masked}, "mask true 4": {"reject": lost}}, frames=[[0, 4], [0]])
+    assert _plain(gone["results"]) == [{"ok": True, "page": OLD_PAGE, "image": _jpeg(1280, 720), "viewport": {"width": 1280, "height": 720}, "scale": 1, "image_scale": 1}]
+    assert [c[3] for c in gone["calls"] if c[0] == "scripting.executeScript"] == ["mask", "mask", "mask", "mask"]  # a frame gone is neither covered nor painted for
+
+    top = _surf([{"action": "screenshot", "origin": ORIGIN}], tabs=SURF_TAB, state={"tabId": 7}, inPage={"mask true": {"reject": lost}},
+                perFrame={"mask true 0": {"reject": lost}}, frames=[[0, 4]])
+    assert _plain(top["results"]) == [{"ok": False, "error": lost, "page": OLD_PAGE}]  # the top frame's failure is the screenshot's
+    assert not [c for c in top["calls"] if c[0] == "tabs.captureVisibleTab"] and [c[3] for c in top["calls"] if c[0] == "scripting.executeScript"][-1] == "mask"
 
 
 @pytest.mark.syngate("BROWSER-EXTENSION-MOUSE", "played")

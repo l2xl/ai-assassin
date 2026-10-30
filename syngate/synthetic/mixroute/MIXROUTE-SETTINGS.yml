@@ -1,0 +1,7 @@
+---
+parents: [MIXROUTE]
+order: 10
+test: ~
+---
+Connection settings
+of the MixRoute connector are the `mixroute` section of the server settings, read at every use: the API key, else the environment variable `MIXROUTE_API_KEY`, the base URL, the `smart_routing` section with its routing key, the models offered with their efforts and the default model and effort.

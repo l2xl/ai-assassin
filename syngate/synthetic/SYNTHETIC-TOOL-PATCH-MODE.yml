@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-TOOL-PATCH]
+order: 30
+sources: [src/ai_scratcher/assassin_ui.py]
+test: ~
+---
+Edit files switch
+A patch call shall be refused while the Edit files switch of the chat is off, its refusal coming back as the next prompt.

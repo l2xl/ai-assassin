@@ -6,4 +6,4 @@ review: e14874802e186587d8379a826a6dd24ed8016cc54a5cc08f1b250e040e2f5c9d
 ---
 The tool call skill shall be a default skill stating how an answer requests tool calls and how they are applied
 
-An answer is plain text or exactly one list of calls, as the structured object or one fenced block; the calls apply in order, the first refusal stops the batch, and the results come back as the next prompt.
+An answer is plain text, tool calls, or text said beside them, as the structured object or fenced blocks; the calls apply in order, the first refusal stops the batch, and the results come back as the next prompt.

@@ -79,7 +79,7 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
     add = {"tool": "add", "uid": "NEW-001", "description": "New leaf\n\nIt shall be new."}
     app.connectors = {"echo": (scripted := Scripted(calls({"tool": "query", "uid": "@"}, add), {"kind": "text", "text": "I would add it."}))}
     modes = call(base, app, "/api/tree")[1]["connectors"]["echo"]["modes"]
-    assert modes[0] == assassin_ui.TREE_MODE and modes[0]["default"] is True and [mode["id"] for mode in modes] == ["tree", "edit"]
+    assert modes[0] == assassin_ui.TREE_MODE and modes[0]["default"] is True and [mode["id"] for mode in modes] == ["tree", "patch", "edit"]
     outcome = call(base, app, "/api/chat", {**SETUP, "uid": "ROOT", "modes": ["edit"], "text": "Add it."})[1]
     assert outcome["reply"] == f"- add NEW-001 refused: {assassin_ui.TREE_REFUSAL}\nI would add it."  # the query was read but stays out of the reply
     assert scripted.heard[0] == {"text": assassin_ui.TREE_OFF + "\nAdd it.", "modes": ["edit"], "session": None}  # the mode is never sent

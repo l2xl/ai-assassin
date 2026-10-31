@@ -43,6 +43,7 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from . import api_connection
 from . import gitlib
 from . import patchlib
 from . import syngatelib
@@ -87,7 +88,7 @@ PATCH_MODE = {"id": "patch", "label": "Edit files", "hint": "apply the diffs of 
 PATCH_REFUSAL = "project file edits are off for this chat — switch Edit files on"
 GIT_ABSENT = "git is not at hand for this project"
 # The server settings, kept next to the tree, one section per feature: `websurf` holds the WebSurf host lists `allow` and `block`,
-# `mixroute` the setup of the MixRoute connector.
+# `connections` the setup of the OpenAI-compatible API connections.
 SETTINGS_FILE = "assassin_settings.json"
 # The harness's Interactive WebSurf permission, listed after every connector's modes while a browser is attached: whether a reply's
 # websurf `fill` and `mouse` act on the surf tab; the passive actions are always on. Neither it nor the tree mode ever reaches a connector.
@@ -474,8 +475,24 @@ class AssassinApp:
         self.library = synthetic.offered_library(self.git)
 
     def offered(self):
-        """(name, connector) of every connector the page offers: those that are not set up -- a MixRoute one without an API key -- left out."""
-        return [(name, connector) for name, connector in self.connectors.items() if getattr(connector, "available", lambda: True)()]
+        """(name, connector) of every connector the page offers: those that are not set up -- an API connection without a model or
+        without the key it declares -- left out."""
+        return [(name, connector) for name, connector in self.sync_connections().items() if getattr(connector, "available", lambda: True)()]
+
+    def sync_connections(self):
+        """The connectors, the API connections among them brought in line with the `connections` section of the server settings read
+        now: one per entry by its id, in the section's order after the built-in connectors, whose names it cannot take; the connection
+        of an id already held is kept, with its model listing and its stops."""
+        builtin = {name: connector for name, connector in self.connectors.items() if not isinstance(connector, api_connection.api_connection)}
+        held = {name: connector for name, connector in self.connectors.items() if isinstance(connector, api_connection.api_connection)}
+        self.connectors = {**builtin, **{name: held.get(name) or api_connection.api_connection(name, cwd=self.root, config=functools.partial(self.connection_settings, name))
+                                         for name, entry in self.settings("connections").items() if isinstance(entry, dict) and name not in builtin}}
+        return self.connectors
+
+    def connection_settings(self, name):
+        """The entry of the API connection `name` in the `connections` section of the server settings, read now; {} without one."""
+        entry = self.settings("connections").get(name)
+        return entry if isinstance(entry, dict) else {}
 
     def settings(self, section):
         """One feature's section of the server settings, read from `SETTINGS_FILE` at every use: {} while the file is missing or malformed
@@ -792,6 +809,9 @@ class AssassinApp:
             if data.get("reset"):
                 chat.session = None
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
+            if "model" in data and (select := getattr(self.sync_connections().get(chat.setup.get("connector")), "select", None)):
+                # a llama.cpp router loads the model chosen at once, so the load runs while the user writes
+                threading.Thread(target=select, args=(chat.setup["model"],), daemon=True).start()
             if patch and 0 <= (index := _number(patch.get("index", -1), "index", int)) < len(chat.log):
                 message = chat.log[index]
                 if "cuts" in patch:
@@ -970,7 +990,7 @@ class AssassinApp:
                 raise ApiError(422, "\n".join([*applied, out]), session=session)
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
-                reply, session = synthetic.query(self.connectors, self._load(), uid, text, data.get("connector"), data.get("model"),
+                reply, session = synthetic.query(self.sync_connections(), self._load(), uid, text, data.get("connector"), data.get("model"),
                                                  data.get("effort"), modes=[mode for mode in modes if mode not in HARNESS_MODES], session=session,
                                                  history=history, root=self.root, on_step=on_step, stopped=halted if turn else None, library=self.library,
                                                  images=images)
@@ -1295,10 +1315,10 @@ class AssassinApp:
 
     def _setup(self, uid):
         """The setup of a turn the harness starts in `uid`'s chat: the chat's own, else the first connector's default one."""
-        chat = self.chats.get(uid)
-        if chat and chat.setup.get("connector") in self.connectors:
+        chat, connectors = self.chats.get(uid), self.sync_connections()
+        if chat and chat.setup.get("connector") in connectors:
             return dict(chat.setup)
-        name, connector = next(iter(self.connectors.items()))
+        name, connector = next(iter(connectors.items()))
         settings = connector.settings()
         default = settings.get("default") or {}
         return {"connector": name, "model": default.get("model") or settings["models"][0]["id"], "effort": default.get("effort") or next(iter(settings["efforts"]), None),

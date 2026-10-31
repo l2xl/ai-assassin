@@ -249,6 +249,7 @@ button.pill { appearance: none; line-height: 1.55; }
 .step-label { font: 0.66rem/1.55 ui-monospace, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim); }
 .step-detail pre, .step-text { margin: 0.1rem 0 0.3rem; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .step-detail pre { max-height: 40vh; overflow: auto; padding: 0.3rem 0.5rem; background: var(--accent-soft); font-family: ui-monospace, Menlo, Consolas, monospace; }
+#status-menu .model-state { margin-left: 0.5em; font-size: 0.72rem; color: var(--dim); }
 #status-menu .menu-label { padding: 0.3em 0.9em 0.1em; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
 textarea.block-text { display: block; width: 100%; min-height: 1.55em; padding: 0; border: none; border-radius: 0; background: transparent; field-sizing: content; resize: none; font-family: inherit; }
 textarea.block-text:focus { outline: none; }
@@ -1334,6 +1335,9 @@ function stepHtml(step, key) {
       () => partHtml("input", step.input) + partHtml("result", step.result));
     case "message": return foldHtml(key, kind("message") + esc(firstLine(step.text)), () => `<div class="md">${md(step.text, "")}</div>`);
     case "reasoning": return foldHtml(key, kind("reasoning") + esc(firstLine(step.text)), () => `<div class="step-text">${esc(step.text)}</div>`);
+    case "prompt": return foldHtml(key, kind("prompt") + `${kilo(step.processed)} / ${kilo(step.total)} tokens read`
+      + (step.processed < step.total ? ` (${Math.floor(100 * step.processed / Math.max(step.total, 1))}%) …` : "")
+      + (step.cached ? ` · ${kilo(step.cached)} cached` : "") + (step.seconds ? " · " + seconds(step.seconds) : ""), () => partHtml("prompt", step));
     case "calls": return foldHtml(key, kind("calls") + esc(step.tools ? step.tools.join(", ") : plural(step.lines.length, "line")),
       () => partHtml(step.tools?.every((tool) => READS.includes(tool)) ? "read" : "applied", step.lines.join("\n")));
     case "usage": return "";
@@ -1635,7 +1639,7 @@ function openChatMenu(chat, anchor) {
   openMenu('<div class="menu-label">connector</div>'
     + Object.entries(state.model.connectors).map(([id, c]) => `<button role="menuitem" data-chat-connector="${esc(id)}">${mark(id === chat.connector)}${esc(c.label)}</button>`).join("")
     + '<div class="menu-label">model</div>'
-    + connector.models.map((m) => `<button role="menuitem" data-chat-model="${esc(m.id)}">${mark(m.id === chat.model)}${esc(m.name)}</button>`).join("")
+    + connector.models.map((m) => `<button role="menuitem" data-chat-model="${esc(m.id)}">${mark(m.id === chat.model)}${esc(m.name)}${m.state ? `<span class="model-state">${esc(m.state)}</span>` : ""}</button>`).join("")
     + (efforts.length ? '<div class="menu-label">effort</div>' : "")
     + efforts.map((e) => `<button role="menuitem" data-chat-effort="${esc(e)}">${mark(e === chat.effort)}${esc(e)}</button>`).join("")
     + '<div class="menu-label">chat</div>'
@@ -2263,7 +2267,11 @@ statusMenu.addEventListener("click", (event) => {
   else if (row && rowAct === "unlink") unlink(row);
   else if (row && rowAct === "delete") deleteItem(row.uid);
   else if (chat && chatConnector && chatConnector !== chat.connector) updateChat(chat.uid, chatSetup(chatConnector));
-  else if (chat && (chatModel || chatEffort)) updateChat(chat.uid, chatModel ? modelSetup(chat.connector, chatModel, chat.effort) : { effort: chatEffort });
+  else if (chat && (chatModel || chatEffort)) {
+    updateChat(chat.uid, chatModel ? modelSetup(chat.connector, chatModel, chat.effort) : { effort: chatEffort });
+    // a model reporting a load state starts loading once chosen: read the states back for the menu
+    if (chatModel && state.model.connectors[chat.connector]?.models.some((m) => m.id === chatModel && m.state)) setTimeout(refresh, 1000);
+  }
 });
 statusMenu.addEventListener("keydown", (event) => {
   const entries = [...statusMenu.querySelectorAll("[role^=menuitem]:not(:disabled)")], at = entries.indexOf(document.activeElement);

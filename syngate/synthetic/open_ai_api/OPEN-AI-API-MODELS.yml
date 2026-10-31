@@ -1,8 +1,8 @@
 ---
-parents: [MIXROUTE]
+parents: [OPEN-AI-API]
 order: 30
 test: 2380d592472645667dde664de36a084bee7d4d0d9db324cf342c0082cc0efec0
 review: 5236438085231da2e02fcfec59e4655bf1e9c0ec04f4a6736c4556e32961fb25
 ---
-MixRoute model selection
+Model selection
 passes the chosen model id unchanged as `model` and the chosen effort as `reasoning_effort` only with a model listing that effort; a model listed without efforts takes none.

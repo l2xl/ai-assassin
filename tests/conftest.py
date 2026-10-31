@@ -19,7 +19,7 @@ import pytest
 import yaml
 
 # The bound (frozen) routines import the toolkit modules by their bare names from the pre-package era; alias them so those spans stay byte-identical.
-for _name in ("syngatelib", "syngate", "assassin_ui", "synthetic", "check_self_approval", "render_syngate_report"):
+for _name in ("syngatelib", "syngate", "assassin_ui", "synthetic", "check_self_approval", "render_syngate_report", "api_connection"):
     sys.modules.setdefault(_name, importlib.import_module(f"ai_scratcher.{_name}"))
 
 

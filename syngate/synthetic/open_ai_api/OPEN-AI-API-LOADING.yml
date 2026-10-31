@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 39
+test: ~
+---
+Turn on a loading model
+waits while the server holds the request until the model is loaded, and a request the server refuses because the model failed to load or is not loaded goes again after a load request, up to `load_retries` times.

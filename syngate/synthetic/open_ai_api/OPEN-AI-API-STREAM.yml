@@ -1,8 +1,8 @@
 ---
-parents: [MIXROUTE]
+parents: [OPEN-AI-API]
 order: 70
 test: 6938a5bdbe586f106abbe2ed39fbd0ceaba032269739cd2d896d40e89a726ec5
 review: 93740691e6ae7eda1489f4dad6418d992c7b06e8ed58353bb77a142333203f55
 ---
-MixRoute event streaming
+Event streaming
 records the reasoning the stream exposes as a reasoning step growing as it comes, and closes the turn with a usage step of its wall time and the token counts of the closing usage chunk.

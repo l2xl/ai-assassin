@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 38
+test: ~
+---
+Immediate model load
+asks a llama.cpp router server — a connection whose model listing reports load states — to load a model the moment a chat selects it, ahead of the chat's first turn.

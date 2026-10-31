@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 35
+test: ~
+---
+Queried model list
+of a connection whose `models` setting is `query` is the listing of its server's `GET /models`, every model offered without efforts and with the load state the server reports.

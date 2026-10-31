@@ -1,20 +1,31 @@
 {
-  "mixroute": {
-    "api_key": "",
-    "base_url": "https://api.mixroute.ai/v1",
-    "models": [
-      "claude-sonnet-5-5",
-      "claude-opus-5-5",
-      "claude-haiku-5-5",
-      "gpt-5.5",
-      "gemini-3.8-flash",
-      {"id": "glm-4-flash", "name": "GLM-4-Flash (free)", "efforts": []},
-      {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "efforts": []}
-    ],
-    "default_model": "claude-sonnet-5-5",
-    "default_effort": "medium",
-    "structured": true,
-    "timeout": 600,
-    "smart_routing": {"api_key": ""}
+  "connections": {
+    "mixroute": {
+      "label": "MixRoute",
+      "base_url": "https://api.mixroute.ai/v1",
+      "api_key": "",
+      "api_key_env": "MIXROUTE_API_KEY",
+      "models": [
+        {"id": "auto", "efforts": [], "api_key": ""},
+        "claude-sonnet-5-5",
+        "claude-opus-5-5",
+        "claude-haiku-5-5",
+        "gpt-5.5",
+        "gemini-3.8-flash",
+        {"id": "glm-4-flash", "name": "GLM-4-Flash (free)", "efforts": []},
+        {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "efforts": []}
+      ],
+      "default_model": "claude-sonnet-5-5",
+      "default_effort": "medium",
+      "structured": true,
+      "timeout": 600
+    },
+    "gpu": {
+      "label": "GPU server",
+      "base_url": "http://127.0.0.1:18080/v1",
+      "models": "query",
+      "timeout": 900,
+      "load_retries": 2
+    }
   }
 }

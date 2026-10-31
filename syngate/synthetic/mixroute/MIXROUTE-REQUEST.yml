@@ -1,8 +1,0 @@
----
-parents: [MIXROUTE]
-order: 40
-test: 5f1f2fc6768e333270028a4a499ade7845a44e8e88db1fb07dabc2a4358b1972
-review: b19722d0804a0db76d1eac32db3d7b14fd9cc2e9f83e0a3e7bfe9b8d85c413c6
----
-Chat request
-of the MixRoute connector carries the API key as the bearer token, the seed context as the system message, then the session's earlier messages and the user's text, a turn's images following that text as `data:` URL image parts.

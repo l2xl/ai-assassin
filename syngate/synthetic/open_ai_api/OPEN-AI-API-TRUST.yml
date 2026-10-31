@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 15
+test: ~
+---
+Custom trusted certificates
+of a connection — the PEM files its `ca` setting names — are trusted for its HTTPS requests besides the system's, so a server with a self-signed certificate is reached.

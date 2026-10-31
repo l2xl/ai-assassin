@@ -40,10 +40,11 @@ is one non-interactive turn of the chosen connector.
   messages as a transcript heading the text. The Claude Code connector runs the local `claude` CLI
   with the call modes — each listed with its label, hint, default and whether it is advanced, for
   the page's permission switches — as its permission mode and allowed tools; its models and
-  efforts are the ones the page offers. The MixRoute connector calls the OpenAI-compatible chat
-  completions API of MixRoute over HTTPS, set up by the `mixroute` section of the server settings
-  and offered while an API key is set; it lists no call modes, its turns working the project through
-  the harness's tool calls alone ([MIXROUTE.md](MIXROUTE.md)). The Tree edit permission is the harness's
+  efforts are the ones the page offers. The OpenAI-compatible API connections — MixRoute, a
+  self-hosted llama.cpp server, as many side by side as configured — call a chat completions API
+  over HTTP or HTTPS, each set up by its entry of the `connections` section of the server settings;
+  they list no call modes, their turns working the project through the harness's tool calls alone
+  ([OPEN_AI_API.md](OPEN_AI_API.md)). The Tree edit permission is the harness's
   own, on by default: while it is off a reply's add, edit, move, rename and remove calls are refused
   (`tree edits are off for this chat — switch Tree edit on`), the refusal going back to the model as
   its next prompt; query, context, skill, test and agent stay allowed — reading the tree is the rail

@@ -1,9 +1,0 @@
----
-parents: [AI_CONNECTION]
-order: 15
-review: a92a0fb580ea9000808ba80c4306d3eb57f5e426f109abe8cc3bfef1e93770ab
----
-MixRoute connector
-is the AI connection calling the OpenAI-compatible chat completions API of MixRoute over HTTPS: a turn is one streamed `POST /chat/completions` request per round with the chosen model and effort, the seed context its system message and the conversation kept by the connector as its session.
-
-[MIXROUTE.md](MIXROUTE.md)

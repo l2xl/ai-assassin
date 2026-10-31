@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 41
+test: ~
+---
+Prompt progress
+of a turn on a llama.cpp router is asked for with `return_progress` and recorded as a prompt step growing with the tokens read, so the request of a long prompt is never silent.

@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 10
-test: 38b483e6a305b2f037c680649f58604ab07050f72f5e8929e5b006e3dca0c5bc
-review: c313f58fd81af4becd643faf3e648150b84d8cece2afcdb2fad3b7a808e124b7
+test: 42314bdc467ffca828e878ec51964e07cfc862b15debc55e7c729cdbff0332a0
+review: 06c9af1a04b237a1f6930d11b76aacea4066aa4171f43e333741b08c45b39d0a
 ---
 Connection settings
 are the `connections` section of the server settings, read at every use: one entry per connection by its id, each with its label, base URL, API key — else the environment variable its `api_key_env` names — models with their efforts and the default model and effort.

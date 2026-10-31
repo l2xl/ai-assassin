@@ -2,7 +2,7 @@
 parents: [AI_CONNECTION]
 order: 15
 sources: [src/ai_scratcher/api_connection.py]
-review: a92a0fb580ea9000808ba80c4306d3eb57f5e426f109abe8cc3bfef1e93770ab
+review: c81052b1da4c4638552c392e43dd71488331695d8cf15fffedd02fe3c43b84c3
 ---
 OpenAI-compatible API connections
 are the AI connections calling an OpenAI-compatible chat completions API over HTTP or HTTPS, as many side by side as the server settings configure — MixRoute and a self-hosted llama.cpp server alike: a turn is one streamed `POST /chat/completions` request per round with the chosen model and effort, the seed context its system message and the conversation kept by the connection as its session.

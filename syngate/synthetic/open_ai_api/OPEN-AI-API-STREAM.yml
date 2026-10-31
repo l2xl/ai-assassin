@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 70
-test: 6938a5bdbe586f106abbe2ed39fbd0ceaba032269739cd2d896d40e89a726ec5
-review: 93740691e6ae7eda1489f4dad6418d992c7b06e8ed58353bb77a142333203f55
+test: 9a8d6f8905bbe2efcb9f4e9167ea3d23a045e55491455545faac4af497179c4f
+review: c2ef86f9562a6c64225210b5826875aa35016963a1cbf71c6b3ba6d6a048fe14
 ---
 Event streaming
 records the reasoning the stream exposes as a reasoning step growing as it comes, and closes the turn with a usage step of its wall time and the token counts of the closing usage chunk.

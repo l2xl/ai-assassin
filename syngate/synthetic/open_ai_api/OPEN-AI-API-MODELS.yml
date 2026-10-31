@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 30
-test: 2380d592472645667dde664de36a084bee7d4d0d9db324cf342c0082cc0efec0
-review: 5236438085231da2e02fcfec59e4655bf1e9c0ec04f4a6736c4556e32961fb25
+test: 36927ab1ceae0909fbdec323af32867a42dffd8814845c0a4488e3cbbd317eba
+review: 146b3c82e2da67d97679e45e759e388ebbd5a7e9f11a8ac258594318ee1f1bf5
 ---
 Model selection
 passes the chosen model id unchanged as `model` and the chosen effort as `reasoning_effort` only with a model listing that effort; a model listed without efforts takes none.

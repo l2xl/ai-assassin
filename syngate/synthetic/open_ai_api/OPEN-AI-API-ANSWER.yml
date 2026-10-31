@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 60
-test: {schema: a53722197ab9203b29aa044ac52e20dd8334121f88c0a70dffec494598db7a37}
-review: 145f4f95fe8366cce986023eefd70749aa7d2b1081cc73697d1e101874e8b87f
+test: {schema: c4309daeb929f29173ec358cd7b95ff6ecdf81161b6cef70216de0955667760d}
+review: 4c6b5ed6232c99b19a137eda7d0cc1a8b06668b0283eca2763245ad672c8c11a
 ---
 Answer schema
 goes as the `json_schema` response format built from the library's tools, a JSON object answered — bare or fenced — being the structured answer and any other content the reply text; the `structured` setting off sends none.

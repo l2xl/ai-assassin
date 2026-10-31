@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 37
-test: b43032ae28327ffd0beda52dc8c37a0be42b24391a1c7090c76b609f8d2a6fc5
-review: 2834807814dd3cdc4b753495a853f41ee378d445e3bcc6b68e763337b8237f73
+test: 025bbcf05b0af3ff8a840d3d011ee9d8e9b34607ba53f6963134e695b5d25a7e
+review: 8f777bbc3c5448b3ef73c7550bf90c73119fc0044c1b89940d1a3b6e46918b07
 ---
 Per-model API key
 of a listed model goes as the bearer token of that model's turns in place of the connection's key, so MixRoute's `auto` model goes with its smart-routing key.

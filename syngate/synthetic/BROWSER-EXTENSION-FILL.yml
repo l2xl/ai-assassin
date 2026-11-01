@@ -6,4 +6,4 @@ test: {input: 38b20e4d73d77996c89f2c639e615d38374584afef0b5d89535ffc998865c046, 
 review: b1f7a6be2ad295d05bc32e7998460aafb2d3871fc038e35e082c6787eec07f4c
 ---
 Fill request
-sets the value of the first element its selector matches as typing does — focused, through the native value setter, then bubbling `input` and `change` events — for a text field, a text area, a select or an editable element, and refuses any other, disabled or read-only one.
+sets the value of the first element its selector matches as typing does, refusing an element that takes no typed value or is disabled or read-only.

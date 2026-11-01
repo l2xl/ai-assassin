@@ -8,6 +8,4 @@ test: {discover: a9f73f03db7c9e52caded3d9af798770bddff841a09928171b8042057fe8448
 review: 6ad2863c96d77918742fa40cd36db985cf3544d8e0c6b9f20952af25ad1cf5b4
 ---
 Session map
-of the extension is read from the URLs of the browser's tabs — a tab at `http://` on a loopback literal, path `/`, with a non-empty `token`, never a surf tab, belonging to the session of its origin — each session's bridge opening with its first tab, replaced by a newer token of its origin, reopened by the alarm once dropped and closed with its last tab, its surf tab then released as an ordinary tab.
-
-The map's tokens, tab ids and placements outlive a restart of the background in the browser's session storage, in its local storage only where it has none; the options page lists the sessions read only, without their tokens, and the badge counts those connected.
+of the extension is read from the URLs of the browser's tabs, each harness origin with an Assassin tab open being one session with one bridge, ending with its last tab.

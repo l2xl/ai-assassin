@@ -6,8 +6,4 @@ test: d86351490258d687aada9d32dfcee85344166f02a3cfab4c8bc5e7e4dc8697d2
 review: b21cc2fb95f2cadec7a2db30bcdeb9c1104075bac96f2aaca333df6d16afdfa5
 ---
 Syngate API tool
-is the prompt library's tool through which an answer reads, changes and tests the tree.
-
-A write of the AI never clears a review stamp: the stamp is left standing over the changed content, so the change reads as a violated review for the user to settle. Review stamping stays the user's act; there is no review call.
-
-A `test` call joins the batch's one run of the page's runner, which runs the routines bound to the leaves it addresses, and hands back one pass/fail line per leaf binding with the output of every failed routine.
+is the prompt library's tool through which an answer reads, changes and tests the tree, never stamping a review.

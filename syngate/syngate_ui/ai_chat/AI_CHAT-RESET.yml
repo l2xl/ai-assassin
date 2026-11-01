@@ -5,4 +5,4 @@ test: {api: 0f80beab4ea956b98da036045fe75be3a71825e1d358d7fa87a13354649d557a, re
 review: cd79db08fb9fde042382b5f8c9e896e4f7febe1d09c0259f0c1585db9799e741
 ---
 Chat reset
-is offered in the setup menu in three strengths: a new session that keeps the shown history and sends the kept messages as the transcript of the next turn, a new chat that files the live conversation and leaves an empty one, and a delete that erases the live conversation's log and session after confirmation, the filed ones untouched; all are refused while a turn runs.
+is offered in the setup menu as a new session, a new chat and a delete of the live conversation.

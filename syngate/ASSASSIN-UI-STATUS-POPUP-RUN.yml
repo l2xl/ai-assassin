@@ -6,6 +6,4 @@ test: {stream: 6688ed21f67bf80728a0376c1f7581274dde019ef90b401cf284aa23f5215db8,
 review: 943a2c6720fec18ef9752c3cbd094d586a80662420ca3bd1f1e0da36368aaa2b
 ---
 Run actions
-of the status popup start the test, review or clear command for the item — review and clear only while the review feature is on, clear only on a reviewed item — streaming the output into the console until the command exits, where a run can be stopped and a reloaded page re-attaches to the running one.
-
-On a branch the test run addresses every leaf below and the review, after confirmation, stamps every item below whose own review does not stand — unstamped or with a validation problem of its own — children first, then the branch, a run where none needs it being refused; a second run is refused while one is active.
+of the status popup start the test, review or clear run of the item, streaming its output into the console.

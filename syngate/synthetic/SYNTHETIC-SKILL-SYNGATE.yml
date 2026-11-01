@@ -7,5 +7,3 @@ review: f65447fe18089975611956e7d93f117dadceda44af79e7f2bd5f34e4cdb2fd4a
 ---
 Syngate rules skill
 is a default skill stating the rules of the DAG and its items.
-
-One testable statement per leaf or a split into children; a statement as the thesis its covering test asserts, never repeating the design file it links; design detail kept in linked project files, each linked from exactly one item and never listed in `sources`, which hold key source files only; tests bound by tags equal to the item UID; the shape of a statement and the naming of UIDs.

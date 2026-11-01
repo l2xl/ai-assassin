@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOLS]
 order: 45
+sources: [src/ai_scratcher/patchlib.py]
 review: 3bf178588e6b3a2d4c25df0ffeee6dc563e4f8a10f8dc071efb852c5f256073c
 ---
 Patch tool

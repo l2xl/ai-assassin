@@ -6,6 +6,4 @@ test: {method: c99e4b481fdec4c958efd2c76497dc72a21da7b8af7160f2ddb0ca4741c37c6c,
 review: 92e6663bb8304c6219c4033d7fdd74c1ec825859602a6fec93ca6a7d52882283
 ---
 Compositor tiling
-of the harness sets a new surf window and its session's Assassin window side by side where the browser cannot position its windows: under KDE Plasma on Wayland it loads a KWin script over D-Bus that finds both windows by their titles and gives them the two halves of the Assassin window's screen work area along its longer side.
-
-The tiling method goes out with an `open` — `kwin` under KDE Plasma on Wayland, `none` on another Wayland desktop, nothing for `browser`, where the browser positions its windows (X11, Windows, macOS) — and a tiling that fails never fails the call.
+of the harness sets a new surf window and its session's Assassin window side by side where the browser cannot position its windows, a tiling that fails never failing the call.

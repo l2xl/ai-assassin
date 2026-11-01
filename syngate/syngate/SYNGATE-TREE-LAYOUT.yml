@@ -5,4 +5,4 @@ review: 2843927c1937b9004a4ac485d4531e6af2d17e2a0f1289cc1a8338e25aa6d3dc
 ---
 Requirements tree layout
 
-The repo shall contain a machine-validatable requirements tree under syngate/: every `*.yml` file under any subfolder is one requirement item, its UID is the file stem, folders carry no semantic meaning, and the tree shape is defined entirely inside item files via `parents` links forming a DAG with exactly one root item
+The tree shall be the `*.yml` items under syngate/, each named by its file stem and shaped solely by `parents` links into a DAG with exactly one root.

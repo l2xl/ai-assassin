@@ -5,4 +5,4 @@ test: b2fd76cc0414928ca64f2c152df617e09729b985ea60517e16cef3f61fcdc3b3
 review: 305e67434311cf1bb11180be14e65f90fee8ca6ac89fda6ff49da76fa210e358
 ---
 Error reporting
-fails a turn as a connection error naming the connection's label, the HTTP status and the API's message, an error in the stream or a missing API key the same way.
+fails a turn as a connection error naming the connection, the HTTP status and the API's message.

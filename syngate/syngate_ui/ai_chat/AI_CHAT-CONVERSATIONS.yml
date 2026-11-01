@@ -5,4 +5,4 @@ test: {api: 4062827f1a6df037c42076d2ab3388803e68bd151fc8197a8dce174ed50873b6, li
 review: 0df26145473df91515a07ac16896f24d2fb1972f207c9a33d385e8c3dd2502d5
 ---
 Conversation list
-of an item keeps every earlier conversation — log, connector session and setup — filed behind the live one in start order, each read by the page as its start, first line and message count: beginning a new conversation files the live one when it holds messages, nothing erased, and resuming a filed one makes it the live chat again with its session and setup, the live one filed in its place; both are refused while a turn runs.
+of an item keeps every earlier conversation filed behind the live one, never erased, each resumable as the live chat.

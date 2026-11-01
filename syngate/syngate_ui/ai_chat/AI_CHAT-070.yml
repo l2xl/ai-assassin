@@ -5,4 +5,4 @@ test: d71b1d4843d567db38524321de46fd3630e2976a7274a50369db183e3807e9ae
 review: 06996682a310438fb1811ace0e1d381fb4bfc9091b0ee889bfaf17da3e64a383
 ---
 Reply line
-waits empty under every item's statement, outside the Tab order until the item's chat is shown; entered by click or focus, it shows that chat — the log and the controls — and a message sent from it goes to the exchange without touching the item.
+waits empty under every item's statement; entering it shows the item's chat, and a message sent from it goes to the exchange without touching the item.

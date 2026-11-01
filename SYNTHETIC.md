@@ -24,6 +24,9 @@ judgement — when disabled.
   by its statement, a section opening with a blank line, so a message may name any contained item
   by `@UID`. A message referencing items the seed context already holds brings no second copy; only
   the missing ones are appended after it, each in the same `@<UID>` form.
+- **Linked design files follow the statements.** Every project file the selected statements link,
+  each once and none a key source already lists, follows them as a `# Design <path>` section holding
+  its text in a four-backtick fence; a linked file that does not exist is left out.
 - **Key sources close the context.** The `sources` of the selected items, each file once in
   selection order, follow as `# Source <path>` sections holding the file's text in a four-backtick
   fence; a missing file says so in place.
@@ -39,8 +42,16 @@ is one non-interactive turn of the chosen connector.
   turn without a session (text was folded out of or back into the exchange) carries the kept
   messages as a transcript heading the text. The Claude Code connector runs the local `claude` CLI
   with the call modes — each listed with its label, hint, default and whether it is advanced, for
-  the page's permission switches — as its permission mode and allowed tools; its models and
-  efforts are the ones the page offers. The OpenAI-compatible API connections — MixRoute, a
+  the page's permission switches — as its permission mode and allowed tools: Internet allows
+  `WebSearch` and `WebFetch` and is on by default, the advanced Raw command allows `Bash` and
+  Workflows `Workflow`, both off by default, and `Agent` is allowed in every mode; its models are the
+  unversioned aliases `fable`, `opus`, `sonnet` and `haiku`, passed unchanged as `--model` so the
+  installed CLI resolves the current version, a model's display name being its id without a
+  `claude-` prefix, and the chosen effort goes as `--effort`, a turn without one leaving the CLI's
+  default. Every connection reports in its settings its models with their efforts, its call modes
+  and its default setup — the model and effort a chat starts with, the effort one the model lists or
+  none; a chat of the page without a setup of its own starts with that model and effort and the modes
+  marked default. The Claude Code connector's default is `sonnet` at `high`. The OpenAI-compatible API connections — MixRoute, a
   self-hosted llama.cpp server, as many side by side as configured — call a chat completions API
   over HTTP or HTTPS, each set up by its entry of the `connections` section of the server settings;
   they list no call modes, their turns working the project through the harness's tool calls alone
@@ -87,16 +98,21 @@ is one non-interactive turn of the chosen connector.
   messages as its transcript. The chats live in `assassin_chats.json` next to the tree, outside git,
   written on every settled change (a message appended, a setup or mark changed, a conversation
   begun, resumed or erased, a reset) through a debounced writer and read at start — a running turn
-  is never stored as running — the chat of a removed item dropped with every conversation.
-- **Two kinds of reply, never mixed.** A reply is **either** plain text — the dialog goes on — **or**
-  exactly one list of Syngate API calls — the dialog is condensed into the DAG. The tools are handed
-  to the turn as the JSON schema of its structured answer (`synthetic.ANSWER_SCHEMA`:
-  `{"kind": "text", "text"}` or `{"kind": "calls", "calls": [...]}`; the Claude Code connector
-  passes it as `--json-schema` and reads the turn's `structured_output`); a connector without
-  structured output carries the same list in one fenced ```` ```syngate ```` block. A reply carrying
-  both, or a malformed call, is refused (HTTP 422, shown as an error message in the chat whose
-  retry mark sends the last message again; the session is kept, so the retry can ask for a clean
-  answer).
+  is never stored as running — the chat of a removed item dropped with every conversation. A
+  renamed item keeps its chat: the chat and its latest turn follow the item to the new UID, and a
+  rename is refused (`409`) while the item's chat runs a turn other than the one renaming it.
+- **A reply is text, calls, or text said beside calls.** A reply is plain text — the dialog goes on —
+  or one list of Syngate API calls — the dialog is condensed into the DAG — and the text a reply says
+  beside its calls is split off as a `message` step of the turn rather than refused. The tools are
+  handed to the turn as the JSON schema of its structured answer (`synthetic.ANSWER_SCHEMA`:
+  `{"kind": "text"|"calls", "text", "calls": [...]}`, `text` and `calls` not exclusive; the Claude
+  Code connector passes it as `--json-schema` and reads the turn's `structured_output`); a connector
+  without structured output carries the calls in fenced ```` ```syngate ```` blocks, joined in order,
+  the prose around them — leaked tool-use markup taken out — being the text beside them
+  (`synthetic.split_reply`). A malformed call — invalid JSON, a block cut off before its closing
+  fence, an unknown tool or a missing field — is refused (HTTP 422, shown as an error message in the
+  chat whose retry mark sends the last message again; the session is kept, so the retry can ask for
+  a clean answer).
 - **Tree calls are the only way the agent touches the DAG.** The model never opens the files under
   `syngate/` — the Claude Code connector denies `Read`, `Edit` and `Write` under `syngate/**` in
   every mode, a shell command reading there refused the same way.
@@ -125,7 +141,9 @@ is one non-interactive turn of the chosen connector.
   calls. It is the same single-flight runner as `▶ Run test` — the records land in the run coverage, the
   statuses recolor, a run live elsewhere refuses the call — and its outcome comes back like a
   query's result: one line per leaf binding with pass/fail, then the output of every failed routine.
-  Review stamping stays the user's act: there is no review call.
+  Review stamping stays the user's act: there is no review call, and a tree call of the AI never
+  clears a stamp — it is left standing over the changed content, a violated review for the user to
+  settle ([SYNGATE.md](SYNGATE.md#item-schema)).
 - **The user's browser goes through the WebSurf tool** (`prompts/websurf.md`, `websurf`), always
   offered: `{"tool": "websurf", "action": "open", "url": "…"}` drives the surf tab of the browser
   extension attached to the server, its answer coming back like a query's result, the page info and
@@ -178,13 +196,24 @@ is one non-interactive turn of the chosen connector.
   The tool's text tells the model how its commits read: what belongs to one change staged
   together, the subject condensing it in the style of the log, never opening with `Review` — the
   review commit's word — and review stamps never committed together with content.
+- **Project files change through the patch tool** (`prompts/patch.md`, `patchlib`).
+  `{"tool": "patch", "diff": "--- a/GUIDE.md\n+++ b/GUIDE.md\n…"}` applies a unified diff to the
+  files of the project root with `git apply`, all of its sections or none, the paths it changed
+  coming back as the next prompt and a refusal carrying git's message for the section that failed.
+  Its guard refuses a diff without a section, a file name without its `a/` or `b/` prefix, and a path
+  that is absolute, climbs out of the project (`..`), names `.git` or the tree (`syngate/`, a rename
+  into it included) or is a symbolic link: the items change only through the tree calls. The Edit
+  files permission is the harness's own, like Tree edit, on by default: while it is off a patch call
+  is refused (`project file edits are off for this chat — switch Edit files on`), the refusal going
+  back to the model as its next prompt.
 
 ## Turn
 
 A turn is a server-side job of the item's chat, addressed as `<UID>:<n>` (`POST /api/turn` starts
 it and refuses a second turn of the same item, `GET /api/turn/<UID>:<n>?wait=<s>` awaits it,
 `POST /api/chat` is the same exchange awaited in one request). It lasts until the connector's
-process exits, and its reply lands in the chat the server holds, so every page showing the item
+process exits — by then every subagent and workflow launched in the turn has reported and the model
+has answered again, the output of its last answer being the turn's answer — and its reply lands in the chat the server holds, so every page showing the item
 picks it up, a reloaded one included; while any turn runs a page keeps one long poll out for the
 next change of the chats (`GET /api/chats?since=<version>&wait=<s>`), one connection however many
 chats are open. A turn is a tree of steps closed by an answer, never the answer alone:
@@ -199,9 +228,9 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   into the activity header; the dispatch's `(reply, session)` shape stays as it is.
 - **Reasoning is requested whenever it may be had.** The harness always asks the connection to
   expose the model's reasoning when the call mode allows it, and records it only when it comes. For
-  the Claude Code connector that depends on the model and the effort — a model without effort
-  levels, Haiku 4.5 among them, has none to expose — so `reasoning` steps are optional in every
-  transcript, never promised.
+  the Claude Code connector every model offers the effort levels, Haiku included, yet whether the
+  model exposes its reasoning still depends on the model and the effort — so `reasoning` steps are
+  optional in every transcript, never promised.
 - **Explicit delegation, harness-controlled.** `{"tool": "agent", "uid", "prompt", "model",
   "effort", "modes"}` runs a turn of the named item's chat, anchored there with that item's own seed
   context. Every `agent` call of a batch runs in parallel after the batch's other calls, the parent
@@ -222,7 +251,8 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   first, with a semantic UID and a statement condensed from the request. The task then goes on as
   an `agent` call to that item rather than as an implicit subagent: only the harness's own turn is
   seeded with the target item's context, and the delegated turn is a turn of that item's chat, shown
-  there live. Only when the fit is the anchored item does the turn keep the work. The extraction
+  there live. Only when the fit is the anchored item does the turn keep the work, and a question or
+  a discussion asking for no change stays in the anchored chat. The extraction
   marks of the chat ([AI_CHAT.md](AI_CHAT.md)) are this routing started by hand, the parent named
   by the mark.
 - **Implicit subagents, observed.** Subagents the model launches inside its own session are

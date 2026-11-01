@@ -6,4 +6,4 @@ test: {singleton: 0489a353743a86153bb667e7648bde6a961d74da5caa7bad2662f8a729bef5
 review: e802a629fd22a245d1ea8b40c5f50e969c22229a31ac18d8f4f604eddc35a988
 ---
 Item chat
-is one per item — its live conversation — addressed by the item's UID and anchored there: the same chat at every occurrence of the item in the outline and in every browser tab, its turns identified everywhere as `<UID>:<n>`, one turn per item at a time — a send meanwhile refused with a notice, the typed text kept — while any number of items chat in parallel.
+is one per item, the same at every occurrence of the item and in every browser tab, one turn per item at a time while any number of items chat in parallel.

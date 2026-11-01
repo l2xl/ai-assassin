@@ -3,6 +3,5 @@ parents: [SYNTHETIC-PROMPTS]
 order: 20
 review: 93b43c58b866f0d611c8c02ec132e8d779207e169337e32da0aa2f8f89613b54
 ---
-A tool shall define the calls — their names and fields — an answer may carry to have the harness execute a command
-
-Every tool definition is part of the default prompt, and every call the harness accepts is defined by a tool.
+Tool
+A tool shall define the calls — their names and fields — an answer may carry to have the harness execute a command, every call the harness accepts defined by a tool.

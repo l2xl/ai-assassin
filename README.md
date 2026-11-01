@@ -102,7 +102,8 @@ python3 -m venv .venv
 ```
 
 `bin/assassin` does the same in one step: it creates `.venv` on first use (with `uv` when present,
-else `python3 -m venv`), installs the checkout editable, and starts the UI with the arguments given.
+else `python3 -m venv`), installs the checkout editable, and starts the UI with the arguments given;
+it installs the package again once `pyproject.toml` is newer than its last install.
 `ASSASSIN_VENV` relocates the environment and `PYTHON` picks the interpreter.
 
 ```

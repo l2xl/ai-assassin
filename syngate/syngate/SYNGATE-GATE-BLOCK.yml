@@ -6,4 +6,4 @@ review: 965e76ea23a10ab77bf1dad38d58d9167828f36668b9c5223a1d04e59652c166
 ---
 Unapproved changes block the gate
 
-The gate shall fail when a reviewed item's content or frozen test routine changed without a user-approved re-review, and in strict mode while any item in the tree is unreviewed
+The gate shall fail when a reviewed item's content or frozen test routine changed without a user-approved re-review.

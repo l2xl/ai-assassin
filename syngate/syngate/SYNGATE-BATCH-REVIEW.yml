@@ -9,7 +9,4 @@ review: 69f1125e28a4c834d7e8c67b86a9a0083f2567bb9fc9bb6fd44a6a0e0fef9428
 ---
 Batch review addressing
 
-The review and clear commands shall accept several requirement UIDs and glob
-patterns in one invocation, expanding patterns against the loaded tree --
-to leaf items for review and to stamped items for clear -- and rejecting a
-pattern that matches nothing.
+The review and clear commands shall address several items by UID or glob pattern in one invocation.

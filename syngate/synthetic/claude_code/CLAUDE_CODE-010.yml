@@ -5,6 +5,4 @@ test: daca64fb69d3898c82eb576458f3e857fdf23a66892795bee1e32170bbc40abf
 review: 4dece989feed4af832e6976b0ad897a2ca471f8bf8a1250c7ff3ca929ff216cc
 ---
 Model and mode listing
-of the Claude Code connector answers a query for its available models and call modes
-
-Every model with its id, a display name stripping the `claude-` prefix and the effort levels it supports — none for a model without reasoning — and the call modes with their label, hint and default state.
+of the Claude Code connector answers a query for its available models with their efforts and its call modes.

@@ -5,6 +5,4 @@ test: c511b9441f6671cb52004c8c9c86a4e04edcc3e0484fb9b4287ac12c83f77eee
 review: 18dacdc1c2f634050bfe72a90f04459846df9b09b8469384c3b504b5bf0a4630
 ---
 Common item label
-is one composite status icon followed by the UID, wherever an item is shown.
-
-The icon is a single element: a circle whose fill carries the test status — green passed, red failed, grey not run — with the review glyph over it: the eyes 👀 (U+1F440) for a standing stamp, the eyes with ❗ (U+2757) laid over their right part, outside the circle and as tall as it, for a violated stamp, nothing for no stamp.
+is one composite status icon — the test status as its fill, the review state as its glyph — followed by the UID, wherever an item is shown.

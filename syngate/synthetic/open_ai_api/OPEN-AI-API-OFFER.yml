@@ -5,4 +5,4 @@ test: 727cd145b0ddf55667ea48b59593a7425b985c7e10080ee9cfb80832751f40ad
 review: c7bdbc3a498c28c0a6b1044c17553094660f68928d147d37d58252e34a959c7c
 ---
 Connection offer
-lists every configured connection by its id among the page's connectors, after the built-in ones, only while it has a model to offer and the API key it declares is set.
+lists every configured connection among the page's connectors while it has a model to offer and its declared API key is set.

@@ -5,4 +5,4 @@ test: b7ba5fc7d9d71568214b2ffb7382a26fcfab9a2172a4303250a7e45167dd35c8
 review: d4fbbdbb0dbc077e779ba3f1952362f03d5b3895832aeeada9f038f5eeaeb344
 ---
 Queried model list
-of a connection whose `models` setting is `query` is the listing of its server's `GET /models`, every model offered without efforts and with the load state the server reports.
+of a connection whose `models` setting is `query` is its server's own model listing.

@@ -6,4 +6,4 @@ test: {query: 017cdf4650f2cc5829bee5f202429b97edd91b8c4192408737894afefb935aa7, 
 review: 04352e9778c2eda84f9244c9b7e1e9e0061f55b089fd44516fe13a97dbed3a3c
 ---
 Sensitive element redaction
-keeps credentials from crossing to the harness: the value of every password, hidden, credential- or card-autocompleting field and token meta element is stubbed `[redacted]` in a DOM query, masked in a screenshot and never filled.
+keeps credentials from crossing to the harness: a sensitive element's value is redacted in a DOM query, masked in a screenshot and never filled.

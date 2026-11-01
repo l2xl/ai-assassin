@@ -6,5 +6,3 @@ review: 73c0e031f8e3c5366e9b126b51556e94c4261a2d18d525d24c04cdc0fec21cb9
 ---
 Row drop
 lands the dragged row at the drop position, re-pointing or adding its parent link without breaking the DAG.
-
-It takes a free order key between its new neighbours, else the family is renumbered.

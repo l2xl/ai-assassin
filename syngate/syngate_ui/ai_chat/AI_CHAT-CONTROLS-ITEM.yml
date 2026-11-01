@@ -5,4 +5,4 @@ test: {marks: 2b8646ede8d35b5e4dc57b40a5551d21deed66d8ea0361163ac389b8682b57e1, 
 review: da8eab235c22b16b58918430a0c65a86dd6d69a32aff51c658220a94b280f912
 ---
 Item extraction marks
-of a message send its kept text as a new turn of the anchored item's chat asking the AI to make it a new child of the anchored item or its next sibling and to carry the new item's task on in that item's own chat, so the AI words the item and names its UID; while a turn runs the send is refused with a notice.
+of a message send its kept text as a turn of the anchored item's chat asking the AI to make it a new child or next sibling of that item.

@@ -87,7 +87,8 @@ entries of the `advanced ▾` drop-down (`.chat-advanced`, present only while th
 such a mode, `.on` while any of them is allowed, titled with every entry's state): the menu lists
 them as `role="menuitemcheckbox"` entries with `data-chat-mode`, `● Label` or `○ Label` titled by
 the hint, one click switching the mode and closing the menu. The switched-on ones go with every
-turn of the chat, the tree and Interactive WebSurf permissions to the harness, the rest to the connector. Which permissions
+turn of the chat, the tree and Interactive WebSurf permissions to the harness, the rest to the connector. A
+delegated turn has a harness permission on only while its parent's is on. Which permissions
 there are, their defaults, what each allows and how a refused call reads are the children of the
 permission switches item. Reading the tree — query and context — is the rail the harness runs on
 and is never a permission, and neither is git, the project's change tracking carrier: its tool is
@@ -136,6 +137,12 @@ limited by its guard alone.
   harness resolves every `@UID` into the item's statement for the turn, appended to the seed
   context as one more section (`@UID`, then the statement), the message text staying as typed; in
   the rendered log `@UID` of a known item is a jump link, as `[UID]` is.
+- **Mention hint.** While `@` is typed in a description editor or a reply line, a hint
+  (`#mention-hint`) opens under the field's left edge, never taking the focus from it: the items
+  whose UID contains the text typed after `@` and the project files whose name contains it. Up and
+  Down move the choice, Enter and Tab pick it, replacing the typed word with `@UID` or with the
+  file's project-relative path; Esc closes the hint with the text as typed, and the hint is absent
+  while no entry matches.
 - **What travels.** A turn resumes the connector's session, so the exchange itself stays with the
   connector. Switching a fold mark drops the session: the next turn starts a new one, headed by
   the transcript of the kept text — the cuts taken out of every message, a message left empty left

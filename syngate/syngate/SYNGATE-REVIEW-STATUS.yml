@@ -5,4 +5,4 @@ test: 4d4b046641b1ee8d406fa093ab4a42ef56eed041995a97eb6e213771cb64b4a9
 review: 5e13bfcdd934593b963e67227fca2f430924321bfa333e95bd0b32f668a47b31
 ---
 Review status axis
-of an item is the superposition of its own review mark and its children's, recursively: not reviewed, reviewed or review violated, where an item's own validation problem is a violated review, violated outranks not reviewed and not reviewed outranks reviewed.
+of an item is the worst of its own review state and its children's.

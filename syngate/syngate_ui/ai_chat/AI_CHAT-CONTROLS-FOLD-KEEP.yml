@@ -6,4 +6,4 @@ test: {marks: 10c360d5e124ac5e24bc9c89bc12934b8d73272ddc6e592c84c9b9a467ae770a, 
 review: 56c506ed94b262bdfef34a0db82a8f3a0b6cfb252d594aef7b0a05b2c8a4698f
 ---
 Fold mark
-of a part of a message is one switch of that text's place in the exchange: unfolded text travels with the next turn, folded text is shown as its first line in grey and does not travel, either switch ending the connector session so the next turn starts anew headed by the unfolded text; the fold marks are frozen while a turn runs.
+of a part of a message switches that text in or out of what travels with the next turn.

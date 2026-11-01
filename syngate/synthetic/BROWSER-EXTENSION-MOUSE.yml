@@ -7,4 +7,4 @@ test: {move: 05edeff296560033742c251c699e7d2bc50b45e8808923de2bfa871678b9330f, c
 review: 900caea69aa3a0b58fffa724c287b402c7e17a553130c6e79e836e4919424c3c
 ---
 Mouse request
-plays its sequence of steps — moves, presses, releases, clicks, double clicks, wheel turns and pauses, at viewport points or selector targets — as the user's pointer would from where the previous request left it: a move as a path of pointer moves with the hover transitions it crosses, a click where a press and its release hit one element, an HTML5 drag from a draggable element, and it answers once they have played, with the page info as it then is.
+plays its steps as the user's pointer would from where the previous request left it, and answers once they have played, with the page info as it then is.

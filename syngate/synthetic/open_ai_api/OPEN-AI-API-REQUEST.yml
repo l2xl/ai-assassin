@@ -5,4 +5,4 @@ test: 4e16dae287136c411cb4c5fa36324303ccadda83590831bf2d796048952420ab
 review: d4921caa09d720dd5234d65263f11f3729b179c4a69e23a48f631546c4131a87
 ---
 Chat request
-carries the API key as the bearer token, none without a key, the seed context as the system message, then the session's earlier messages and the user's text, a turn's images following that text as `data:` URL image parts.
+carries the seed context, then the session's earlier messages, then the user's text with its images.

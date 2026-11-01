@@ -5,4 +5,4 @@ test: {offer: 06d11e4aed0e8470267767fc6b67fe2f6a2a1eabe2fba7f85e41b49de854053e, 
 review: 13bcdee52897f10f31438a8e1223659c9c440130c5403275312c95ebff3c4579
 ---
 Interactive WebSurf permission
-switch of the chat is the harness's own, offered while a browser extension is attached, after the connector's switches and off by default: with it off a websurf `fill` or `mouse` is refused while the passive actions stay on in every turn, and a delegated turn cannot switch it on while its parent's is off.
+switch of the chat is the harness's own, off by default: with it off a websurf `fill` or `mouse` is refused, the passive actions staying on.

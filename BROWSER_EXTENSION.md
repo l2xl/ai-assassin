@@ -1,7 +1,9 @@
 # Browser extension — the WebSurf tool
 
 The extension in [`websurf-extension/`](websurf-extension/README.md) answers the harness's `websurf`
-calls of every AI Assassin server open in the user's browser, each on a tab of its own. This
+calls of every AI Assassin server open in the user's browser, each on a tab of its own, where pages
+load as the user would load them — with their sessions, network identity and location — for the AI
+to read, see and, where permitted, operate. This
 document is how it works — the sessions, the data flow, the protocol and the guards — and how to
 install it in developer mode; installing it is the whole setup.
 
@@ -322,9 +324,10 @@ awaits its first event and reads it in a single round.
 
 All chats of a server share its one surf tab. Any turn may read and act on the page it shows — the origin each
 page action carries refuses it on a page that changed under it — so turns and their subagents can
-work on one page together. Replacing or ending the page is held: the turn whose `open` loaded the
-surf tab's page holds the tab while it runs, and an `open` or `close` of any other turn — but the
-turns it delegated, directly or not — is refused, naming the holding turn. The hold lapses as the
+work on one page together. Replacing or ending the page is held: the last turn whose `open` or
+`close` passed holds the surf tab while it runs, and an `open` or `close` of any other turn — but the
+turns it delegated, directly or not — is refused, naming the holding turn; a call of no turn takes no
+hold. The hold lapses as the
 turn ends, so it is soft: it orders the turns' new pages, it never locks the user or the page out.
 
 ### The bridge protocol
@@ -341,7 +344,8 @@ its Assassin tab's URL carries. Every frame is one JSON object with a `type`:
 | extension | `page` | `event` (`load` \| `history` \| `closed` \| `failed`), `page`, `error` (of `failed`) | a change of the surf tab |
 | either | `ping` / `pong` | — | keepalive |
 
-The harness accepts the upgrade only from a `chrome-extension://` or `moz-extension://` `Origin` and
+The harness accepts the upgrade only on a request addressing a loopback host (its `Host` header,
+else `403`) and from a `chrome-extension://` or `moz-extension://` `Origin`, and
 closes the socket (1008) unless its first message is a version 3 `hello` carrying the session token;
 it then answers `welcome`. One extension is attached at a time: a newer one takes over and the older
 is closed. Until `welcome` the extension answers a `surf` with an error and sends no `page` frame.
@@ -414,6 +418,11 @@ stopped — replaces it at once for a newer token of its origin and closes it wi
   `synthetic.QUERY_ROUNDS`; the results prompt names the rounds left once three or fewer remain, and
   a round past the bound is refused, ending the turn. The tool's text tells the AI to batch what
   belongs together into one answer.
+- **Recovery told.** The tool's text tells the AI that a refusal ends its batch alone — the calls
+  after it did not run — and comes back with its reason and what the surf tab shows; to go on by
+  looking again, changing what was wrong and sending the rest of the batch anew; and to hand the user
+  only what is theirs to settle — a browser to attach, a hidden tab to show, an origin the host lists
+  refuse, a credential to type, the Interactive WebSurf switch to turn on.
 
 The host lists are the `websurf` section of the server settings file `assassin_settings.json`
 (@ASSASSIN-SETTINGS), read at every use:
@@ -466,7 +475,8 @@ the extension serves that server while one of its tabs stays open. Several serve
 served side by side.
 
 The toolbar button opens the options page, a read-only list of the sessions — each server's origin,
-its bridge (`connecting`, `authenticating`, `connected`, `disconnected`) and its surf tab, if any —
+its bridge (`connecting`, `authenticating`, `connected`, `disconnected`) and its surf tab, if any,
+never its token —
 with the **Grant site access** button. The badge counts the sessions connected and shows `●` while a
 request runs. Host lists, where wanted, go into `assassin_settings.json` as above; an edit takes
 effect without a restart.

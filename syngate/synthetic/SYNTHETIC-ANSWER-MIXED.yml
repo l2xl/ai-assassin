@@ -1,7 +1,6 @@
 ---
 parents: [SYNTHETIC-TOOLS]
 order: 50
-sources: [src/ai_scratcher/synthetic.py]
 test: {split: b27ea4e4315f96735cbca7409cc9ab48ae189a838a4f27ed964c5c05ebb0d77e, message: eb85a5ca0db0c51a8b6ae9702d292f296ea2edd2da6af10c9288e4799eaa63f4}
 review: 42be3755022ee2cee1b97808b6bceea244cf896537a584ea3de52c8a14b9c70c
 ---

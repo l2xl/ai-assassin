@@ -5,4 +5,4 @@ test: 1a0e17191fcfcc8886d01339b783410431c6e8301fbae8c72be381cfe7d548a8
 review: 334824f12929e6cb0fef5fc41eebf92a472d569e9786351aa55ef876fd851ae1
 ---
 Claude Code connector
-is the AI connection running the local `claude` CLI non-interactively: a turn is one `claude -p` call with the chosen model, effort and resumed session, its reply and session id read from the CLI's JSON output.
+is the AI connection running the local `claude` CLI non-interactively, one call per turn.

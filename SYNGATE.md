@@ -27,8 +27,9 @@ rollup, as the `syngatelib` library, the `syngate` CLI, `check_self_approval` an
   `review: enabled` turns review stamping on; both are **off when absent**, so a project that wants
   neither the TDD gate nor approval stamps carries plain items only. A root's own binding or stamp
   switches its feature on as well. With a feature off, an item carrying its key is a layout problem,
-  the commands of that feature refuse to run and the page shows none of its affordances; with the
-  test feature off, `review` stamps childless items as approved text. AI Assassin's own root
+  the commands of that feature refuse to run, naming the switch to set (`review: enabled`), and the
+  page shows none of its affordances; with the test feature off, `review` stamps childless items as
+  approved text, and with it on, an item without a binding of its own is stamped without a run. AI Assassin's own root
   (`AI-ASSASSIN`) and Open Trader's (`OPEN-TRADER`) switch both on.
 
 # Item Schema
@@ -70,8 +71,8 @@ The CI pipeline builds the project on every push to the repository.
   immediate child UIDs and is present only for an item that has any, so a childless item's stamp is
   unchanged and adding or removing a child moves its parent's. Recompute with
   `syngatelib.item_stamp(items, uid)`, or `compute_stamp` plus the child set. Stamping is **user-only** — the stamp is the
-  record of user approval. On the root item, `enabled` / `disabled` is the tree's review feature
-  switch instead.
+  record of user approval. A `review` value that is not a sha256 hex reads as no stamp, never as an
+  error. On the root item, `enabled` / `disabled` is the tree's review feature switch instead.
 - A call that moves stamped content settles the stamps it touched one of two ways. With
   `--clear-review` — the page always passes it, and it is yours to pass from the CLI — the stamp is
   dropped and the item reads as *not reviewed*. Without it, as when a call is proxied from an AI
@@ -145,12 +146,17 @@ is their genuine spelling rather than a second implementation.
   Runs whichever way the test feature sits: off only means the tree does not *await* tests of its
   items, so the routines tagged for them still run and still record coverage — with the switch off
   the bindings come from the discovered tags, since nothing is declared. Stamping stays `review`'s.
-- `syngate review <UID>` — **user-only**: validates the item, discovers its bindings, runs the bound
+  A binding the run cannot execute — no or several tagged routines, test binary not built, a binding
+  name the item does not declare — is recorded as failed with the reason; for a binding finding no
+  routine the reason names the routines tagged for the item under its other bindings.
+- `syngate review <UID…>` — **user-only**: validates the item, discovers its bindings, runs the bound
   tests, and stamps routine shas + `review` once every binding resolves to exactly one runnable
   routine — whether that routine currently passes or fails. A failing routine still freezes and the
   leaf simply rolls up as `test_failed` (TDD red state) until the implementation lands; only a
   binding that can't be run at all (ambiguous, unresolved, or not built) blocks stamping. `syngate clear
-  <UID>` removes the stamp (and reverts shas to `~`). Takes `--coverage-out` like `test`. Both are
+  <UID…>` removes the stamp (and reverts shas to `~`). Both take several UIDs and glob patterns in one
+  invocation, a pattern expanding against the loaded tree — to leaf items for `review`, to stamped
+  items for `clear` — and a pattern matching nothing rejected. Takes `--coverage-out` like `test`. Both are
   refused while the tree's review feature is off; with the test feature off, `review` stamps
   childless items without running anything. In a git work tree `review` stamps only over committed
   content: an item is refused, the files named, while its **review footprint** — what its statement

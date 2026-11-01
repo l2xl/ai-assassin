@@ -6,5 +6,3 @@ review: b58f36d725f58cec475e268947830de927d4c44708161525f32d4607e856580c
 ---
 Field save
 writes an edited field on its own as canonical YAML, the other fields untouched.
-
-An unknown parent, a parent cycle or a value changed on disk since it was loaded is refused.

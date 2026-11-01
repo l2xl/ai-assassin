@@ -1,9 +1,8 @@
 ---
 parents: [SYNGATE, SYNTHETIC-TOOL-SYNGATE]
 order: -20
-test: a72fbed94d5879af7e0cdbf21d97b20b8011d61504d482755f641ee67d352aa2
-review: 96e9caafc4905605e20c2f881b8d48e377fa46bb06748005565689c1bcc60878
+test: ~
 ---
 Syngate API
 
-Python based tools/API to work with syngate DAG. The calls except test and review has option to clear review to signal the change is intentional. The option is omitted by default.
+Python based tools/API to work with syngate DAG. The "modifying" calls except test and review has option to clear review to signal the change is intentional. The option is omitted by default.

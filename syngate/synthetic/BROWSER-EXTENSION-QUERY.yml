@@ -6,4 +6,4 @@ test: {whole: 74a2b503a8da86451424bb2efeb97a9fe34549f8833ffa7867205cdbcd4a7494, 
 review: b0290784103830a191454183f4db71cf364fc4e509d6542a188ceb8381140a0a
 ---
 DOM query
-answers the live DOM of the surf tab's top frame — each element a CSS selector matches, with their count, else the whole document — serialized with the current state of its form controls and without scripts, styles and comments, cut to its limit.
+answers the live DOM of the surf tab's top frame, or each element a CSS selector matches, cut to its limit.

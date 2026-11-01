@@ -6,4 +6,4 @@ test: {run: 20dfbca7e87f6c650705ec1b5fb03160f3150bf590c78cf84ce1498d22a42c6d, of
 review: e346ad20579ea88c321ef2e6c0099b8081429c6f59cfb204a475859e83ffee46
 ---
 Git tool
-runs one git command line of an answer — `{"tool": "git", "command": "log --oneline -5"}` — in the project root without a shell, its exit status and output coming back as the next prompt, and is offered to a turn only while the `git` command finds a work tree around the project root.
+runs one git command line of an answer in the project root without a shell, its output coming back as the next prompt, while git is at hand for the project.

@@ -5,4 +5,4 @@ test: e30431a2c73cba6053cabbd2b7c8d54e75552a040ca37fdf39270a2678ad772e
 review: 46e122287fa371b80969d77f5793b0799cd68530f2f38952a2e198460365daff
 ---
 Conversation session
-of a connection is a transcript file of the user messages and answers under the sessions folder of its id, opened under a fresh id by a turn without a session, resent by a turn resuming it and written only once an answer is in; a session the folder lacks fails the turn.
+is kept by the connection itself, resent by a turn resuming it and written only once an answer is in.

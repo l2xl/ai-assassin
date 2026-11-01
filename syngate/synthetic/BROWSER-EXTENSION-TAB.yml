@@ -7,4 +7,4 @@ test: {replace: c193e99c3d3f974753da9bbbe90ebc5dc4e9ebc0c984c2c79c5a71416d7363c5
 review: f04669404ba511764f4942cf5ed59689ac4161bf396f15fb109222dfd8f818ed
 ---
 Surf tab
-of a session is the one tab the extension drives for it: each `open` creates it anew and closes the one before, each answer but that of `close` carries its page info — final URL, title, HTTP status and content type — that a `status` request answers alone, and while none is open every request but `open` is refused.
+of a session is the one tab the extension drives for it, each answer but that of `close` carrying its page info and every request but `open` refused while none is open.

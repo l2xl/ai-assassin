@@ -6,5 +6,3 @@ review: c88f69347b54d8f09626dd024604b03106d937aeca60ea1130dd5008719024e8
 ---
 File view
 opens a file linked from an item inline, served only from inside the project.
-
-Saving is limited to markdown files unchanged on disk since they were loaded.

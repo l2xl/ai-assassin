@@ -8,4 +8,4 @@ test: {run: 7c836dc5697a38cd06df8e84643d950a44bd6810fcf41c2a9ab36235689af90e, ab
 review: 4cbeb26f6a087ae5418976729e3774583629d149b3643ef6dbf35ee7050ac8f6
 ---
 WebSurf tool
-sends each `websurf` call of an answer — `{"tool": "websurf", "action": "open", "url": "https://example.com/page"}` — as a surf request to the browser extension attached to the harness, its answer, awaited with no time limit until it comes, the browser detaches or the turn stops, coming back as the next prompt, the page info and DOM fenced as untrusted content and a screenshot as an image; every answer carrying websurf calls is one round of the turn, each call a chat step showing its action, target and size; with no browser attached the call is refused.
+sends each `websurf` call of an answer as a surf request to the browser extension attached to the harness, its answer coming back as the next prompt.

@@ -5,4 +5,4 @@ test: 58d26c6e7d6945626ea591c103a32d3ecc533fb36d24367061dc1e1b4d252ef7
 review: 950dd0fb57078637bf98c3d548b4cf93d2efbde3784c9bdb9f27e58f3ae91bd3
 ---
 Prompt progress
-of a turn on a llama.cpp router is asked for with `return_progress` and recorded as a prompt step growing with the tokens read, so the request of a long prompt is never silent.
+of a turn on a llama.cpp router is recorded as a step growing with the tokens read, so the request of a long prompt is never silent.

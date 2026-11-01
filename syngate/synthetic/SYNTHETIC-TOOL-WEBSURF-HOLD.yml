@@ -6,4 +6,4 @@ test: {other: e6d1faa9fc17eb98ec196afe29ed7ba88a9c6a50c625a180991d7a11e0c4aa38, 
 review: 89352981aaac772539491890dd1f23b6916422e0ecfc4443c81ba15b7610a793
 ---
 Surf tab hold
-of the harness refuses a websurf `open` or `close` while another running turn holds the surf tab — the last turn whose `open` or `close` passed, unless the caller descends from it by delegation — naming that turn, every turn's page actions passing; the hold lapses as its turn ends, and a call of no turn takes none.
+of the harness refuses a websurf `open` or `close` while another running turn holds the surf tab, naming that turn, every turn's page actions passing.

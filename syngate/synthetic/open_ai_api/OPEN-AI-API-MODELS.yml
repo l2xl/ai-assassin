@@ -5,4 +5,4 @@ test: 36927ab1ceae0909fbdec323af32867a42dffd8814845c0a4488e3cbbd317eba
 review: 146b3c82e2da67d97679e45e759e388ebbd5a7e9f11a8ac258594318ee1f1bf5
 ---
 Model selection
-passes the chosen model id unchanged as `model` and the chosen effort as `reasoning_effort` only with a model listing that effort; a model listed without efforts takes none.
+sends the chosen model id unchanged, and the chosen effort only when the model lists it.

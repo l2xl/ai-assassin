@@ -5,6 +5,4 @@ test: {tab: 8461d908c7e22c4c672c5d765f31cccf775e0c77b061160a12d7a1df43e39e6e, pa
 review: 42776a100162dde83c86ad36c5a21084c6425cd8987ce217b6df285d7dc6b5ef
 ---
 Hidden surf tab refusal
-answers every request, `open` included, with an error and no page info while the surf tab is out of the user's sight — its window minimized, the tab hidden, neither the active tab of its window nor in a split view, or its page reporting itself hidden — until the user shows it again or closes it.
-
-`open`, `close` and `status` go by the tab's state; a page action asks its page too, in the very script that plays it.
+answers every request, `open` included, with an error and no page info while the surf tab is out of the user's sight.

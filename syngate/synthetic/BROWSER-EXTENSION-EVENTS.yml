@@ -8,4 +8,4 @@ test: {load: 9ab7e84de619eec600aeb786267177d31ec31f0d55742d7e081f15a34cb38b43, f
 review: 812737c599c9cd0d640c3cda209614f217d67386a8b921a5526180ba573ae176
 ---
 Page events
-of the surf tab — each top-level document loaded, each top-level navigation failed with the browser's error, each URL change within a document and the tab's closing — are sent to the harness as `page` frames carrying the page info, whoever caused them, its HTTP status and content type taken from the main frame's last response; no other tab is ever reported.
+of the surf tab are sent to the harness as `page` frames carrying the page info, whoever caused them.

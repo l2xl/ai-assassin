@@ -6,5 +6,3 @@ review: e8a5a98d1418faeadf4e31dd772779783247a238fa4d628ef7556e0fe2fa4b09
 ---
 Sub-element delimiting
 inside an item's block — a file view, a chat message — is by horizontal lines, a shift and alignment, never by a full rectangle border.
-
-Its tool buttons and indicators sit on its own bottom line or on the item's left or right border line, level with the sub-element.

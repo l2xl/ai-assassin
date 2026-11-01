@@ -6,4 +6,4 @@ review: e720233787d59d9656de3ef563c3ecf3ab6cdbe9c904773b73d3e883be038962
 ---
 Feature switches
 
-The root item shall switch the tree's test and review features on with `test: enabled` and `review: enabled` — a root's own binding or stamp switching its feature on as well — both being off when absent, and an item carrying bindings or a stamp while its feature is off shall be a layout problem.
+The root item shall switch the tree's test and review features, both being off when absent.

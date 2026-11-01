@@ -7,6 +7,4 @@ test: {capture: 6922d1f1a7ae00b66520b45b65a9f8d3bb3dc073bdad2767e7f582792c82386d
 review: f9a53e9280175540c37a3104f28663c7701ddafd1cefcc2d4522c157855d1ead
 ---
 Screenshot request
-answers the visible part of the surf tab, activated in its window first and captured once its visible top frame has painted twice over the masks — never awaiting a frame out of sight — as a JPEG image scaled to the viewport's CSS pixels, or below them to fit the request's longest edge and area, with the viewport size, the device pixel scale and the image scale, image pixels per CSS pixel.
-
-The masks go into every frame in one injection, else — the browser refusing it for a frame gone under the script — frame by frame, each failure its own: the top frame's fails the screenshot, any other frame still there that laid none is covered whole by a box over its element in the top frame, the answer counting the frames `covered`; the masks are taken away the same way.
+answers an image of the surf tab's visible part, its sensitive elements masked, scaled to fit the request's limits with the scale mapping it back to the viewport.

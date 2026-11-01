@@ -6,4 +6,4 @@ review: f22dab76760b1a980161b66cac9cf808d5874a2817ee4444294caf646ac1cb7d
 ---
 Test-bearing branch
 
-An item with children shall be free to carry its own tests: its test status is the worst of its own bindings and its children's, it is reviewed and frozen exactly as a leaf is, and a stamped routine that changed or is gone violates its review without touching its test status.
+An item with children shall be free to carry its own tests, reviewed and frozen exactly as a leaf's are.

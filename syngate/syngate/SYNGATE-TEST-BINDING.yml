@@ -6,4 +6,4 @@ review: 5c9f3e36378fc9b0186694ae4eeffc4588af578f8574928f70f688724781325a
 ---
 Leaf-to-test binding
 
-Every test-bearing leaf item shall be bound to its covering test routines purely by structural tags -- the default binding by the `[UID]` tag alone, named bindings by the `[UID][binding_name]` tag pair -- with the routine's source location discovered from the tags at check time and never declared in the requirement file
+Every test-bearing leaf item shall be bound to its covering test routines by structural tags alone, the routine's location discovered at check time and never declared in the item.

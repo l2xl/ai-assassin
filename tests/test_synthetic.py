@@ -81,8 +81,12 @@ def test_a_referenced_item_the_seed_context_holds_brings_no_second_copy_and_a_mi
     assert seen["context"] == seed + "\n@SIDE-B\nSide B\n"
 
 
-def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(tmp_path, syngate_tree):
+@pytest.mark.syngate("SYNTHETIC-SEED-CONTEXT")
+@pytest.mark.parametrize("git", [True, False], ids=["git", "no_git"])
+def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(tmp_path, syngate_tree, git):
     syngate_dir, _ = syngate_tree
+    if git:
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "root.py").write_text("ROOT = 1\n")
     (tmp_path / "src" / "leaf.py").write_text("```\nLEAF = 2")
@@ -102,7 +106,9 @@ def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(t
     app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     app.connectors = {"echo": EchoAnswer()}
     reply = app.chat({"uid": "LEAF-001", "connector": "echo", "model": "model-a", "effort": "low", "modes": ["tree"], "text": "Go."})["reply"]
-    assert reply == f"{seed}|Go.|model-a|low||None"
+    offered = synthetic.default_prompt(synthetic.offered_library(git)) + TESTS_ON
+    assert app.git is git and (synthetic.LIBRARY["git"].text in reply) is git
+    assert reply == offered + seed.removeprefix(prompt) + "|Go.|model-a|low||None"
     synthetic.apply_call(items, "ROOT", {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow.", "sources": ["src/leaf.py"]}, syngate_dir=syngate_dir)
     assert items["LEAF-002"].sources == ["src/leaf.py"] and synthetic.seed_context(items, "LEAF-002", root=tmp_path).endswith(root_source + "\n# Source src/leaf.py\n````\n```\nLEAF = 2\n````\n")
     synthetic.apply_call(items, "ROOT", {"tool": "edit", "uid": "LEAF-002", "sources": []}, syngate_dir=syngate_dir)

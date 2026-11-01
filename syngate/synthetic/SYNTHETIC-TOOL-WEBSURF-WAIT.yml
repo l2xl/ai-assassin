@@ -6,4 +6,4 @@ test: {ready: f7d7227240fe4888cff4f0fe7066cad211c8422c34ecb7db75fd18f20fcddf79, 
 review: ecc70afc32b230be31a08af99095874128a2cded97913babe4ad8bc8b0ff95a0
 ---
 WebSurf wait
-is the harness's own websurf action, never sent to the browser: it answers with the number of page events seen once one newer than the turn's last websurf call and its previous prompt is recorded — at once when one is — and is refused sooner on the turn's stop, the browser detaching or past the `seconds` it names.
+is the harness's own websurf action, answering once a page event newer than the turn's last websurf call is recorded.

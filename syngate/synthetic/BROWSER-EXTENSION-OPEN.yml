@@ -5,6 +5,4 @@ test: {pending: df6135a3caeb106e3507427ef499f76a9ff760abcdb2d9a7fccc5be9ab51f3ba
 review: 6944ad23f16282492190392a56f8b894087ec67ffb96c68384eb6e366bf6def9
 ---
 Open request
-loads its http or https URL with the new surf tab in the previous one's place — its window, its index and its placement — opened before that one is closed, and answers as soon as the tab exists with the page info of its pending document, the load reaching the harness as page events; any other scheme is refused.
-
-A previous surf tab in a split view is closed first, its successor placed anew like the first one.
+loads its http or https URL in a new surf tab taking the previous one's place, and answers as soon as the tab exists, the load reaching the harness as page events.

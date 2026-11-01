@@ -1200,13 +1200,22 @@ function decorateFileView(el, f) {
 // An item has one chat, held by the server and shared by every block and every browser tab showing the item; a tab only keeps where it shows it.
 function persistViews() { sessionStorage.setItem("assassin-chat-views", JSON.stringify([...state.views].filter(([, view]) => !view.byEdit && !view.fresh))); }
 function chatOf(uid) {
-  const chat = { uid, log: [], session: null, turn: null, ...chatSetup(Object.keys(state.model.connectors)[0]), ...(state.chats.get(uid) || {}) };
-  return state.model.connectors[chat.connector] ? chat : { ...chat, ...chatSetup(Object.keys(state.model.connectors)[0]) };
+  const chat = { uid, log: [], session: null, turn: null, ...chatSetup(newChatConnector()), ...(state.chats.get(uid) || {}) };
+  if (!state.model.connectors[chat.connector]) return { ...chat, ...chatSetup(newChatConnector()) };
+  return chat.log.length || chat.turn ? chat : { ...chat, ...newSetup(chat) };
 }
-// A fresh view shows the new conversation it stands for: the setup of the chat, nothing of the live log, until a turn runs.
+// A new conversation -- a chat holding no message, or a fresh view -- shows the new-chat setup, so a choice made in any new chat is every
+// other one's; only the advanced permissions switched on in the chat itself stay its own.
+const isAdvanced = (connector, mode) => Boolean(state.model.connectors[connector]?.modes.find((m) => m.id === mode)?.advanced);
+function newSetup(chat) {
+  const setup = chatSetup(newChatConnector());
+  const own = chat.connector === setup.connector ? (chat.modes || []).filter((mode) => isAdvanced(setup.connector, mode) && !setup.modes.includes(mode)) : [];
+  return { ...setup, modes: [...setup.modes, ...own] };
+}
+// A fresh view shows the new conversation it stands for: the new-chat setup, nothing of the live log, until a turn runs.
 function chatAt(row) {
   const view = state.views.get(row.path), chat = view ? chatOf(row.uid) : null;
-  return view?.fresh && !chat.turn ? { ...chat, log: [], session: null, started: null, fresh: true } : chat;
+  return view?.fresh && !chat.turn ? { ...chat, log: [], session: null, started: null, fresh: true, ...newSetup(chat) } : chat;
 }
 // No chat is active for the item in this tab: nothing shown here of a live conversation holding messages, no turn to join.
 const startsAnew = (uid) => { const kept = state.chats.get(uid); return Boolean(kept && kept.log.length && !kept.turn && !chatShown(uid)); };
@@ -1259,7 +1268,7 @@ function messageHtml(m, index, busy, last) {
     : `<button type="button" class="msg-child" title="ask the AI to make the kept text a child item">${MARK.child}</button><button type="button" class="msg-sibling" title="ask the AI to make the kept text the next sibling item">${MARK.sibling}</button>`;
   const [agent, turn] = String(m.agent || "").split(":");
   const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>`
-    : m.agent_report ? `<div class="msg-from">report of ${uidLink(m.agent_report)}</div>` : m.statement ? '<div class="msg-from">statement changed</div>' : "";
+    : m.agent_report ? `<div class="msg-from">report of ${uidLink(m.agent_report)}</div>` : m.statement ? '<div class="msg-from">statement changed</div>' : m.notice ? '<div class="msg-from">harness notice</div>' : "";
   return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${m.agent_report ? " agent-report" : ""}${out ? " dropped" : ""}" data-index="${index}">`
     + `<div class="msg-body">${from}${partsHtml(m, busy)}</div>` + (right ? `<span class="msg-tools right">${right}</span>` : "") + "</div>";
 }
@@ -1450,11 +1459,16 @@ function modelSetup(connector, model, effort = null) {
   const efforts = effortsOf(connector, model);
   return { model, effort: efforts.includes(effort) ? effort : efforts.includes("medium") ? "medium" : efforts[0] ?? null };
 }
+// The setup of a new chat is the one the server keeps in its settings -- the last choice made in a new chat, its permissions checked by
+// the server -- for its own connector; another connector starts with its own model and defaults.
 function chatSetup(connector) {
-  const setup = state.model.connectors[connector];
-  const start = setup.models.some((m) => m.id === setup.default?.model) ? setup.default : { model: setup.models[0].id };
-  return { connector, ...modelSetup(connector, start.model, start.effort), modes: setup.modes.filter((m) => m.default).map((m) => m.id) };
+  const setup = state.model.connectors[connector], saved = state.model.chat_defaults || {};
+  const own = saved.connector === connector && setup.models.some((m) => m.id === saved.model) ? saved : null;
+  const start = own || (setup.models.some((m) => m.id === setup.default?.model) ? setup.default : { model: setup.models[0].id });
+  return { connector, ...modelSetup(connector, start.model, start.effort),
+    modes: saved.connector === connector && saved.modes ? [...saved.modes] : setup.modes.filter((m) => m.default && !m.advanced).map((m) => m.id) };
 }
+const newChatConnector = () => state.model.connectors[state.model.chat_defaults?.connector] ? state.model.chat_defaults.connector : Object.keys(state.model.connectors)[0];
 
 // Showing the chat in a block: wherever the item is shown, in this tab or another, it is the same chat.
 // A view begun where no chat is active shows a new, fresh conversation.
@@ -1533,12 +1547,22 @@ async function updateChat(uid, patch) {
   }
   if (erase || begin) Object.assign(local, { log: [], session: null, started: null });
   if (reset) local.session = null;
+  // a setup chosen where the conversation shown is a new one -- the live chat holds no message, or this tab's fresh view stands in for it -- is the next new chats' too
+  const fresh = [...state.views.values()].some((view) => view.uid === uid && view.fresh);
+  let pending = null;
+  if ((fresh || !local.log.length) && !local.turn && Object.keys(setup).length) {
+    const shown = { ...local, ...newSetup(local), ...setup };
+    state.model.chat_defaults = { connector: shown.connector, model: shown.model, effort: shown.effort,
+      modes: (shown.modes || []).filter((mode) => !isAdvanced(shown.connector, mode)) };
+    state.pendingDefaults = pending = { value: state.model.chat_defaults, stored: null };
+  }
   state.chats.set(uid, Object.assign(local, setup));
   renderDoc();
   try {
-    const stored = await api(`/api/chat/${uid}`, patch);
+    const stored = await api(`/api/chat/${uid}`, fresh ? { ...patch, new: true } : patch);
     if (chatUpdates.get(uid) === seq) takeChat(stored);
   } catch (err) { toast(err.message); reloadChats().then(renderDoc, () => {}); }
+  finally { if (pending) pending.stored ??= performance.now(); }
 }
 
 function toggleChatMode(chat, mode) {
@@ -1633,19 +1657,44 @@ function enterReply(el) {
   else if (!chatAt(row)) openChat(row);
 }
 
-function openChatMenu(chat, anchor) {
-  const connector = state.model.connectors[chat.connector], efforts = effortsOf(chat.connector, chat.model);
+// The setup the menu stands at: the chat's own until another connector or model is clicked, a connector of its own starting from its
+// defaults; it reaches the chat only by the click that completes it -- an effort, or a model taking none.
+function draftSetup(chat, connector, model = null) {
+  const base = connector === chat.connector ? chat : chatSetup(connector);
+  return { connector, ...modelSetup(connector, model ?? base.model, base.effort), ...(connector === chat.connector ? {} : { modes: base.modes }) };
+}
+
+function chatMenuHtml(chat, draft) {
+  const connector = state.model.connectors[draft.connector], efforts = effortsOf(draft.connector, draft.model);
   const mark = (on) => (on ? "● " : "○ "), off = busy(chat) ? "disabled" : "";
-  openMenu('<div class="menu-label">connector</div>'
-    + Object.entries(state.model.connectors).map(([id, c]) => `<button role="menuitem" data-chat-connector="${esc(id)}">${mark(id === chat.connector)}${esc(c.label)}</button>`).join("")
+  return '<div class="menu-label">connector</div>'
+    + Object.entries(state.model.connectors).map(([id, c]) => `<button role="menuitem" data-chat-connector="${esc(id)}">${mark(id === draft.connector)}${esc(c.label)}</button>`).join("")
     + '<div class="menu-label">model</div>'
-    + connector.models.map((m) => `<button role="menuitem" data-chat-model="${esc(m.id)}">${mark(m.id === chat.model)}${esc(m.name)}${m.state ? `<span class="model-state">${esc(m.state)}</span>` : ""}</button>`).join("")
+    + connector.models.map((m) => `<button role="menuitem" data-chat-model="${esc(m.id)}">${mark(m.id === draft.model)}${esc(m.name)}${m.state ? `<span class="model-state">${esc(m.state)}</span>` : ""}</button>`).join("")
     + (efforts.length ? '<div class="menu-label">effort</div>' : "")
-    + efforts.map((e) => `<button role="menuitem" data-chat-effort="${esc(e)}">${mark(e === chat.effort)}${esc(e)}</button>`).join("")
+    + efforts.map((e) => `<button role="menuitem" data-chat-effort="${esc(e)}">${mark(e === draft.effort)}${esc(e)}</button>`).join("")
     + '<div class="menu-label">chat</div>'
     + `<button role="menuitem" data-chat-reset="session" ${off} title="keep the messages, start a new connector session with them as the transcript">↺ New session</button>`
     + `<button role="menuitem" data-chat-reset="begin" ${off} title="start a new conversation — this one is kept, ▾ lists it">＋ New chat</button>`
-    + `<button role="menuitem" data-chat-reset="chat" class="danger" ${off} title="erase the messages and the session of this conversation">✕ Delete chat</button>`, anchor, { chat });
+    + `<button role="menuitem" data-chat-reset="chat" class="danger" ${off} title="erase the messages and the session of this conversation">✕ Delete chat</button>`;
+}
+function openChatMenu(chat, anchor) {
+  const draft = draftSetup(chat, chat.connector, chat.model);
+  openMenu(chatMenuHtml(chat, draft), anchor, { chat, draft });
+}
+// A connector or a model offering efforts only steps the menu on: it is rebuilt in place, the focus on the choice it now asks for.
+function stepChatMenu(draft, next) {
+  const menu = $("status-menu");
+  menu.draft = draft;
+  menu.innerHTML = chatMenuHtml(menu.chat, draft);
+  placeBy(menu, menu.anchor);
+  const entries = [...menu.querySelectorAll(`[data-chat-${next}]`)];
+  (entries.find((b) => b.textContent.startsWith("●")) || entries[0])?.focus({ preventScroll: true });
+}
+function chooseChatSetup(chat, setup) {
+  updateChat(chat.uid, setup.connector === chat.connector ? { model: setup.model, effort: setup.effort } : setup);
+  // a model reporting a load state starts loading once chosen: read the states back for the menu
+  if (state.model.connectors[setup.connector]?.models.some((m) => m.id === setup.model && m.state)) setTimeout(refresh, 1000);
 }
 
 function resetChat(chat, strength) {
@@ -1734,7 +1783,7 @@ function openStatusPopup(row, anchor) {
 function openMenu(html, anchor, props = {}) {
   const menu = $("status-menu");
   if (menu.matches(":popover-open")) menu.hidePopover();
-  Object.assign(menu, { chat: null, row: null, anchor }, props);
+  Object.assign(menu, { chat: null, row: null, draft: null, anchor }, props);
   menu.innerHTML = html;
   menu.showPopover();
   placeBy(menu, anchor);
@@ -2066,10 +2115,14 @@ async function restoreUi(saved) {
 
 let refreshSeq = 0;
 async function refresh() {
-  const seq = ++refreshSeq;
+  const seq = ++refreshSeq, asked = performance.now();
   let model;
   try { model = await api("/api/tree"); } catch (err) { toast(err.message); return; }
   if (seq !== refreshSeq) return;
+  // a new-chat setup chosen here holds until a tree asked after the server stored it tells the server's own
+  const pending = state.pendingDefaults;
+  if (pending && (pending.stored === null || asked < pending.stored)) model.chat_defaults = pending.value;
+  else state.pendingDefaults = null;
   const booting = !state.model;
   state.model = model;
   state.engine = model.engine;
@@ -2258,6 +2311,9 @@ const closeMenu = () => {
 statusMenu.addEventListener("click", (event) => {
   const { chatModel, chatEffort, chatConnector, chatReset, chatMode, chatResume, rowAct } = event.target.dataset, chat = statusMenu.chat, row = statusMenu.row;
   if (!event.target.closest("[role^=menuitem]")) return;
+  const draft = statusMenu.draft;
+  if (chat && chatConnector) return stepChatMenu(draftSetup(chat, chatConnector), "model");
+  if (chat && chatModel && effortsOf(draft.connector, chatModel).length) return stepChatMenu(draftSetup(chat, draft.connector, chatModel), "effort");
   closeMenu();
   if (chat && chatReset) resetChat(chat, chatReset);
   else if (row && chatResume !== undefined) chatResume === "live" ? openChat(row, true) : resumeConversation(row, Number(chatResume));
@@ -2266,12 +2322,8 @@ statusMenu.addEventListener("click", (event) => {
   else if (row && rowAct === "add-parent") startLinking(row);
   else if (row && rowAct === "unlink") unlink(row);
   else if (row && rowAct === "delete") deleteItem(row.uid);
-  else if (chat && chatConnector && chatConnector !== chat.connector) updateChat(chat.uid, chatSetup(chatConnector));
-  else if (chat && (chatModel || chatEffort)) {
-    updateChat(chat.uid, chatModel ? modelSetup(chat.connector, chatModel, chat.effort) : { effort: chatEffort });
-    // a model reporting a load state starts loading once chosen: read the states back for the menu
-    if (chatModel && state.model.connectors[chat.connector]?.models.some((m) => m.id === chatModel && m.state)) setTimeout(refresh, 1000);
-  }
+  else if (chat && chatModel) chooseChatSetup(chat, draftSetup(chat, draft.connector, chatModel));
+  else if (chat && chatEffort) chooseChatSetup(chat, { ...draft, effort: chatEffort });
 });
 statusMenu.addEventListener("keydown", (event) => {
   const entries = [...statusMenu.querySelectorAll("[role^=menuitem]:not(:disabled)")], at = entries.indexOf(document.activeElement);

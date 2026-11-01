@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-011]
+order: 80
+test: ~
+---
+Permission the connector does not list
+shall be ignored by the turns of the chat, without an error, the switch keeping its state.

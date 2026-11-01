@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-011]
+order: 90
+test: ~
+---
+Permission check
+of the list read for a new chat from the settings and for every turn from the chat shall reset a list holding an unknown permission to the defaults, at the source it was read from, with a notice in the chat that the AI is told too.

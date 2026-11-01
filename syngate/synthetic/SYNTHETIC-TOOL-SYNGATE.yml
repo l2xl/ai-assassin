@@ -1,9 +1,8 @@
 ---
-parents: [SYNTHETIC-TOOLS, SYNTHETIC]
+parents: [SYNTHETIC-TOOLS]
 order: 42
 sources: [src/ai_scratcher/prompts/syngate_api.md]
-test: d86351490258d687aada9d32dfcee85344166f02a3cfab4c8bc5e7e4dc8697d2
-review: 58eadd6a4ef62ef1cb0b8b7191592467a1ae6d88bfa2e24adb9b2c4684c716b6
+test: ~
 ---
 Syngate API tool
 is the prompt library's tool through which an answer reads, changes and tests the tree, never stamping a review.

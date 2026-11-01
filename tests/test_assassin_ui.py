@@ -1280,10 +1280,53 @@ def test_an_at_reference_brings_the_named_item_into_the_turn(server, chrome, syn
     assert reply.split("|Compare with")[0].count("@ROOT") == 1  # the contained one brings no second copy
 
 
+MENU_OPEN = "document.getElementById('status-menu').matches(':popover-open')"
+
+
 def pick(page, attribute, value):
+    """Chooses `value` as a whole selection: a connector or a model only steps the selector on, so the steps after it keep their marked entries."""
     page.eval("document.querySelector('.chat-setup').click()")
-    assert page.eval("document.getElementById('status-menu').matches(':popover-open')")
+    assert page.eval(MENU_OPEN)
     page.eval(f"document.querySelector('#status-menu [data-chat-{attribute}=\"{value}\"]').click()")
+    for step in {"connector": ("model", "effort"), "model": ("effort",)}.get(attribute, ()):
+        if page.eval(MENU_OPEN):
+            page.eval(f"[...document.querySelectorAll('#status-menu [data-chat-{step}]')].find((b) => b.textContent.startsWith('●')).click()")
+    assert not page.eval(MENU_OPEN)
+
+
+class MixedConnector(EchoConnector):
+    models = ("model-a", "model-b", "model-c")
+
+    def settings(self):
+        setup = super().settings()
+        setup["models"][2]["efforts"] = []
+        return setup
+
+
+SETUP_MENU = "(() => { const menu = document.getElementById('status-menu'), marked = (key) => [...menu.querySelectorAll(`[data-chat-${key}]`)].find((b) => b.textContent.startsWith('●'));" \
+             " return [menu.matches(':popover-open'), ...['connector', 'model', 'effort'].map((key) => marked(key)?.dataset[`chat${key[0].toUpperCase()}${key.slice(1)}`] ?? null)," \
+             " [...menu.querySelectorAll('[data-chat-model]')].map((b) => b.dataset.chatModel), [...menu.querySelectorAll('[data-chat-effort]')].map((b) => b.dataset.chatEffort)]; })()"
+
+
+@pytest.mark.syngate("AI_CHAT-SETUP-STEPS")
+def test_the_setup_selector_steps_from_connector_to_model_to_effort_and_selects_only_on_the_last_step(server, chrome):
+    page = open_chat(server, chrome, echo=EchoConnector(), mixed=MixedConnector("Mixed"))
+    click = lambda key, value: page.eval(f"document.querySelector('#status-menu [data-chat-{key}=\"{value}\"]').click()")
+    page.eval("document.querySelector('.chat-setup').click()")
+    assert page.eval(SETUP_MENU) == [True, "echo", "model-a", "low", ["model-a", "model-b"], ["low", "high"]]
+    click("connector", "mixed")
+    assert page.eval(SETUP_MENU) == [True, "mixed", "model-a", "low", ["model-a", "model-b", "model-c"], ["low", "high"]]  # rebuilt for the connector, still open
+    assert page.eval(SETUP) == "Echo · a · low ▾"  # nothing chosen yet
+    click("model", "model-b")
+    assert page.eval(SETUP_MENU) == [True, "mixed", "model-b", "low", ["model-a", "model-b", "model-c"], ["low", "high"]]
+    assert page.eval("document.activeElement.dataset.chatEffort") == "low"  # the focus waits on the effort
+    assert page.eval(SETUP) == "Echo · a · low ▾"
+    click("effort", "high")
+    assert not page.eval(MENU_OPEN) and page.eval(SETUP) == "Mixed · b · high ▾"  # the effort selects the whole setup and closes the selector
+    page.eval("document.querySelector('.chat-setup').click()")
+    click("model", "model-c")
+    assert not page.eval(MENU_OPEN) and page.eval(SETUP) == "Mixed · c ▾"  # a model without efforts selects at once
+    page.wait("state.chats.get('LEAF-001').effort === null")
 
 
 class DefaultingConnector(EchoConnector):
@@ -1318,6 +1361,36 @@ def test_the_connector_menu_selects_the_setup(server, chrome):
     offered, setup = page.eval(menu), page.eval(SETUP)
     expected = [names, list(synthetic.CLAUDE_MODEL_EFFORTS[rich])]
     assert offered == expected and setup == f"Claude Code · {rich.removeprefix('claude-')} · {synthetic.claude_code_connector.default_effort} ▾", f"rich model {rich!r}: menu {offered} expected {expected}, setup {setup!r}"
+
+
+SETUPS = "Object.fromEntries([...document.querySelectorAll('#doc .block')].map((b) => [b.dataset.uid, b.querySelector('.chat-setup')?.textContent ?? null]))"
+
+
+@pytest.mark.syngate("AI_CHAT-DEFAULTS", "page")
+def test_a_setup_chosen_in_a_new_chat_shows_at_once_in_every_other_new_chat_while_a_chat_holding_messages_keeps_its_own(server, chrome, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    for uid, order in (("LEAF-002", 30), ("LEAF-003", 40), ("LEAF-004", 50)):
+        make_item(syngate_dir, uid, f"It shall {uid}.\n", parents=("ROOT",), order=order, tests=None)
+    page = open_chat(server, chrome, echo=EchoConnector(), other=EchoConnector("Other"))
+    block = lambda uid: f"document.querySelector('#doc .block[data-uid=\"{uid}\"]')"
+    for uid in ("LEAF-003", "LEAF-004"):  # each with a conversation, LEAF-003's hidden, LEAF-004's left open
+        enter_reply(page, uid)
+        send(page, uid, "earlier talk")
+        page.wait(f"{block(uid)}.querySelector('.chat-msg.ai')")
+    page.eval(f"{block('LEAF-003')}.querySelector('.chat-hide').click()")
+    enter_reply(page, "LEAF-002")  # an empty chat open before the choice
+    page.eval(f"{block('LEAF-001')}.querySelector('.chat-setup').click()")
+    for key, value in (("connector", "other"), ("model", "model-b"), ("effort", "high")):
+        page.eval(f"document.querySelector('#status-menu [data-chat-{key}=\"{value}\"]').click()")
+    assert page.eval(SETUPS) == {"ROOT": None, "LEAF-001": "Other · b · high ▾", "LEAF-002": "Other · b · high ▾", "LEAF-003": None, "LEAF-004": "Echo · a · low ▾"}
+    enter_reply(page, "LEAF-003")  # the new conversation of an item with history starts with it too
+    assert page.eval(SETUPS)["LEAF-003"] == "Other · b · high ▾"
+    page.eval(f"{block('LEAF-003')}.querySelector('.chat-setup').click()")
+    page.eval("document.querySelector('#status-menu [data-chat-effort=\"low\"]').click()")  # a choice in any new chat is every other one's
+    assert page.eval(SETUPS) == {"ROOT": None, "LEAF-001": "Other · b · low ▾", "LEAF-002": "Other · b · low ▾", "LEAF-003": "Other · b · low ▾", "LEAF-004": "Echo · a · low ▾"}
+    send(page, "LEAF-003", "new talk")
+    page.wait(f"{block('LEAF-003')}.querySelector('.chat-msg.ai')?.textContent.includes('|new talk|')")  # not the earlier talk's answer, shown until the new one replaces it
+    assert page.eval(f"{block('LEAF-003')}.querySelector('.chat-msg.ai').textContent").endswith("|new talk|model-b|low|edit,internet|None")  # sent as shown
 
 
 def css_color(page, var):

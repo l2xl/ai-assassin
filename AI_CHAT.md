@@ -70,7 +70,10 @@ the description, the controls on the panel's bottom-left border, `.block-ai`).
 
 The setup pill (`.chat-setup`, titled `connector · model · effort — click to change`; with a single
 connector it reads `model · effort ▾`, the connector named in its title) opens the menu choosing the connector, its model and the
-efforts that model supports, and holds the three resets: `↺ New session` keeps the shown history and
+efforts that model supports, in steps within one opening: a connector click rebuilds the model list in
+place, a model click shows that model's efforts, and only an effort click — or the click of a model
+offering no effort — chooses the whole setup and closes the menu, so a change of connector, model
+and effort is three clicks. The menu also holds the three resets: `↺ New session` keeps the shown history and
 drops the connector session, so the next turn starts a new one headed by the kept messages;
 `＋ New chat` (`begin`) files the live conversation behind `▾` and leaves an empty one, unasked;
 `✕ Delete chat` (`erase`) erases the live conversation's log and session after confirmation
@@ -93,6 +96,29 @@ there are, their defaults, what each allows and how a refused call reads are the
 permission switches item. Reading the tree — query and context — is the rail the harness runs on
 and is never a permission, and neither is git, the project's change tracking carrier: its tool is
 limited by its guard alone.
+
+### New chat setup and the check of permissions
+
+- **New chats.** The connector, model, effort and the main permission switches chosen while the shown
+  conversation is a new one — the live chat holds no message, or this tab's view stands for a new
+  conversation — are kept in the `chat` section of `assassin_settings.json` and are the setup of every
+  next new chat: every new conversation shows it at once — an empty chat already open in another block,
+  and the new conversation an item with history begins when its chat is opened again — only the advanced
+  permissions switched on in a chat staying its own; the page applies the choice locally and keeps it over
+  a tree read until the server has stored it. A chat holding messages keeps its own setup in the chats store and a change there never reaches
+  the settings.
+- **Advanced permissions** belong to their chat alone: they are never written to the settings and a new
+  chat — a new conversation filed behind `▾` too — starts with them off.
+- **A permission the connector does not list** (`Workflows` on an API connection) is ignored by the
+  turns of the chat; it is no error and the switch keeps its state for a connector that lists it.
+- **The check.** The permission list is read for every new chat from the `chat` section and for every
+  turn from the chat's setup, and must be a list of permissions that exist. Otherwise it is replaced by
+  the defaults at the source it was read from — the settings file, the chat's record — and a notice
+  (`harness notice`, a message of the log) says what was wrong and what the list is now. The notice
+  is part of the turn's text, so the AI is told what the user is shown.
+- **Interruption.** An unexpected error of the harness ends the turn with a message saying the chat
+  was interrupted by a bug, not a refusal. A malformed answer of the AI is no such error: it is
+  refused to the AI as its next prompt, naming what is wrong, within the rounds of the turn.
 
 ## Messages
 

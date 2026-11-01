@@ -153,6 +153,7 @@ ROUNDS_WARNING = 3
 ROUNDS_LEFT = "\nRounds of calls left in this turn: {left} — answer in text before they run out."
 ROUNDS_OUT = "answer refused: the turn ran out of its {rounds} rounds (`websurf.rounds` of the server settings sets the bound of a turn that surfs)"
 RUN_TAIL = 40
+ANSWER_REFUSED = "Your last answer was refused, none of it was applied: {error}\nAnswer again in the answer format."
 RESULTS_PREAMBLE = "Results of the calls in your last answer:\n"
 # A message names an item the way a file is named: `@UID` brings the item's statement into the turn.
 REFERENCE_RE = re.compile(r"@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\b")

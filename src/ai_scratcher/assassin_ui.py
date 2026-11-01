@@ -95,6 +95,13 @@ SETTINGS_FILE = "assassin_settings.json"
 SURF_MODE = {"id": "websurf", "label": "Interactive WebSurf", "hint": "type and click in the surf tab of your browser — WebSurf fill and mouse; opening, "
              "reading and looking at pages stay on", "default": False, "advanced": False}
 HARNESS_MODES = ("tree", "patch", "websurf")
+# The `chat` section of the server settings: the setup -- connector, model, effort and the main permission switches -- of every new chat,
+# kept as the last choice made in a new chat. A chat with messages keeps its own setup, in the chats file; advanced permissions are never kept here.
+CHAT_SECTION = "chat"
+# The note a chat is headed by when a stored permission list failed its check and was reset to the defaults; it is shown to the user and goes to the AI.
+MODES_RESET = "The permission switches of this chat were invalid ({why}) and have been reset to the defaults: {modes}."
+# What the user reads when a turn ends on an error that is the harness's own bug, not a refusal or a failure of the connection.
+INTERRUPTED = "The chat was interrupted by an unexpected error in the harness — this is a bug, not something to retry blindly: {error}"
 SURF_OFF = ("Interactive WebSurf is off for this chat: fill and mouse are refused, open, close, status, query, screenshot and wait stay on — "
             "switch Interactive WebSurf on to act")
 # The request of the review commit's message, sent to the reviewed item's chat when no single commit names the review.
@@ -460,6 +467,8 @@ class AssassinApp:
         self._chat_lock = threading.Condition()
         self._writer = None
         self.settings_file = self.root / SETTINGS_FILE
+        self._settings_lock = threading.Lock()
+        self.defaults_notice = None
         # A connector naming a settings section is set up by it, read at every use.
         self.connectors = {name: connector(cwd=self.root, **({"config": functools.partial(self.settings, connector.settings_section)}
                                                              if getattr(connector, "settings_section", None) else {}))
@@ -483,10 +492,11 @@ class AssassinApp:
         """The connectors, the API connections among them brought in line with the `connections` section of the server settings read
         now: one per entry by its id, in the section's order after the built-in connectors, whose names it cannot take; the connection
         of an id already held is kept, with its model listing and its stops."""
-        builtin = {name: connector for name, connector in self.connectors.items() if not isinstance(connector, api_connection.api_connection)}
         held = {name: connector for name, connector in self.connectors.items() if isinstance(connector, api_connection.api_connection)}
+        wanted = [name for name, entry in self.settings("connections").items() if isinstance(entry, dict)]  # the slow read comes first
+        builtin = {name: connector for name, connector in self.connectors.items() if not isinstance(connector, api_connection.api_connection)}  # read last, so a concurrent change is kept
         self.connectors = {**builtin, **{name: held.get(name) or api_connection.api_connection(name, cwd=self.root, config=functools.partial(self.connection_settings, name))
-                                         for name, entry in self.settings("connections").items() if isinstance(entry, dict) and name not in builtin}}
+                                         for name in wanted if name not in builtin}}
         return self.connectors
 
     def connection_settings(self, name):
@@ -499,6 +509,79 @@ class AssassinApp:
         or holds no such section."""
         value = synthetic.read_json(self.settings_file).get(section)
         return value if isinstance(value, dict) else {}
+
+    def write_settings(self, section, value):
+        """Set one section of the server settings, the others kept as they stand, the file replaced whole; False -- nothing written -- while the
+        file holds no JSON object (a hand edit in progress is never overwritten) or cannot be written."""
+        with self._settings_lock:
+            try:
+                data = json.loads(self.settings_file.read_text(encoding="utf-8")) if self.settings_file.exists() else {}
+                if not isinstance(data, dict):
+                    return False
+                draft = self.settings_file.with_suffix(".json.tmp")
+                draft.write_text(json.dumps({**data, section: value}, ensure_ascii=False, indent=2), encoding="utf-8")
+                os.replace(draft, self.settings_file)
+            except (OSError, ValueError) as err:
+                print(f"assassin: settings not saved to {self.settings_file}: {err}", file=sys.stderr)
+                return False
+        return True
+
+    def mode_table(self):
+        """{mode id: advanced} of every permission there is: the harness's own and those every connector lists."""
+        table = {mode: False for mode in HARNESS_MODES}
+        for connector in self.sync_connections().values():
+            for mode in (connector.settings().get("modes", ()) if hasattr(connector, "settings") else ({"id": mode} for mode in getattr(connector, "modes", ()))):
+                table[mode["id"]] = bool(mode.get("advanced"))
+        return table
+
+    def builtin_setup(self):
+        """The setup of a new chat before anything was chosen: the first connector's defaults, the permissions that are on by default."""
+        name, connector = next(iter(self.sync_connections().items()))
+        if not hasattr(connector, "settings"):  # a connector that tells nothing of itself
+            return {"connector": name, "model": None, "effort": None, "modes": [TREE_MODE["id"], PATCH_MODE["id"]]}
+        settings = connector.settings()
+        default = settings.get("default") or {}
+        return {"connector": name, "model": default.get("model") or settings["models"][0]["id"], "effort": default.get("effort") or next(iter(settings["efforts"]), None),
+                "modes": [mode["id"] for mode in [TREE_MODE, PATCH_MODE, *settings["modes"]] if mode.get("default") and not mode.get("advanced")]}
+
+    def chat_defaults(self):
+        """The setup of a new chat: the `chat` section of the settings, its permission list checked against the permissions there are and cut
+        to the main ones -- advanced ones start off. A section whose list fails the check is replaced, in the file too, by the built-in setup and
+        `defaults_notice` tells why. A model or effort the connector lists no longer is left to the page, which falls back to the connector's own."""
+        builtin, stored, table = self.builtin_setup(), self.settings(CHAT_SECTION), self.mode_table()
+        if not stored:
+            return builtin
+        modes = stored.get("modes")
+        if modes is not None and not self.valid_modes(modes, table):
+            self.defaults_notice = self.modes_problem(modes, table)
+            self.write_settings(CHAT_SECTION, builtin)
+            return builtin
+        return {**builtin, **{key: stored[key] for key in ("connector", "model", "effort") if key in stored},
+                **({"modes": [mode for mode in modes if not table[mode]]} if modes is not None else {})}
+
+    @staticmethod
+    def valid_modes(modes, table):
+        """Whether `modes` is a list of permission ids that exist."""
+        return isinstance(modes, list) and all(isinstance(mode, str) and mode in table for mode in modes)
+
+    @staticmethod
+    def modes_problem(modes, table):
+        """What is wrong with a permission list, in words."""
+        if not isinstance(modes, list):
+            return f"not a list: {json.dumps(modes)}"
+        return "unknown " + ", ".join(json.dumps(mode) for mode in modes if not isinstance(mode, str) or mode not in table)
+
+    def keep_new_chat_setup(self, data, table, defaults):
+        """Keep the setup chosen in a new chat -- the live one holds no message -- as the setup of every next new chat: the `chat` section
+        takes the connector, model, effort and main permissions of `data`, the others as they were -- `defaults` -- advanced permissions
+        never kept; `table` is the `mode_table`, both read by the caller outside the chats lock, since a connector may answer slowly."""
+        chosen = {key: data[key] for key in SETUP_KEYS if key in data}
+        if "modes" in chosen:
+            chosen["modes"] = [mode for mode in chosen["modes"] if mode in table and not table[mode]] if self.valid_modes(chosen["modes"], table) else None
+            if chosen["modes"] is None:
+                del chosen["modes"]
+        if chosen and {**defaults, **chosen} != defaults:  # a choice the new chats start with anyway writes nothing
+            self.write_settings(CHAT_SECTION, {**defaults, **chosen})
 
     def surf_lists(self):
         """(allow, block): the WebSurf host lists of the server settings, each the strings of its list; empty while it names none."""
@@ -528,6 +611,7 @@ class AssassinApp:
             stat.update(gitlib.state(self.root).encode("utf-8", "surrogateescape"))
         if self.websurf.attached is not None:
             stat.update(b"websurf attached\n")
+        stat.update(json.dumps(self.settings(CHAT_SECTION), sort_keys=True).encode())  # the new-chat setup is part of the page's model
         return stat.hexdigest()
 
     def _blocked(self, items, uids, discovered, uncommitted):
@@ -590,6 +674,7 @@ class AssassinApp:
             "build_dir": self.build_dir,
             "features": syngatelib.features(items),
             "connectors": {name: {**(settings := connector.settings()), "modes": [TREE_MODE, PATCH_MODE, *settings["modes"], *harness]} for name, connector in self.offered()},
+            "chat_defaults": self.chat_defaults(),
             "git": self.git,
             "uncommitted": sorted(uncommitted),
             "job": job.id if job and job.returncode is None else None,
@@ -795,6 +880,7 @@ class AssassinApp:
         them ends the connector session, so the next turn carries the kept text -- the removal of a failed or stopped turn's message,
         `reset` -- the session dropped, the log kept -- `erase` of the live conversation, `begin` of a new one -- the live one filed --
         or `resume` of the filed one at that index; everything but the setup is refused while a turn runs."""
+        table, defaults = (self.mode_table(), self.chat_defaults()) if any(key in data for key in (*SETUP_KEYS, "begin")) else ({}, {})
         with self._chat_lock:
             chat = self._chat(uid)
             patch = data.get("message") if isinstance(data.get("message"), dict) else {}
@@ -804,10 +890,13 @@ class AssassinApp:
                 chat.erase()
             if data.get("begin"):
                 chat.file()
+                self._advanced_off(chat, table)
             if "resume" in data:
                 chat.resume(_number(data["resume"], "resume", int))
             if data.get("reset"):
                 chat.session = None
+            if (not chat.log or data.get("new")) and not chat.running:
+                self.keep_new_chat_setup(data, table, defaults)
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
             if "model" in data and (select := getattr(self.sync_connections().get(chat.setup.get("connector")), "select", None)):
                 # a llama.cpp router loads the model chosen at once, so the load runs while the user writes
@@ -830,6 +919,12 @@ class AssassinApp:
                     del chat.log[index]
             return self._changed(chat)
 
+    @staticmethod
+    def _advanced_off(chat, table):
+        """Switch the advanced permissions off in the setup of a chat that begins anew."""
+        if isinstance(chat.setup.get("modes"), list):
+            chat.setup["modes"] = [mode for mode in chat.setup["modes"] if not table.get(mode)]
+
     def start_turn(self, data, parent=None):
         """Start one turn of the item's chat -- the typed text joins the log, marked as an `agent` message when a parent turn sent it,
         a `statement` is the content itself and is not repeated as the first message of a conversation, `fresh` filing the live one
@@ -838,6 +933,7 @@ class AssassinApp:
         stamped with the chats `version`.
         A turn of a conversation whose anchored statement changed since its previous turn is headed by the `STATEMENT_NOTE` message."""
         uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
+        table, defaults = self.mode_table(), self.chat_defaults()  # read outside the lock: a connector may answer slowly
         item = self._load().get(uid)
         current = item.description.strip() if item else None
         with self._chat_lock:
@@ -848,12 +944,25 @@ class AssassinApp:
                 raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
             if data.get("fresh"):
                 chat.file()
+                self._advanced_off(chat, table)
             if chat.started is None:
                 chat.started = time.time()
+            new = not chat.log
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
+            problems = []
+            if new and self.defaults_notice:  # the new-chat setup of the settings failed its check and was reset: the chat it starts says so
+                problems.append(self.defaults_notice)
+                self.defaults_notice = None
+            if "modes" in chat.setup and not self.valid_modes(chat.setup["modes"], table):
+                problems.append(self.modes_problem(chat.setup["modes"], table))
+                chat.setup["modes"] = defaults["modes"]
+            reset_note = MODES_RESET.format(why="; ".join(problems), modes=", ".join(chat.setup.get("modes") or ()) or "none") if problems else None
             kept = chat.kept()
             history = [] if chat.session else kept[:-1] if data.get("retry") else kept
             changed = chat.statement is not None and current is not None and current != chat.statement
+            if reset_note:
+                chat.log.append({"role": "user", "text": reset_note, "notice": True})
+                text = f"{reset_note}\n\n{text}"
             note = STATEMENT_NOTE.format(uid=uid, statement=current) if chat.log and not data.get("retry") and current and (data.get("statement") or changed) else None
             if note:
                 chat.log.append({"role": "user", "text": note, "statement": True})
@@ -876,7 +985,7 @@ class AssassinApp:
             except ApiError as err:
                 outcome = {"error": str(err), "status": err.status, **err.extra}
             except Exception as err:
-                outcome = {"error": f"{type(err).__name__}: {err}", "status": 500}
+                outcome = {"error": INTERRUPTED.format(error=f"{type(err).__name__}: {err}"), "status": 500}
             with self._chat_lock:
                 try:
                     if chat.turn is turn:
@@ -968,7 +1077,8 @@ class AssassinApp:
         The steps of every round and the lines of every applied batch are recorded in the `turn` as they happen."""
         uid, text, session, applied, calls = data.get("uid"), str(data.get("text") or ""), data.get("session"), [], []
         history = [message for message in (data.get("history") or ()) if isinstance(message, dict)]
-        modes = list(data.get("modes") or ())
+        offers = {mode["id"] for mode in getattr(self.sync_connections().get(data.get("connector")), "settings", lambda: {})().get("modes", ())}
+        modes = [mode for mode in data.get("modes") or () if mode in HARNESS_MODES or mode in offers]  # a stored mode the connector dropped is not sent
         tree, patch, interactive = "tree" in modes, "patch" in modes, "websurf" in modes
         events, images, rounds = websurf.watch(self.websurf), [], self.surf_rounds()
         if not tree and text.strip():
@@ -1006,7 +1116,11 @@ class AssassinApp:
             try:
                 kind, payload = synthetic.parse_reply(reply)
             except synthetic.protocol_error as err:
-                raise ApiError(422, f"answer refused: {err}", session=session) from None
+                refusal = f"answer refused: {err}"  # the AI hears it as its next prompt and answers again, within the rounds of the turn
+                batch_step([refusal])
+                applied.append(f"- {refusal}")
+                text = synthetic.ANSWER_REFUSED.format(error=err)
+                continue
             if kind == "chat":
                 return {"ok": True, "reply": "\n".join([*applied, payload]), "session": session, **({"calls": calls} if calls else {})}
             items, results, shown, refusal, detail = self._load(), [], [], None, ""
@@ -1318,11 +1432,7 @@ class AssassinApp:
         chat, connectors = self.chats.get(uid), self.sync_connections()
         if chat and chat.setup.get("connector") in connectors:
             return dict(chat.setup)
-        name, connector = next(iter(connectors.items()))
-        settings = connector.settings()
-        default = settings.get("default") or {}
-        return {"connector": name, "model": default.get("model") or settings["models"][0]["id"], "effort": default.get("effort") or next(iter(settings["efforts"]), None),
-                "modes": [mode["id"] for mode in [TREE_MODE, PATCH_MODE, *settings["modes"]] if mode.get("default")]}
+        return self.chat_defaults()
 
     def cancel_job(self, job_id):
         job = self.jobs.get(job_id)

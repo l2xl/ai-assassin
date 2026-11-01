@@ -1,0 +1,7 @@
+---
+parents: [AI-CHAT]
+order: 180
+test: ~
+---
+Malformed AI answer
+shall be refused to the AI itself as its next prompt, naming what is wrong, for it to answer again.

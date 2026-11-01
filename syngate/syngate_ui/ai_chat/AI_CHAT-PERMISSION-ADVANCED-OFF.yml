@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-PERMISSION-ADVANCED]
+order: 40
+test: ~
+---
+Advanced permissions of a new chat
+shall be off, those switched on in a chat staying with that chat alone and never kept in the settings.

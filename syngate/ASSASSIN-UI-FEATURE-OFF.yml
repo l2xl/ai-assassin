@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 50
 test: fc7f5c3a9c3d63ddb41cbd3a35b60d1c0e619071bd31e7a2fd06bbe804fe8cfe
-review: 6ce65a44c497af74f7a7a55fbd39fa78faff21488d02bd1f07c9e24b48d18fcd
+review: 4bc1aaa417df0e80a56222359ed9815598e9e0ddcd08150fce088a51ea334739
 ---
 Feature-off affordances
 are none: a switched-off feature shows nothing of itself on the page, a test run staying offered whichever way the switches sit.

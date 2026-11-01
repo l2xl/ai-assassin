@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE]
 order: 140
 test: cafd0c24177e75bed5de7c6ed105aa0f8389fc531a115191e9c90acfb517f373
-review: 00a2679051865a45f5087bdaf52a60e1117612cd21dfdb24abb37fd905e30b77
+review: 2fe5a4447e9f301996d913a31cca8047caebcd6b7648a3485704b8c70ea14d57
 ---
 Claude Code skill delivery
 hands every skill on request of the library to the CLI as a Claude Code skill, its text absent from the seed prompt.

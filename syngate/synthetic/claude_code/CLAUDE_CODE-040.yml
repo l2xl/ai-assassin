@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE, AI_CHAT-PERMISSION-WORKFLOWS]
 order: 40
 test: 0b83bcbb031583d439bcaf0d660d1328218adb1dd55e6f1f5a3c163f81fcdacb
-review: 3b9d13b9ef21919d99e01a62a86da8154e07741b06235b6dd1f3068ad083c1c9
+review: a51e0e752b411d47fd9adb657e52cbc82d284ad1d027220137a4c41c001d69b0
 ---
 Workflows mode
 instructs the Claude Code connector to call `claude` with the workflow tool allowed without prompting.

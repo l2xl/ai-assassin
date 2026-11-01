@@ -4,7 +4,7 @@ order: -5
 sources: [websurf-extension/surf.js, websurf-extension/page.js]
 test: {replace: c193e99c3d3f974753da9bbbe90ebc5dc4e9ebc0c984c2c79c5a71416d7363c5, status: beb1088d6417d9d6d24bd2b30cf7cbb4770d2e076744b0739b82afc1fe385e8d,
   absent: cf7e9c6844a07250a6404b327bcdc1fe6a2a648dc22e2ca771211a26512372f6}
-review: f04669404ba511764f4942cf5ed59689ac4161bf396f15fb109222dfd8f818ed
+review: 987fb14400b3f6d31099f2a78ce4c03fbaeff4df88cf350b8dc96baa5e901cf0
 ---
 Surf tab
 of a session is the one tab the extension drives for it, each answer but that of `close` carrying its page info and every request but `open` refused while none is open.

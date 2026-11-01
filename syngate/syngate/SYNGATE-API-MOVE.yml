@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-API]
 order: 10
-test: ~
+test: 454c5955b408ba035d181f93b3392ee4d3422e4aa21f941b219ea60ea87336a9
+review: 9e11ce81892c154e1250ba0bfd3b34888e3d87f31a9107556e9f0c9dd4c2caa7
 ---
 Move thesis to another parent
 

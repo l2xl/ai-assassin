@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 10
 test: d71b1d4843d567db38524321de46fd3630e2976a7274a50369db183e3807e9ae
-review: 06996682a310438fb1811ace0e1d381fb4bfc9091b0ee889bfaf17da3e64a383
+review: 8a587285afec8a2bc4d8b1c0c7825540685561bf0b277bdffec809b52e765d45
 ---
 Reply line
 waits empty under every item's statement; entering it shows the item's chat, and a message sent from it goes to the exchange without touching the item.

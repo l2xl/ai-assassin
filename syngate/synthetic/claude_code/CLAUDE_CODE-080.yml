@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE]
 order: 80
 test: {interrupt: 6f24efcc1d9b09539963c2aa9bc8d4f6a847700072d2c84ed96d8d5496477960, gate: 03db8f24b6a0f4432075db9c94a2e42654fcad9c3beb02aa98cfd9b3675351ec}
-review: 3c5526ff163a53ff3fe601b6336d534a8d7291c1ff5de11e150fdb752b1da5e8
+review: af12dab5d22a020d38c28f439d1ae31e93466eadf1a650a1aac2e591ee485f3e
 ---
 Immediate interruption facility
 of the Claude Code connector ends a turn the instant the stop is received, nothing of the turn applied past the stop.

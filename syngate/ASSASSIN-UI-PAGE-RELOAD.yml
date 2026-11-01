@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 95
 test: cbd0e6665be1baa669682a9c5200dbd54ee41916da7376f1d8b81294895e890c
-review: abd93b6b6b45fe85687ef9367a34a4ab10e43f341bd19c5d7e322762629ac561
+review: 9c08c672f1f721656ddd0711a6e88366187d8d4048186fbfec18eebdf7173466
 ---
 Page update reload
 follows a change of the page's file on the server, a tab reloading itself once idle and keeping its view state.

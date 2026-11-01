@@ -2,7 +2,7 @@
 parents: [AI_CHAT-070]
 order: 10
 test: 5bb830c21480f1d60618b375ccdd5ad7dceea3d05175fcbfad0057a77d5c62e1
-review: 5c4ab574c2e0ac872753d81e10f71f814e48b73cf566eb7560535b6e258c2be2
+review: 6592ff28c6229f47e7f957a5858f73358da964b1059d259fccde797c94458790
 ---
 New conversation by entry
 is shown, empty, when the reply line is entered while the item's chat holds messages and is shown nowhere in the tab.

@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-API]
 order: 20
-test: ~
+test: 2fa248af2547af8027dc02dd78ec0f83256a26d2cf22e63ad08ddda5fc1e1815
+review: 3c220c8b9b888d5b39359df479828f5c9ee6f85e3636b8573df5dfac1037730b
 ---
 Edit thesis
 

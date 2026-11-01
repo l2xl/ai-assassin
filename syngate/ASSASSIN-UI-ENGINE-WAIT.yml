@@ -1,7 +1,7 @@
 ---
 parents: [ASSASSIN-UI-ENGINE-RELOAD]
 test: f579dfc7fadba3e5b0a6c0538e6e79b3f21864ba7ef82dd79a1f353a2e1f5bea
-review: b3df6f4310a016d8650b08aefa5b09b4b1d03f6ee65f02d13a39da619e25d35c
+review: daea8b3c49587423e7cd4192eb66c4b235a4f2c565c21fbc29e12016a9b54b90
 ---
 Restart deferral
 holds the restart while any turn, background subagent or run is live, its `restart now` stopping them first.

@@ -2,7 +2,7 @@
 parents: [AI_CHAT-070]
 order: 30
 test: 2e652db312985858e4979b7adf59cab40e3de4130c58e7c05de7f2235cd585f3
-review: 39854023c2d8ce75567d545e36a94edbd88e65f26a09a6e979aa5cf0e5babecb
+review: 92cb95fa41417446100fd3dc8ac54404d9b6b77ef4c5eb429a31ce79dfce16fe
 ---
 Reply clear mark
 empties the reply line of the open chat and the text the tab keeps for it.

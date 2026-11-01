@@ -1,7 +1,7 @@
 ---
 parents: [ASSASSIN-UI-FIELD-SAVE]
 test: 445efa5e3cfa5ae68483502352075f098f3ac0b9c124fb84ccdb09e1bb74b014
-review: 69224c5097facfc2d00654931a69ac375e3c97167ad23672fb9fbb2f524016bd
+review: 8d9d67aeddbccbe43c8987d7eac9e200f3abd7f59163edaf583a39f2cbc2b34b
 ---
 Edit conflict bar
 appears under the header when a save is refused for a value changed on disk, offering to keep the typed text or take the disk value.

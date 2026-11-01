@@ -1,7 +1,7 @@
 ---
 parents: [AI_CHAT-011]
 order: 70
-review: 8a0f586d850032167a8c4c06353334cbee091f46e9a2cf580908c3ae29305984
+review: 25bb8a8e158b9a6089f856d0d02ea6001af53abce69607ae79fcad2df186e876
 ---
 Advanced permission drop down list
 of the chat gathers in one `advanced` pill the switches a connector marks advanced.

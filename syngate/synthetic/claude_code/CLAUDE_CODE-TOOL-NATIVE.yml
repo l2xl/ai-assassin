@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE]
 order: 160
 test: 338dcd04e687fe16f12bc55b43558a2357f8036fc6f502cbea481988f67596d4
-review: 4c8075b3eca1e118e44b9d761162b02b15dcde73e80fd1f5c4a372f815105670
+review: 9ffdff1f7a569d8fd6d89332b064ee8a8ef5389dc445fe5fe4066cc7a5be71d3
 ---
 Claude Code tool delivery
 builds the schema of the structured answer from the library's tool definitions, so a tool added to the library reaches the CLI without a change of the connector.

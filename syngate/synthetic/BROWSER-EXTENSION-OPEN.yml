@@ -2,7 +2,7 @@
 parents: [BROWSER-EXTENSION-TAB]
 test: {pending: df6135a3caeb106e3507427ef499f76a9ff760abcdb2d9a7fccc5be9ab51f3ba, scheme: 8e158e0ba3d5f6d097af6e96fe700d6619700b17be65cb039bc5e6f7c3a52ccb,
   place: 7f8ef9410b9d53661c5785131a7c25d82088152192f86396a722cef4edc237fc}
-review: 6944ad23f16282492190392a56f8b894087ec67ffb96c68384eb6e366bf6def9
+review: 6ca90acd55f6f0979ec4297b586e13c19996f6dab531a59a62f9f4880b899c6e
 ---
 Open request
 loads its http or https URL in a new surf tab taking the previous one's place, and answers as soon as the tab exists, the load reaching the harness as page events.

@@ -2,7 +2,7 @@
 parents: [AI_CHAT-CONTROLS]
 order: 30
 test: 7dcc0775da929634c21637fe250bcd9bf2f7c4ce2e7fdd6481bf9462ba8e5a89
-review: a445e27a994bd7a0169063b1dc8f5731e98715ce624a3021b34775719771594e
+review: 909ead005f088450827309645c683108399df90969cf1e8d5a7ede388cda1e9c
 ---
 Selection marks
 replace the message's own while text inside it is selected, acting on the selected text alone.

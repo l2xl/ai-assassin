@@ -5,7 +5,7 @@ test: {scheme: 8e7a8c12b0c1dc8b0e2202a03d609a2e73819d7362592dc8bde6724d7225eef5,
   origin: d1a859dc0a577a27f929577af0cb753003a9d10659fcd7792d4b597aa8e37adf, landed: 5c3d4339a5a00e85bd174d72b1d41806740d84f1aaee93fffcc34d92c328e938,
   event: 00b7196ac701762991979d479da66bb0d782129bfd6b829e5d984a6c27f48f85, action: af951c00a7b8348f161a10c6421fc5892ca2de0800daded692e39e0d8f848a51,
   size: 261825421a06637a41e931a002bd38213caccd5bb6f6d458f2e42fe45d8b2722}
-review: fd0711e281050e8c2bdd0defef2977079e26ce8c4072fcd4714edd07eb78694a
+review: 310eed3cdd887bc71b46af93fc90eeb2316a3f8257c801fe8bc1247df7170669
 ---
 WebSurf guard
 of the harness refuses a websurf call before anything reaches the browser unless it is well-formed and the origin it names passes the host lists, and withholds a landed page those lists refuse but for its origin.

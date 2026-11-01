@@ -2,7 +2,7 @@
 parents: [SYNTHETIC-TOOLS]
 order: 30
 test: 8e728c68c70e4062bcdbdb09b7d9364058195328acb0f04b0fc1630b0ad72cd4
-review: 0b64ac3c95db9d058f2c9564a47d08f9bb3ab0cecfa93ee0f1283dc60da5ada1
+review: 22b93074dad7a0f5ca3acf0699753cc7a5c01dcc892ccd74108418084593160d
 ---
 Background agent call
 starts the child's turn without the parent awaiting it when the call carries `background: true`, the child's report joining the parent's chat when it ends.

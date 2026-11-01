@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE]
 order: 150
 test: c7a12dd0d3550cd1417d74fb835d1d6ad5be85526926fc6d9ec31d00739d0ddd
-review: 3edec3b19f6d42939be67f78a920604b9a9b3a00f48a831582139b9f5623b11d
+review: a6b24cfd2de40c2eeeecb5f30280fa6d97028c1956f9f1f14d7d38b2168bb115
 ---
 Native skill use
 shows the underlying model calling a skill that reached the CLI only through the library argument.

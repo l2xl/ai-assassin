@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 100
 test: 2eb8a78b0a1ff5dc911bfa0d1e6a422f40e3ba2a9f23e4da43ee71161053a19d
-review: 4a9795f984035c49e90280fd1b66fc4b6ee6195b1959f9f1001503d4efc519cc
+review: 28cf641f13bcad90419ea216a86603ba8dba26d8619a5c01a26b352bf4f47a0e
 ---
 Outline filter
 narrows both panes to the items matching the typed text or the chosen test statuses.

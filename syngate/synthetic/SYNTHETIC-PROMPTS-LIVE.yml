@@ -2,7 +2,7 @@
 parents: [SYNTHETIC-PROMPTS]
 order: 30
 test: e593a3ee178445e0b38c9dfacc72ba968545ae189b856526f133925d3e0fb4dd
-review: b4fdd16dc813e5784b48c372d7e9ffaccbdf7f6b91533ae24865a1f42e608647
+review: ce65e8f273c31714f369c08d8f36cc7665e7c43e6855087f84e3f427e170c7fb
 ---
 Live prompt library
 is read from its files anew whenever a prompt is needed, so a prompt file added, edited or removed shapes the next turn without a restart.

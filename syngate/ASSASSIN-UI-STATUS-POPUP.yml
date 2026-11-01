@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 40
 test: {label: 2a39c3d89683e8bd581e9aa83328b58b141ff0a3cc3d0ce28dff19b4a8c964a7, row: f723114cf2cfb0902ed186d4eb22fb1b429ec6b007719db808a0254164929d92}
-review: f701cd2c54537788002e748ec0e3fd16616ec9cb2f8732072c273a6cb81677fb
+review: af21166e9e0f29fed8b9acadb9b8373f9d169c44e852dcc5d844e907dc384594
 ---
 Status popup
 opens from the composite status icon of the common label in either pane and details the item's two status axes, nothing else on the page showing the status in detail.

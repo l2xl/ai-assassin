@@ -2,7 +2,7 @@
 parents: [BROWSER-EXTENSION-PLACEMENT]
 order: -10
 test: 6abb558723cb2af47b9f6b112267624fbff14518d4002910bd9bf486416ed1d2
-review: c77c4b09a5fc5056932c6f633d5f117fd24bfa22655cb62812226db6ceea5b60
+review: 2d2715219e2045ef9080d0848dde683c052332e1859d8563c0ebfb1559bddda3
 ---
 Surf window label
 `WebSurf <port> · ` prefixes the title of every surf window the extension creates where the browser takes a title preface, so the user sees which server's AI drives the window.

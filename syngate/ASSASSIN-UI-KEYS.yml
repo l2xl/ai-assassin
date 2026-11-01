@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 110
 test: 5bf1ac1588005dd9bd8f1621a5329636f4400a39acd2e17a2d80e53c08c37a03
-review: d8164e088a422969babe0e0b50ecf0083f952b9523e431be7bb293d8a456cc32
+review: da36ab6460b93a10bf5875fdb09b74f6d7ff770dcbefb4721408208e78d809f9
 ---
 Keyboard navigation
 moves the selection in the pane holding the focus and reaches every action from the keyboard, ? listing the keys.

@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 120
 test: 8c97a4eaa67fb9c5c0b2453cf98477b75cde8fc0ec70e513e08ca25ee46d6fd8
-review: 3e19e5365e62e045495862124ed9a770a0492422e71f7c939ccdf1ba7de6ee13
+review: dda315bd06641afe9f48de03af02e2a3edbc5fe0b4c9404f9129fa3de99e1ff0
 ---
 Narrow layout
 stacks the outline above the document on a narrow viewport.

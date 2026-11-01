@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 150
 test: b0e21fc5cdd069f090885e950bd6554dd601ca271c3cb66e4803580cedd1d930
-review: 8571fe7a2eacd7add6dbf59a3c252e18776e048872413211eeb07d25254b31ea
+review: c50f642e13d553bb2d414e8cff2803ffcbc3eda60f0ec46808bb2a894aa4b33b
 ---
 Message marks
 are the fold and extraction marks on the block's border lines of every message but the statement, shown while the pointer is over the message and none of its text is selected.

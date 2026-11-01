@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE]
 order: 170
 test: 543c8dfff793e59bf82e81b78d34c3c46e8d845050a2481dac86b28dd2088f21
-review: 8be94c793a5e5b3b66aa19d3ce1342b688e3ea2aa373c793c62e3cde51adb9df
+review: 580c2ee33ca66144616d380906867f92f0a0833944acd439e1aec33a196a6864
 ---
 Native tool use
 shows the underlying model answering with a call of a tool that reached the CLI only through the library argument, the reply parser accepting it.

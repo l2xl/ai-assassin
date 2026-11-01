@@ -2,7 +2,7 @@
 parents: [SYNTHETIC-SKILLS]
 order: 40
 test: bce83d934514e2c678efa528c8d6f78ac2bebf58ddfeb3461a6e41596413d9b0
-review: 2dcf893be0e33c23e7f5efd76630713b58007b78dde39d2fadc33d3927c1faa7
+review: 4bc6582d5a779161faf1037067439f1563813fbdd77f412279a9d23d87512064
 ---
 Seed context skill
 is a default skill stating the format of the seed context and that what the context includes is not read again.

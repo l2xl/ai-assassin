@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI-CONTENT]
 order: 40
 test: {read: f9742f67fb850be2e7f02cc6e4589f1eece581ad73b68033c35fe6356f3e30b2, save: 6dad5c5e44fae8d0fc34fa4786aed5af32e3a52ddde7d63a3b143b2632016e44}
-review: c88f69347b54d8f09626dd024604b03106d937aeca60ea1130dd5008719024e8
+review: 87a83d3f37efaf0c836b95d06e66168a9c2f23f27bf3d15965653c6d1ca239d6
 ---
 File view
 opens a file linked from an item inline, served only from inside the project.

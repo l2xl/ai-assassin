@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 70
 test: 9a8d6f8905bbe2efcb9f4e9167ea3d23a045e55491455545faac4af497179c4f
-review: c2ef86f9562a6c64225210b5826875aa35016963a1cbf71c6b3ba6d6a048fe14
+review: 612ae9de3cb254534d69bdd65bf7956db78d97df26fd1ecf146865ed671733f2
 ---
 Event streaming
 records the reasoning the stream exposes as a step growing as it comes and closes the turn with its usage.

@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 40
 test: 4e16dae287136c411cb4c5fa36324303ccadda83590831bf2d796048952420ab
-review: d4921caa09d720dd5234d65263f11f3729b179c4a69e23a48f631546c4131a87
+review: 724763bc53dec9ecffad4c6fe5b3fd08227b0588ae24e08f5aaee24f7360f734
 ---
 Chat request
 carries the seed context, then the session's earlier messages, then the user's text with its images.

@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI-CONTENT]
 order: 50
 test: 35cec2e036e1b26a384da48f49982f2d44e778d66ec507d53f0bef990a30414b
-review: 20f5f40752df6bc148e791d0ffec212a18a81587372c15dcce24d8d4ca798615
+review: 916e635abe86b4209fe524ee476a599dc16332766fb2c14b8024c5a3851fba3e
 ---
 Item reference link
 renders `@UID` of a known item as a link that activates the item's block and unfolds the outline to it.

@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 130
 test: {api: 0f80beab4ea956b98da036045fe75be3a71825e1d358d7fa87a13354649d557a, reset: ecb12e086ed8d08bcfcc6bdbfda38fedec762d6ee90c512ac993fe47e97b91fe}
-review: cd79db08fb9fde042382b5f8c9e896e4f7febe1d09c0259f0c1585db9799e741
+review: f90cb8f79a98df80478634933a7a37506bb30c2469359ba53d7b0972afa06c7f
 ---
 Chat reset
 is offered in the setup menu as a new session, a new chat and a delete of the live conversation.

@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 38
 test: 776fad0376e93407449fce2976f23aca1c3fd572db21e6b6b071834d9848abd7
-review: 5430e577afbad7ae423ac0486736d0df949d942a4c8f18d044e4b37cc331610e
+review: b61fbf36bfc82f716d8198c757070b212d72a6a8da811f56c25241c47aa221f7
 ---
 Immediate model load
 asks a llama.cpp router server to load a model the moment a chat selects it, ahead of the chat's first turn.

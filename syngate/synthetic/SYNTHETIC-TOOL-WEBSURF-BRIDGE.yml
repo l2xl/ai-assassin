@@ -3,7 +3,7 @@ parents: [SYNTHETIC-TOOL-WEBSURF]
 order: -10
 test: {welcome: 055251b8f7a3fb30e9b7888522746b3ab8372dc212d2bd98949269073d6dadd0, refuse: 41d93292136571a3aa09ab43da8e0a4d054fbcd0729f867866f3a9cd6bfb0431,
   single: 39d110f8a218647ef13aad3456a4306f4bd3d31ab11f934a564c35f30d5fed71}
-review: 2346dd51736a4ecef61a4437aebf3c542507a4fe30d07f0cd76bc88be705f5cb
+review: c7e8d225c85a14605e52be6be8169abc6dde326e4719bfbb5f68210324678464
 ---
 WebSurf bridge
 of the harness attaches one browser extension at a time over a loopback WebSocket once its first message carries the session token, every result handed to the request of its id.

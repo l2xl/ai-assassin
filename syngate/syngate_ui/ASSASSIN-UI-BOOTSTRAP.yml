@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI]
 order: 5
 test: b249017d5d2e6542be5654994e2f11ccf55b24b72a453e6779e340bf168d5611
-review: 7028d9b43eaffd5bcbeac92d109cd1598de11cf9423a7c58370e2842e77b3e34
+review: 79620e167ee0c6586cd9b9bbfcdebc5954224c2771da89b3936fb393d6ea20e8
 ---
 Auto project bootstrap
 runs when the `assassin` command starts on a project without any item file, creating a root item named after the project.

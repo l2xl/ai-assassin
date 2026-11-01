@@ -2,7 +2,7 @@
 parents: [SYNTHETIC-TOOL-PATCH]
 order: 20
 test: 6ade3d9c680e69c41c36ef52d1586cc89b9954b3526eee7b6eb3663368a24bb6
-review: c30a30785c0b66b002099591dff41c3de26678b2cd716b2a41e81f66d8659b85
+review: b33ae33789c1247e93db7c2af265b7d80af813ec4a697a25cb4ac0e1168852a6
 ---
 Patch guard
 A patch shall be refused when a path it names reaches the tree, leaves the project or is a symbolic link.

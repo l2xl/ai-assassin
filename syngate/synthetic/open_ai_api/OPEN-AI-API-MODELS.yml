@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 30
 test: 36927ab1ceae0909fbdec323af32867a42dffd8814845c0a4488e3cbbd317eba
-review: 146b3c82e2da67d97679e45e759e388ebbd5a7e9f11a8ac258594318ee1f1bf5
+review: a93be166db395ba4231561555c1d772542921eb10016be8b401c5e2ab815abdf
 ---
 Model selection
 sends the chosen model id unchanged, and the chosen effort only when the model lists it.

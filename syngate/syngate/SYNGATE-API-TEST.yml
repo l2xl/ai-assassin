@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-API]
 order: 30
-test: ~
+test: 3ecd8091287f8eed574b3d27ef07b724ba60645fe512b0e33c5bfe4d0ff528d5
+review: 32fbe040752e2c73961e72aad2398a880bd5f56d4326090f6df830b207da84a3
 ---
 Run tests
 

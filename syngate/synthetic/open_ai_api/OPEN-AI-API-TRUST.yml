@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 15
 test: aa1067b870c831ef7d103f2c3470ee7aa64479255464ffd83c7fcbe4632c63b5
-review: 8641f59eed967993491ead8860487130b52f2a678a97fb84313f18148259aca4
+review: 9692d35530589ddd9551e0aca17bfc41f6e6cf9672662217ff991071cedc0a3a
 ---
 Custom trusted certificates
 of a connection are trusted for its HTTPS requests besides the system's, so a server with a self-signed certificate is reached.

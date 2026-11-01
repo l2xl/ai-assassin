@@ -2,7 +2,7 @@
 parents: [AI-ASSASSIN]
 order: 80
 test: 1c387f6df7705ac25435032bd7ff3e3f875ad665238c67bc8b8fa2825ed23d50
-review: e7192092454949ac5cd0c48be5a0c217a2cb59fcb8fbb8a80bbf8f3e9e9d4814
+review: 40c08337aea0e5019204a00cb24a4efc425034f5ff6716caf568a0a148d9add7
 ---
 Server settings
 are read from `assassin_settings.json` beside the tree at every use, so an edit takes effect without a restart.

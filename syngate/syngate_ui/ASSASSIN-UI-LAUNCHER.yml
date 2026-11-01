@@ -3,7 +3,7 @@ parents: [ASSASSIN-UI]
 order: -10
 sources: [bin/assassin]
 test: 5e193cbc55178a82eda490e167a51912ef208d19efa8cf625c68f6dda1c11d5f
-review: 4367661afba15646718a9cf4d01a9061262ab3ec41dfb7a249cfa9c01a668940
+review: b404c366fba7bb0a45fb9b03d7cbc0bea46bad9903f3d19a7b1b66ac65c580bd
 ---
 Launcher script
 `bin/assassin` starts the `assassin` command from the checkout's own virtual environment, creating it on first use, so no Python setup is needed beforehand.

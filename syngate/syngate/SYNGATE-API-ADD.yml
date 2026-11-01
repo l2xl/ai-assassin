@@ -1,6 +1,7 @@
 ---
 parents: [SYNGATE-API]
-test: ~
+test: 396c8faf6b5a602d0c9a9ed22e6a113b94b6b3630dea80624f34748c676fb78b
+review: 29864651f2350848affdb3ade9bd175e0e8140af1094246957a144d628616358
 ---
 Add thesis
 

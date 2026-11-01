@@ -1,7 +1,7 @@
 ---
 parents: [SYNGATE]
 order: 5
-review: 2691501fac765413737b9a26cd49556c2618519d1f51f84f78ddf17858fb36c5
+review: 2b37d4aa1a0d846945562fe2aa0ba8256fb8fa5e4eddeffb9bfe9b892797958d
 ---
 Status rollup
 gives every item of the project DAG a status recursively from the tests bound to it and below it.

@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 80
 test: 01fa21b871a47c1848eef63957710bcbdb73309621291e86298d8a1cdd439e68
-review: 4530f17bc3a2dc9baabcedaa957e9bbd4fda777231080294de961bd6f8cea5ae
+review: a33639e1c2e2199c3d5972af4126e1fb9e1f870c4d4cfe5839ad4252ba3553de
 ---
 Immediate interruption
 ends a dispatch the instant the stop is received as a connection error, the session left as it was.

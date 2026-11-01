@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE]
 order: 87
-test: ~
+test: 9101cc07b5fd4f494497e1174e46be9dcecab55653fd4a033976effe4e479c37
+review: 06b46bb381496e646e55ff2b9b977c5607a8c8ffa2350d1d75eec1393994d004
 ---
 Review option
 on the root item, off when absent: while off no item carries a stamp and `review` and `clear` refuse.

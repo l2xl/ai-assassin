@@ -1,7 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 160
-test: {api: ~, page: ~}
+test: {api: 61f28b9c94a50dc55c37aaba708912d71f61393357d4115f1c4576f8832e80b7, page: ca2535b54458fd46d173a94dd5ac55247122f736a0884cb30e56ee1471ae0309}
+review: d2305d55fb7d8bbd6ef1c05359208c83445e1e60da483471bb072ed032933406
 ---
 New chat setup
 shall be the connector, model, effort and main permission switches last chosen in a new chat, kept in the `chat` section of the server settings and shown in every block without an active chat, while a chat holding messages keeps its own setup in the chats store.

@@ -1,7 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 170
-test: ~
+test: f532b6923c3510413689cc51ec1a01359fcb2fa3fe13670d72287d5d243c0a34
+review: 16ea58cae87307d2856be088909b29906e5fc26f717db51590e8cabef0df4016
 ---
 Chat interruption
 shall be told to the user as a message of the chat describing the unexpected error of the harness that ended the turn.

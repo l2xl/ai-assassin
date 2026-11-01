@@ -1,7 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 45
-test: ~
+test: 1521d1a20407da5b06e87b6d1ed8ab894a366616656a4b836d515c79d7ee6dec
+review: 18a55abfa0e331ea964ed73f7590200893115cfdfef818c0d3ed3cd2f48b39ce
 ---
 Stepwise setup selection
 of the setup selector shall rebuild the menu in place when a connector is clicked, offering its models, and when a model with efforts is clicked, offering that model's efforts, choosing the setup and closing the selector only on the click of an effort, or of a model offering none.

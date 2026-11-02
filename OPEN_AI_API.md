@@ -8,9 +8,10 @@ giving one key to the models of many providers, or a self-hosted [llama.cpp](htt
 own, and the page offers them side by side next to the Claude Code connector. Where the Claude Code
 connector drives a local agent with its own file and shell tools, an API connection answers with the
 model's text alone: its turn works the project only through the harness's tool calls — the tree
-calls, queries, test runs, delegations, git and WebSurf — and never edits a file itself, so it lists
-no call modes of its own; the harness's Tree edit, Edit files and Interactive WebSurf switches are all
-the page shows for it.
+calls, queries, test runs, delegations, git, patch, WebSurf and the shell — and never edits a file or
+runs a command itself. Its one call mode is the advanced Raw command, off by default, which lets the
+shell calls of its answers run; besides it the page shows the harness's Tree edit, Edit files and
+Interactive WebSurf switches.
 
 The module depends on `synthetic` for the connection error, the prompt library and the answer
 schema; `synthetic` does not import it, and the AI Assassin server builds the connections from the
@@ -150,7 +151,20 @@ A turn is one streamed `POST <base_url>/chat/completions` request per round of t
   every model — Claude models behind MixRoute answer in prose and fenced blocks whatever
   `response_format` says — and such a model may write a remark, or leak its native tool-use markup
   (`<invoke …>`), beside its one call block: the block alone is the answer and the remark, the markup
-  taken out, a `message` step; two blocks stay refused. With `structured` off, no schema is sent.
+  taken out, a `message` step; two blocks stay refused. Markup naming a tool (`<invoke name="shell">`) with no call block
+  beside it is the model's calls written where the harness does not read them: the answer is refused back to the model, asking for
+  the block, instead of ending the turn as a text reply with the calls unrun. With `structured` off, no schema is sent.
+- **Format fallback.** Providers behind one gateway hold different subsets of `response_format`. A request
+  the server refuses for it — a `400` or `422` whose message names `response_format` or `json_schema` —
+  goes again with the schema in the strict form OpenAI requires, then without a schema; any other
+  refusal fails the turn at once. The strict form lists every property of an object as required, an
+  optional one taking `null` besides, gives every `const` and `enum` its `type`, and merges the call
+  shapes into one call object — `tool` the enum of every tool, the fields of all of them — since a
+  strict decoder writes the keys in its own order and cannot tell shapes apart by a `tool` it writes
+  last; the fields a strict answer fills with `null` are dropped and each tool's required fields are
+  checked when the answer is parsed. The connection keeps the form that served per model for as long
+  as the server runs, so OpenAI models go strict and DeepSeek's without a schema from their second
+  turn on, answering through the fenced `syngate` block.
 - **Streaming.** `stream` is on, with `stream_options.include_usage`. The model's exposed reasoning
   (`reasoning_content`, or `reasoning`, in the deltas) is a `reasoning` step, announced as it grows.
   The closing usage chunk's `prompt_tokens` and `completion_tokens` make the turn's closing `usage`

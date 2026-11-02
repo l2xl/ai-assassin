@@ -174,7 +174,7 @@ def test_the_page_offers_every_configured_connection_with_a_model_and_its_declar
                          "keyed": {"base_url": fake.url, "api_key": "sk-file", "models": ["m"]}})
     connectors = offered(base, app)
     assert list(connectors) == ["claude_code", "keyless", "keyed"]
-    assert [mode["id"] for mode in connectors["keyed"]["modes"]] == ["tree", "patch"] and connectors["keyed"]["library"] == "text"
+    assert [mode["id"] for mode in connectors["keyed"]["modes"]] == ["tree", "patch", "bash"] and connectors["keyed"]["library"] == "text"
     monkeypatch.setenv("TEST_API_KEY", "sk-env")
     assert list(offered(base, app)) == ["claude_code", "keyless", "from_env", "keyed"]
     fake.listing = {"object": "list", "data": []}
@@ -376,6 +376,53 @@ def test_the_answer_schema_goes_as_response_format_and_a_json_object_answered_is
     assert api_connection.api_connection.library_delivery == "text"
 
 
+def strict_objects(schema):
+    """Every object schema of `schema` lacking the strict form: a property left out of `required`, extra properties allowed, or a
+    property schema with no `type` (an `anyOf` aside) -- [] for a strict schema."""
+    if isinstance(schema, list):
+        return [found for value in schema for found in strict_objects(value)]
+    if not isinstance(schema, dict):
+        return []
+    found = [found for key, value in schema.items() if key not in ("const", "enum") for found in strict_objects(value)]
+    if "properties" in schema and (schema.get("required") != list(schema["properties"]) or schema.get("additionalProperties") is not False
+                                   or any("type" not in prop and "anyOf" not in prop for prop in schema["properties"].values())):
+        found.append(schema)
+    return found
+
+
+@pytest.mark.syngate("OPEN-AI-API-FORMAT")
+def test_a_refused_response_format_goes_again_strict_then_without_a_schema_and_the_model_keeps_the_form_that_served(connection):
+    fake, connector, entry = connection
+    entry["models"] = ["gpt-5.5", "deepseek-flash"]
+    library = synthetic.load_prompts()
+    invalid = (400, json.dumps({"error": {"message": "Invalid schema for response_format 'answer': In context=('properties', 'tool'), schema must have a 'type' key."}}))
+    calls = {"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]}
+    fake.answers = [invalid, [chunk(content=json.dumps({"kind": "calls", "text": None, "calls": [{"tool": "query", "uid": "@", "name": None}]}))]]
+    assert connector.dispatch("seed", "Hi.", model="gpt-5.5", library=library)[0] == calls  # the nulls the strict form asks for are dropped
+    full, strict = (request["body"]["response_format"]["json_schema"]["schema"] for request in fake.chats())
+    assert strict_objects(full) and strict_objects(strict) == []
+    assert strict["properties"]["text"]["type"] == ["string", "null"] and strict["properties"]["calls"]["type"] == ["array", "null"]
+    call = strict["properties"]["calls"]["items"]  # one call object: a strict decoder cannot tell shapes apart by a `tool` it writes last
+    assert call["properties"]["tool"] == {"type": "string", "enum": list(synthetic.library_calls(library))} and "anyOf" not in call
+    assert {"uid", "command", "diff", "url"} <= set(call["properties"]) and call["properties"]["diff"]["type"] == ["string", "null"]
+    fake.answer = [chunk(content=json.dumps(calls))]
+    connector.dispatch("seed", "Again.", model="gpt-5.5", library=library)
+    assert len(fake.chats()) == 3 and strict_objects(fake.chats()[-1]["body"]["response_format"]["json_schema"]["schema"]) == []  # kept strict
+    unavailable = (400, json.dumps({"error": {"message": "This response_format type is unavailable now"}}))
+    block = '```syngate\n[{"tool": "query", "uid": "@"}]\n```'
+    fake.answers = [unavailable, unavailable, [chunk(content=block)]]
+    reply = connector.dispatch("seed", "Hi.", model="deepseek-flash", library=library)[0]
+    assert synthetic.parse_reply(reply) == ("calls", calls["calls"])
+    assert ["response_format" in request["body"] for request in fake.chats()[3:]] == [True, True, False]
+    fake.answer = [chunk(content="Plain.")]
+    assert connector.dispatch("seed", "Hi.", model="deepseek-flash", library=library)[0] == "Plain."
+    assert len(fake.chats()) == 7 and "response_format" not in fake.chats()[-1]["body"]  # kept without a schema
+    fake.answers = [(400, json.dumps({"error": {"message": "max_tokens is too large"}}))]
+    with pytest.raises(synthetic.connection_error, match="max_tokens is too large"):
+        connector.dispatch("seed", "Hi.", model="gpt-5.5", library=library)
+    assert len(fake.chats()) == 8  # any other refusal fails the turn at once
+
+
 @pytest.mark.syngate("OPEN-AI-API-STREAM")
 def test_the_reasoning_grows_as_a_step_and_the_usage_chunk_closes_the_turn(connection):
     fake, connector, _ = connection
@@ -498,3 +545,18 @@ def test_a_model_listed_with_its_own_key_goes_with_that_key_and_the_page_never_s
     assert fake.requests[-1]["authorization"] == "Bearer sk-test"
     connector.dispatch("seed", "Hi.", model="fallback")
     assert fake.requests[-1]["authorization"] == "Bearer sk-test"
+
+
+@pytest.mark.syngate("OPEN-AI-API-PREAMBLE")
+def test_prose_a_gateway_joins_ahead_of_the_json_answer_is_its_text_and_the_object_ending_the_content_is_the_answer(connection):
+    fake, connector, _ = connection
+    calls = [{"tool": "query", "uid": "@"}]
+    notes = "I’ll check the item first.The token repository isn’t in the tree yet, so I’ll look."
+    fake.answer = [chunk(content=notes), chunk(content=json.dumps({"calls": [{**calls[0], "diff": None}], "kind": "calls", "text": None}))]
+    answer = connector.dispatch("seed", "Hi.", model="gpt-5.5")[0]
+    assert answer == {"calls": calls, "kind": "calls", "text": notes} and synthetic.split_reply(answer) == (notes, calls)
+    fake.answer = [chunk(content="Said first. " + json.dumps({"kind": "text", "text": "Then this."}))]
+    assert connector.dispatch("seed", "Hi.", model="gpt-5.5")[0] == {"kind": "text", "text": "Said first. Then this."}
+    for prose in ("A set {a, b} is fine.", "Ends with {not json}", 'Quotes {"kind": "text"} mid-sentence, then goes on.'):
+        fake.answer = [chunk(content=prose)]
+        assert connector.dispatch("seed", "Hi.", model="gpt-5.5")[0] == prose  # an object must end the content and hold `kind`

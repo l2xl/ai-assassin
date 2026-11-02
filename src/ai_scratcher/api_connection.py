@@ -35,12 +35,74 @@ LISTING_TIMEOUT = 5
 RUNNING_STATES = ("loaded", "loading", "sleeping")
 # The refusals of a llama.cpp router for a model whose load fell over or that is not loaded: the request goes again after a load request.
 LOAD_REFUSED_RE = re.compile(r"failed to load|not loaded|not running", re.IGNORECASE)
+# The refusals of a server for the response format it was sent -- a schema outside OpenAI's strict subset, or no json_schema support at
+# all: the request goes again in the next of FORMATS.
+FORMAT_REFUSED_RE = re.compile(r"response_format|json_schema", re.IGNORECASE)
+# The forms of the answer schema a request goes with, in the order tried: the schema as the library builds it, its strict form, none.
+FORMATS = ("schema", "strict", None)
+JSON_TYPES = {str: "string", bool: "boolean", int: "integer", float: "number"}
 SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 JSON_FENCE_RE = re.compile(r"\A```[a-z]*[ \t]*\n(.*)\n[ \t]*```\Z", re.DOTALL)
 
 
 class load_refused(connection_error):
     """The server refused a request because its model failed to load or is not loaded."""
+
+
+class format_refused(connection_error):
+    """The server refused the response format of a request."""
+
+
+def flat_calls(schema):
+    """The answer schema with its call shapes merged into one call object -- `tool` the enum of every tool, the fields of all of them
+    optional -- since a strict decoder writing keys in its own order cannot tell shapes apart by their `tool` alone; the required
+    fields of each tool stay checked when the answer is parsed."""
+    items = schema.get("properties", {}).get("calls", {}).get("items", {})
+    if "anyOf" not in items:
+        return schema
+    fields = {}
+    for shape in items["anyOf"]:
+        for name, field in shape["properties"].items():
+            if name != "tool" and field not in fields.setdefault(name, []):
+                fields[name].append(field)
+    call = {"type": "object", "properties": {"tool": {"enum": [shape["properties"]["tool"]["const"] for shape in items["anyOf"]]},
+                                             **{name: kinds[0] if len(kinds) == 1 else {"anyOf": kinds} for name, kinds in fields.items()}},
+            "required": ["tool"], "additionalProperties": False}
+    return {**schema, "properties": {**schema["properties"], "calls": {**schema["properties"]["calls"], "items": call}}}
+
+
+def strict_schema(schema, optional=False):
+    """`schema` in the strict form OpenAI requires of a response format: every object listing all its properties as required and no
+    others, an optional one taking null besides, and a `const` or `enum` schema carrying its `type`."""
+    if isinstance(schema, list):
+        return [strict_schema(value) for value in schema]
+    if not isinstance(schema, dict):
+        return schema
+    strict = {key: value if key in ("const", "enum", "required") else strict_schema(value) for key, value in schema.items()}
+    if "properties" in strict:
+        required = set(schema.get("required") or ())
+        strict["properties"] = {name: strict_schema(value, name not in required) for name, value in schema["properties"].items()}
+        strict.update(required=list(strict["properties"]), additionalProperties=False)
+    if "type" not in strict and "anyOf" not in strict and ("const" in strict or "enum" in strict):
+        kinds = sorted({JSON_TYPES.get(type(value), "string") for value in ([strict["const"]] if "const" in strict else strict["enum"])})
+        strict = {"type": kinds[0] if len(kinds) == 1 else kinds, **strict}
+    if optional:
+        if "anyOf" in strict:
+            return {**strict, "anyOf": [*strict["anyOf"], {"type": "null"}]}
+        kinds = strict.get("type", [])
+        strict["type"] = [*(kinds if isinstance(kinds, list) else [kinds]), "null"]
+        if "enum" in strict:
+            strict["enum"] = [*strict["enum"], None]
+    return strict
+
+
+def without_nulls(value):
+    """`value` with every null-valued field of its objects dropped, as a strict answer fills the fields it leaves out."""
+    if isinstance(value, dict):
+        return {key: without_nulls(field) for key, field in value.items() if field is not None}
+    if isinstance(value, list):
+        return [without_nulls(field) for field in value]
+    return value
 
 
 def closable_opener(context, cancelled, held):
@@ -92,13 +154,31 @@ def openai_content(text, images=()):
 
 
 def json_answer(content):
-    """The structured answer a content holds -- a JSON object, bare or in one fenced block -- else None."""
+    """The structured answer a content holds -- a JSON object, bare or in one fenced block, or an answer object ending the content behind
+    prose, that prose joined ahead of its text -- else None."""
     fenced = JSON_FENCE_RE.match(content.strip())
     try:
         answer = json.loads(fenced.group(1) if fenced else content)
     except ValueError:
-        return None
+        return trailing_answer(content.strip())
     return answer if isinstance(answer, dict) else None
+
+
+def trailing_answer(content):
+    """The answer object -- one holding `kind` -- that ends `content` behind prose, the prose joined ahead of its text; else None. A gateway
+    joins the progress notes a model streams before its answer into the same content."""
+    decoder = json.JSONDecoder()
+    for start in (match.start() for match in re.finditer(r'\{\s*"', content)):
+        if start == 0:
+            continue
+        try:
+            answer, end = decoder.raw_decode(content, start)
+        except ValueError:
+            continue
+        if end == len(content) and isinstance(answer, dict) and "kind" in answer:
+            prose = content[:start].strip()
+            return {**answer, "text": " ".join(part for part in (prose, answer.get("text") or "") if part)}
+    return None
 
 
 def api_message(label, body, status):
@@ -115,7 +195,8 @@ class api_connection:
     """The AI connection `name` to an OpenAI-compatible chat completions API, set up by its entry of the `connections` section of the
     server settings that `config` reads at every use; the conversation is a session file of the connection's own."""
     library_delivery = "text"
-    modes = {}
+    # Its one call mode, Raw command: the shell calls of its answers run through the harness only while it is on.
+    modes = {"bash": synthetic.BASH_MODE}
     # Seconds between two announcements of a growing reasoning step.
     announce_every = 0.25
 
@@ -125,6 +206,8 @@ class api_connection:
         self.config = config or (lambda: {})
         self.sessions_dir = sessions_dir
         self.halted = set()
+        # model -> the index in FORMATS of the response format its server last took
+        self.formats = {}
         self._listing = (None, 0.0, {})
         self._lock = threading.Lock()
 
@@ -240,7 +323,7 @@ class api_connection:
         return {"label": self.label_of(config), "library": self.library_delivery,
                 "models": [{"id": model_id, "name": spec["name"], "efforts": list(spec["efforts"]), **({"state": spec["state"]} if spec["state"] else {})}
                            for model_id, spec in models.items()],
-                "efforts": list(self.efforts), "default": {"model": model, "effort": effort}, "modes": []}
+                "efforts": list(self.efforts), "default": {"model": model, "effort": effort}, "modes": [dict(mode) for mode in self.modes.values()]}
 
     # -- transport --------------------------------------------------------
 
@@ -317,7 +400,7 @@ class api_connection:
 
     def read_stream(self, config, opener, request, timeout, lines, cancelled):
         """Put every `data:` payload of the streamed answer into `lines`, then None; a failure goes in as its `connection_error`, a
-        refusal for a model that did not load as `load_refused`."""
+        refusal for a model that did not load as `load_refused`, one of the response format as `format_refused`."""
         label = self.label_of(config)
         try:
             with opener.open(request, timeout=timeout) as response:
@@ -330,7 +413,9 @@ class api_connection:
             lines.put(None)
         except urllib.error.HTTPError as err:
             message = api_message(label, err.read().decode("utf-8", "replace"), err.code)
-            lines.put((load_refused if LOAD_REFUSED_RE.search(message) else connection_error)(message))
+            refused = (load_refused if LOAD_REFUSED_RE.search(message) else format_refused if err.code in (400, 422) and FORMAT_REFUSED_RE.search(message)
+                       else connection_error)
+            lines.put(refused(message))
         except connection_error as err:
             lines.put(err)
         except (OSError, ValueError) as err:
@@ -429,20 +514,34 @@ class api_connection:
             if any(spec["state"] for spec in models.values()):
                 # a llama.cpp router reads a long prompt silently: its progress keeps the request alive and shows on the page
                 body["return_progress"] = True
+            schema = None
             if config.get("structured", True) is not False:
                 schema = {name: value for name, value in synthetic.answer_schema(synthetic.read_library(library)).items() if name != "description"}
                 schema["properties"] = {**schema["properties"], "text": {**synthetic.STRING, "description": "The reply, only with kind text; leave it out with kind calls"}}
-                body["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "schema": schema}}
             timeout = config.get("timeout") if isinstance(config.get("timeout"), (int, float)) and config["timeout"] > 0 else TIMEOUT
             retries = config.get("load_retries") if type(config.get("load_retries")) is int and config["load_retries"] >= 0 else LOAD_RETRIES
-            for attempt in range(retries + 1):
+            form = self.formats.get(model, 0) if schema else len(FORMATS) - 1
+            while True:
+                body.pop("response_format", None)
+                if FORMATS[form]:
+                    body["response_format"] = {"type": "json_schema", "json_schema": {"name": "answer", "schema": strict_schema(flat_calls(schema)) if FORMATS[form] == "strict" else schema}}
                 try:
-                    reply, finish, usage = self.stream(config, key, body, timeout, halted, on_step, started)
+                    for attempt in range(retries + 1):
+                        try:
+                            reply, finish, usage = self.stream(config, key, body, timeout, halted, on_step, started)
+                            break
+                        except load_refused:
+                            if attempt == retries or halted():
+                                raise
+                            self.load(config, key, model)
                     break
-                except load_refused:
-                    if attempt == retries or halted():
+                except format_refused:
+                    # a gateway serves models of providers holding different subsets of the schema: each model keeps the form its server took
+                    if not FORMATS[form] or halted():
                         raise
-                    self.load(config, key, model)
+                    form += 1
+            if schema:
+                self.formats[model] = form
         finally:
             self.halted.discard(ident)
         on_step({"kind": "usage", "seconds": round(time.monotonic() - started, 2), "cost_usd": None,
@@ -454,7 +553,7 @@ class api_connection:
             raise connection_error(f"{label} answered without content")
         session = session or uuid.uuid4().hex
         self.write_session(session, [*history, asked, {"role": "assistant", "content": reply}])
-        answer = json_answer(reply) if config.get("structured", True) is not False else None
+        answer = without_nulls(json_answer(reply)) if config.get("structured", True) is not False else None
         if answer is not None and not answer.get("calls") and "```syngate" in str(answer.get("text") or ""):
             # the schema is not enforced on every model behind a gateway: calls written as a block in the text field make a plain answer
             answer, reply = None, str(answer["text"])

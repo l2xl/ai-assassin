@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 65
+test: ~
+---
+Response format fallback
+of a request whose response format the server refuses sends it again with the answer schema in the strict form OpenAI requires, its calls one object of every tool's fields, then without a schema, the model keeping the form that served.

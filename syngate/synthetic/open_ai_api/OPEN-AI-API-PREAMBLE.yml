@@ -1,0 +1,7 @@
+---
+parents: [OPEN-AI-API]
+order: 62
+test: ~
+---
+Preamble before the answer
+Content holding prose before the JSON object that ends it shall take that object as the structured answer and the prose as its text, as a gateway joins a model's progress notes ahead of its answer.

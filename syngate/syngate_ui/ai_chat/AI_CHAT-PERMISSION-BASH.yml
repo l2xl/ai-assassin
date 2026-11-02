@@ -1,7 +1,7 @@
 ---
 parents: [AI_CHAT-PERMISSION-ADVANCED]
-test: 33a9b529968a7aec5c03eaab417271bdcbc221d90e444c9db61bedad5b5b12c6
-review: ac483176085ce81e666d2f4e74e95afd94f382bd7a8a2dc9d9587fa3b34593e0
+test: ad04a58ed200bed7e3e86eacf40c3e1b806ec89cc26dee33452389a3c07c9aab
+review: 8fd1fe5aa87a4dee77402cb887f2e40bffa6302847b4a8c549b8009404225bff
 ---
 Raw command permission
 switch of the chat is listed by every connector, advanced and off by default, and lets the turn run shell commands in the project root.

@@ -2,7 +2,7 @@
 parents: [AI_CONNECTION]
 order: 15
 sources: [src/ai_scratcher/api_connection.py]
-review: df8e3efcac13c463620cbddbe0f0b3e323eba3a7edd705330cb1175485ccc9ff
+review: a2e3fcd9f24a82cc76bdf1e80832cdfa8f3e8bf0406780cf9d0f1a161fcb2735
 ---
 OpenAI-compatible API connections
 are the AI connections answering through any server speaking the OpenAI chat completions API, as many side by side as the server settings configure.

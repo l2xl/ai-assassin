@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 20
-test: 727cd145b0ddf55667ea48b59593a7425b985c7e10080ee9cfb80832751f40ad
-review: 7ab9dfbf2481cfed3d0dd828be93632eed19bae28e12d1f6c37eaba7a34580f1
+test: 4061841f5c438eb1117aa09cd45b0c9db226d1b5453d54f1c55ce7f67d4a83de
+review: a3d0c656fc98d6d1df8a494fa81c2be041dac647a334478ce6fecc58e5d26515
 ---
 Connection offer
 lists every configured connection among the page's connectors while it has a model to offer and its declared API key is set.

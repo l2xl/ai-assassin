@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-AGENT]
 order: 10
-test: ~
+test: 692c5f8d36d536a83b9ec10ee60dcbad6deecfddc00ca5b52748cda65402612d
+review: 0c5c60f209ff8c416f3ed01d411a8b2e68741924022816a7368891136750641f
 ---
 Statement as the delegated task
 An agent call without a prompt shall start the item's chat with the standing instruction to carry out its statement, its seed context being the whole briefing, and a prompt past the bound shall be refused as restating what the tree holds.

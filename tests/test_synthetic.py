@@ -999,3 +999,43 @@ def test_the_design_files_the_statements_link_follow_them_each_once_under_a_desi
     items["SIDE-A"].sources.append("docs/PART.md")
     seed = synthetic.seed_context(items, "ROOT", root=tmp_path)
     assert seed.endswith(design + "\n# Source docs/PART.md\n````\nPart.\n````\n") and "# Design docs/PART.md" not in seed  # a key source is not repeated as a design file
+
+
+class Briefed(ScriptedConnection):
+    """Answers a delegating parent from its script and a delegated child at once, keeping every text a child was started with."""
+
+    def __init__(self, *answers):
+        super().__init__(*answers)
+        self.briefs = []
+
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
+        if text.startswith(synthetic.DELEGATION_TEXT.split("{")[0]) or text == "Use the tag v2.":
+            self.briefs.append(text)
+            return {"kind": "text", "text": "Leaf delivered."}, "session-child"
+        return super().dispatch(context, text, model, effort, modes, session, on_step)
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-AGENT-STATEMENT")
+def test_an_agent_call_without_a_prompt_starts_the_items_chat_on_its_statement_and_a_prompt_past_the_bound_is_refused(tmp_path, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT", "Root.\n", parents=())
+    make_item(syngate_dir, "LEAF-001", "Tagged release\nThe release shall carry a tag.\n", parents=("ROOT",), tests=None)
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
+    calls = lambda *batch: {"kind": "calls", "calls": list(batch)}
+    setup = {"uid": "ROOT", "connector": "scripted", "model": "model-a", "effort": "low", "modes": ["tree"]}
+    bare, short = {"tool": "agent", "uid": "LEAF-001"}, {"tool": "agent", "uid": "LEAF-001", "prompt": "Use the tag v2."}
+    long = {"tool": "agent", "uid": "LEAF-001", "prompt": "Tag the release. " * 20}
+    assert synthetic.parse_reply(calls(bare)) == ("calls", [bare])  # the prompt is optional
+    app.connectors = {"scripted": (connection := Briefed(calls(bare), {"kind": "text", "text": "Handed on."}))}
+    outcome = app.chat({**setup, "text": "Release it."})
+    assert connection.briefs == [synthetic.DELEGATION_TEXT.format(uid="LEAF-001")] and "@LEAF-001" in connection.briefs[0]
+    assert outcome["reply"] == "- agent LEAF-001: Leaf delivered.\nHanded on."
+    assert app.chats_snapshot()["chats"]["LEAF-001"]["log"][0]["text"] == connection.briefs[0]
+    app.connectors = {"scripted": (connection := Briefed(calls(short), {"kind": "text", "text": "Handed on."}))}
+    app.chat({**setup, "text": "Release it."})
+    assert connection.briefs == ["Use the tag v2."]  # a short prompt goes as it is
+    app.connectors = {"scripted": (connection := Briefed(calls(long), {"kind": "text", "text": "Kept."}))}
+    outcome = app.chat({**setup, "text": "Release it."})
+    assert connection.briefs == [] and outcome["reply"].startswith("- agent LEAF-001 refused: ")
+    assert f"at most {assassin_ui.DELEGATION_PROMPT_LIMIT} characters" in outcome["reply"] and "statement" in outcome["reply"]
+    assert connection.prompts[-1][0].startswith(synthetic.RESULTS_PREAMBLE + "- agent LEAF-001 refused: ")  # the refusal comes back to the model

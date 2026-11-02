@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-PATCH]
+order: 15
+test: ~
+---
+Hunk recount
+A patch shall apply by the lines its hunks carry, a miscounted hunk header refusing nothing whose context matches the file.

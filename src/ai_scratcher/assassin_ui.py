@@ -86,7 +86,24 @@ TREE_REFUSAL = "tree edits are off for this chat — switch Tree edit on"
 PATCH_MODE = {"id": "patch", "label": "Edit files", "hint": "apply the diffs of the reply to project files; syngate items are not in reach",
               "default": True, "advanced": False}
 PATCH_REFUSAL = "project file edits are off for this chat — switch Edit files on"
+# A reply's `shell` call runs with `sh -c` in the project root only while the chat's Raw command mode (`bash`) is on, without stdin, within
+# SHELL_TIMEOUT seconds, its output cut past SHELL_LIMIT characters; a command naming the tree is refused in every mode.
+SHELL_MODE = "bash"
+SHELL_REFUSAL = "raw commands are off for this chat — switch Raw command on"
+SHELL_TREE = "a command naming syngate is refused: the items are read and changed only through the tree calls"
+SHELL_TREE_RE = re.compile(r"(?<![\w.-])syngate(?![\w.-])")
+SHELL_TIMEOUT = 300
+SHELL_LIMIT = 20000
 GIT_ABSENT = "git is not at hand for this project"
+# The git commands outside the git tool's reads and records that erase nothing: their refusal points to the shell, which runs them while
+# the chat's Raw command permission is on.
+GIT_SHELL_COMMANDS = ("submodule", "remote", "fetch", "ls-remote", "clone")
+GIT_SHELL_HINT = "run it with the shell tool, `git …` as its command, which the chat's Raw command permission allows"
+# The longest prompt an agent call may carry: the delegated item's statement and seed context are the briefing, a prompt adds only what
+# the tree lacks; a longer one restates the task and is refused.
+DELEGATION_PROMPT_LIMIT = 300
+DELEGATION_RESTATED = (f"the prompt restates the task — the item's statement and seed context are its briefing: put what the statement "
+                       f"lacks into it with `edit`, then delegate with no prompt or one of at most {DELEGATION_PROMPT_LIMIT} characters")
 # The server settings, kept next to the tree, one section per feature: `websurf` holds the WebSurf host lists `allow` and `block`,
 # `connections` the setup of the OpenAI-compatible API connections.
 SETTINGS_FILE = "assassin_settings.json"
@@ -1145,12 +1162,24 @@ class AssassinApp:
                     continue
                 if synthetic.is_patch(call):
                     if not patch:
-                        refusal = denied("patch", ApiError(403, PATCH_REFUSAL))
+                        refusal = denied(call["tool"], ApiError(403, PATCH_REFUSAL))
                         break
                     try:
                         line = self._patch(call)
                     except ApiError as err:
-                        refusal = denied("patch", err)
+                        refusal = denied(call["tool"], err)
+                        break
+                    results.append(line)
+                    shown.append(line)
+                    continue
+                if synthetic.is_shell(call):
+                    if SHELL_MODE not in modes:
+                        refusal = denied(f"shell {call['command']}", ApiError(403, SHELL_REFUSAL))
+                        break
+                    try:
+                        line = self._shell(call)
+                    except ApiError as err:
+                        refusal = denied(f"shell {call['command']}", err)
                         break
                     results.append(line)
                     shown.append(line)
@@ -1200,19 +1229,41 @@ class AssassinApp:
             batch_step(results, payload)
             applied += shown
             calls += payload
-            if refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_surf(call) for call in payload) and not runs and not delegations:
+            if (refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_surf(call) or synthetic.is_shell(call) for call in payload)
+                    and not runs and not delegations):
                 return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
             text = (synthetic.RESULTS_PREAMBLE + "\n".join(results) + websurf.events_text(events.take(), *self.surf_lists())
                     + synthetic.rounds_left(bound() - done - 1))
 
     def _patch(self, call):
-        """Apply the unified diff of a patch call to the project's files through the patch tool's guard, all of it or none. -> the line
+        """Apply the unified diff of a patch call to the project's files through the patch tool's guard, all of it or none, or the exact
+        replacement of a replace call. -> the line
         telling the paths it changed; a refusal is an `ApiError` carrying git's message for the section that failed."""
         try:
-            changed = patchlib.apply(self.root, call["diff"])
+            if call["tool"] == "replace":
+                changed = patchlib.replace(self.root, call["path"], call["old"], call.get("new") if isinstance(call.get("new"), str) else "")
+            else:
+                changed = patchlib.apply(self.root, call["diff"])
         except patchlib.refused as err:
             raise ApiError(403, str(err)) from None
-        return f"- patch changed {', '.join(changed)}"
+        return f"- {call['tool']} changed {', '.join(changed)}"
+
+    def _shell(self, call):
+        """Run the command line of a shell call with `sh -c` in the project root, without stdin, within `SHELL_TIMEOUT` seconds. -> the line
+        telling its exit status and output, cut past `SHELL_LIMIT` characters; a command naming the tree is refused as an `ApiError`."""
+        command = call["command"]
+        if SHELL_TREE_RE.search(command):
+            raise ApiError(403, SHELL_TREE)
+        try:
+            done = subprocess.run(command, shell=True, cwd=self.root, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace",
+                                  timeout=SHELL_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            return f"- shell {command}:\ntimed out after {SHELL_TIMEOUT} s"
+        except OSError as err:
+            raise ApiError(500, f"the shell did not start: {err}") from None
+        output = done.stdout + done.stderr
+        cut = f"\n… cut at {SHELL_LIMIT} characters" if len(output) > SHELL_LIMIT else ""
+        return f"- shell {command}:\n" + f"exit {done.returncode}\n{output[:SHELL_LIMIT]}{cut}".rstrip("\n")
 
     def _git(self, call):
         """Run a git call of an answer through the tool's guard. -> (the line telling its outcome, whether it records)."""
@@ -1221,7 +1272,8 @@ class AssassinApp:
         try:
             words, records = gitlib.guard(call["command"])
         except gitlib.refused as err:
-            raise ApiError(403, str(err)) from None
+            name = (call["command"].split() or [""])[0]
+            raise ApiError(403, f"{err}; {GIT_SHELL_HINT}" if name in GIT_SHELL_COMMANDS else str(err)) from None
         return f"- git {call['command']}:\n{gitlib.run(self.root, words)}", records
 
     def _surf(self, call, interactive, turn=None, halted=None, events=None):
@@ -1271,7 +1323,8 @@ class AssassinApp:
                 turn.add_step(step)
 
     def _delegate(self, items, anchor, data, calls, turn, results):
-        """Every agent call of a batch as a turn of its item's chat with the call's prompt, in the setup of `data` the call may override,
+        """Every agent call of a batch as a turn of its item's chat with the call's prompt -- the standing instruction to carry out the
+        item's statement without one, a prompt past `DELEGATION_PROMPT_LIMIT` refused -- in the setup of `data` the call may override,
         all running in parallel and awaited -- a stop of the parent `turn` starts none more and stops the running ones. Each child's
         report joins `results` and its transcript the parent's steps as an agent step; a call marked `background` is answered at once
         instead and not awaited -- see `_watch`; a child switches a harness mode -- `tree`, `websurf` -- on only when the parent has it;
@@ -1284,18 +1337,21 @@ class AssassinApp:
             own = setup["modes"] if "modes" in setup else self.chats[child].setup.get("modes") if child in self.chats else ()
             if "tree" in withheld or set(own or ()) & set(withheld):
                 setup["modes"] = [mode for mode in own or () if mode not in withheld]
+            prompt = call.get("prompt") if isinstance(call.get("prompt"), str) and call["prompt"].strip() else synthetic.DELEGATION_TEXT.format(uid=child)
             try:
                 if turn and turn.stopped:
                     raise ApiError(409, "turn stopped")
+                if len(prompt) > DELEGATION_PROMPT_LIMIT and "prompt" in call:
+                    raise ApiError(400, DELEGATION_RESTATED)
                 if child == anchor:
                     raise ApiError(409, "the anchored item runs this turn — delegate to another item or do the work in this turn")
                 if child not in items:
                     raise ApiError(404, f"unknown UID '{child}'")
-                key = self.start_turn({**setup, "uid": child, "text": call["prompt"], "agent": turn.id if turn else anchor}, parent=turn)["turn"]
+                key = self.start_turn({**setup, "uid": child, "text": prompt, "agent": turn.id if turn else anchor}, parent=turn)["turn"]
             except ApiError as err:
                 refusal = (err, f"agent {child}")
                 break
-            step, shift, run = {"kind": "agent", "uid": child, "prompt": call["prompt"], "report": None, "steps": [], "at": 0}, turn.elapsed() if turn else 0, self._turn(key)
+            step, shift, run = {"kind": "agent", "uid": child, "prompt": prompt, "report": None, "steps": [], "at": 0}, turn.elapsed() if turn else 0, self._turn(key)
             if call.get("background"):
                 step["report"] = f"started in the background (turn {key})"
                 results.append(f"- agent {child}: {step['report']}")

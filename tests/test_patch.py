@@ -85,3 +85,36 @@ def test_claude_code_is_denied_its_own_edit_tools_in_every_mode(tmp_path):
         denied = argv[argv.index("--disallowedTools") + 1].split(",")
         assert {"Edit", "MultiEdit", "Write", "NotebookEdit"} <= set(denied) and "Edit(syngate/**)" in denied
         assert "acceptEdits" not in argv
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-PATCH-RECOUNT")
+def test_a_hunk_whose_header_miscounts_its_lines_applies_by_the_lines_it_carries(project):
+    miscounted = "--- a/notes.md\n+++ b/notes.md\n@@ -1,7 +1,9 @@\n # Notes\n-One line.\n+Two lines.\n End.\n"  # the way a model counts
+    assert patchlib.apply(project, miscounted) == ["notes.md"] and (project / "notes.md").read_text() == "# Notes\nTwo lines.\nEnd.\n"
+    with pytest.raises(patchlib.refused):  # the context still has to match the file
+        patchlib.apply(project, "--- a/notes.md\n+++ b/notes.md\n@@ -1,9 +1,9 @@\n # Notes\n-Gone.\n+Here.\n End.\n")
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-PATCH-REPLACE")
+def test_a_replace_call_changes_the_one_occurrence_of_an_exact_text_under_the_patch_guard_and_switch(repo_server):
+    base, app = repo_server
+    paragraph = "The reserve, at 313% of the stake, bounds the staking; " * 30 + "end.\n"
+    app.root.joinpath("paper.md").write_text("# Paper\n" + paragraph + "Twice. Twice.\n")
+    replace = {"tool": "replace", "path": "paper.md", "old": "at 313% of the stake, bounds the staking; end.", "new": "at 308% of the stake, bounds the staking; end."}
+    assert synthetic.parse_reply(calls(replace)) == ("calls", [replace]) and synthetic.is_patch(replace)
+    app.connectors = {"echo": (scripted := Scripted(calls(replace), calls({**replace, "old": "Twice."}), {"kind": "text", "text": "Unique needed."},
+                                                    calls({**replace, "old": "absent"}), {"kind": "text", "text": "Not there."},
+                                                    calls({**replace, "path": "syngate/ROOT.yml", "old": "Root"}), {"kind": "text", "text": "Tree."},
+                                                    calls({"tool": "replace", "path": "paper.md", "old": "Twice. Twice.\n"}), calls(replace)))}
+    assert turn(base, app, "ROOT", "Fix the number.", modes=["patch"])["reply"] == "- replace changed paper.md"
+    text = app.root.joinpath("paper.md").read_text()
+    assert text == "# Paper\n" + paragraph.replace("at 313% of the stake, bounds the staking; end.", "at 308% of the stake, bounds the staking; end.") + "Twice. Twice.\n"
+    outcome = turn(base, app, "ROOT", "Again.", modes=["patch"])
+    assert outcome["reply"].startswith("- replace refused: ") and "2 times" in outcome["reply"] and outcome["reply"].endswith("Unique needed.")
+    assert "not in paper.md" in turn(base, app, "ROOT", "Again.", modes=["patch"])["reply"]
+    assert "tree calls" in turn(base, app, "ROOT", "Again.", modes=["patch"])["reply"]
+    assert app.root.joinpath("paper.md").read_text() == text
+    assert turn(base, app, "ROOT", "Drop it.", modes=["patch"])["reply"] == "- replace changed paper.md"  # no `new` deletes the text
+    assert not app.root.joinpath("paper.md").read_text().endswith("Twice.\n")
+    assert turn(base, app, "ROOT", "Off.", modes=[])["reply"].startswith(f"- replace refused: {assassin_ui.PATCH_REFUSAL}")
+    assert '"tool": "replace"' in synthetic.LIBRARY["patch"].text

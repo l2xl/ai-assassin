@@ -10,6 +10,8 @@ import pytest
 
 import syngatelib
 import synthetic
+from test_assassin_ui import app, server  # noqa: F401 -- the server fixtures of the page tests
+from test_assassin_ui_api import Scripted, turn
 
 
 class Answering:
@@ -54,3 +56,25 @@ def test_a_query_hands_the_text_of_a_mixed_answer_to_the_turn_as_a_message_and_r
     assert answer == reply and session == "session-1"
     assert steps == [{"kind": "message", "text": "I will remove it."}]
     assert synthetic.parse_reply(answer) == ("calls", reply["calls"])
+
+
+# The shape a Claude model behind a gateway leaked in place of its call block: native tool-use markup, a stray fence after it.
+LEAKED = '\n<invoke name="shell">\n<parameter name="command">git status --short</parameter>\n</invoke>\n```\n'
+
+
+@pytest.mark.syngate("SYNTHETIC-ANSWER-MARKUP")
+def test_calls_written_as_native_tool_markup_without_a_call_block_are_refused_back_to_the_model_within_the_turn(server):
+    base, app = server
+    with pytest.raises(synthetic.protocol_error, match="tool-use markup"):
+        synthetic.parse_reply(LEAKED)
+    with pytest.raises(synthetic.protocol_error, match="tool-use markup"):
+        synthetic.parse_reply({"kind": "text", "text": "Checking." + LEAKED})
+    block = '```syngate\n[{"tool": "query", "uid": "@"}]\n```'
+    assert synthetic.parse_reply('<invoke name="query">\n</invoke>\n' + block)[0] == "calls"  # beside a call block the markup is only stripped
+    assert synthetic.parse_reply("Write `<invoke>` in a prompt and the model may answer with it.") == (
+        "chat", "Write `<invoke>` in a prompt and the model may answer with it.")  # a mention in prose is no markup
+    app.connectors = {"echo": (scripted := Scripted(LEAKED, block, {"kind": "text", "text": "Read it."}))}
+    outcome = turn(base, app, "ROOT", "Show the status.")
+    assert outcome["reply"].startswith("- answer refused: ") and outcome["reply"].endswith("Read it.")
+    assert scripted.heard[1]["text"].startswith("Your last answer was refused") and "syngate" in scripted.heard[1]["text"]
+    assert len(scripted.heard) == 3  # the refusal, then the call block's query, then the text answer

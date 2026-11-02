@@ -54,7 +54,8 @@ is one non-interactive turn of the chosen connector.
   marked default. The Claude Code connector's default is `sonnet` at `high`. The OpenAI-compatible API connections — MixRoute, a
   self-hosted llama.cpp server, as many side by side as configured — call a chat completions API
   over HTTP or HTTPS, each set up by its entry of the `connections` section of the server settings;
-  they list no call modes, their turns working the project through the harness's tool calls alone
+  their one call mode is the advanced Raw command, off by default, their turns working the project
+  through the harness's tool calls alone, the shell calls among them while it is on
   ([OPEN_AI_API.md](OPEN_AI_API.md)). The Tree edit permission is the harness's
   own, on by default: while it is off a reply's add, edit, move, rename and remove calls are refused
   (`tree edits are off for this chat — switch Tree edit on`), the refusal going back to the model as
@@ -200,12 +201,26 @@ is one non-interactive turn of the chosen connector.
   `{"tool": "patch", "diff": "--- a/GUIDE.md\n+++ b/GUIDE.md\n…"}` applies a unified diff to the
   files of the project root with `git apply`, all of its sections or none, the paths it changed
   coming back as the next prompt and a refusal carrying git's message for the section that failed.
+  The line counts of its hunk headers are set to the lines each hunk carries before git sees them, a
+  model miscounting them far more often than misquoting the context; a hunk ends at the next hunk
+  header or file header (a `--- ` line followed by a `+++ ` one), which git's own `--recount` would
+  read as a removed line. `{"tool": "replace", "path", "old", "new"}` changes the one occurrence of
+  an exact text in a project file — refused for a text absent or repeated there — so a change inside
+  a long line, a paragraph of prose or a table row, carries only the words that change, where a diff
+  repeats every whole line it touches with its context.
   Its guard refuses a diff without a section, a file name without its `a/` or `b/` prefix, and a path
   that is absolute, climbs out of the project (`..`), names `.git` or the tree (`syngate/`, a rename
   into it included) or is a symbolic link: the items change only through the tree calls. The Edit
   files permission is the harness's own, like Tree edit, on by default: while it is off a patch call
   is refused (`project file edits are off for this chat — switch Edit files on`), the refusal going
   back to the model as its next prompt.
+- **Shell commands go through the shell tool** (`prompts/shell.md`). `{"tool": "shell", "command":
+  "…"}` runs the command line with `sh -c` in the project root, without stdin, within a time limit;
+  its exit status and output, cut past a limit, go back as the next prompt and show in the reply. It
+  runs only while the chat's Raw command permission — the `bash` call mode every connector lists,
+  advanced and off by default — is on, a call refused otherwise (`raw commands are off for this chat
+  — switch Raw command on`); a command naming `syngate` is refused in every mode, the tree staying
+  the tree calls'. The same switch gives the Claude Code connector its own `Bash` tool.
 
 ## Turn
 
@@ -233,7 +248,12 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   optional in every transcript, never promised.
 - **Explicit delegation, harness-controlled.** `{"tool": "agent", "uid", "prompt", "model",
   "effort", "modes"}` runs a turn of the named item's chat, anchored there with that item's own seed
-  context. Every `agent` call of a batch runs in parallel after the batch's other calls, the parent
+  context. That statement and seed context are the whole briefing: without a `prompt` the turn
+  starts with the standing instruction to carry out the item's statement and report
+  (`synthetic.DELEGATION_TEXT`); a `prompt` only adds a detail the tree does not hold, and one past
+  300 characters is refused as restating the task, the parent putting what the statement lacks into
+  it with `edit` instead — so a delegation never pays twice for context the tree already carries.
+  Every `agent` call of a batch runs in parallel after the batch's other calls, the parent
   turn awaits them, and their final reports come back as the next prompt the way query results do;
   a busy item refuses the call, since an item runs one turn at a time. The subagent is an ordinary
   turn of the child's chat, so its whole transcript is where the child is shown. A call marked

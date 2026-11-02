@@ -217,3 +217,18 @@ def test_the_popup_offers_the_commit_with_ai_and_holds_the_review_while_its_foot
     page.wait("state.model.uncommitted.length === 0")  # the page follows the repository
     page.eval(popup)
     assert page.eval(actions) == [["👀 Mark reviewed", False, ""]]
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-GIT-SHELL")
+def test_a_git_command_the_tool_does_not_run_but_erasing_nothing_is_refused_with_the_pointer_to_the_shell(repo_server):
+    base, app = repo_server
+    submodule = {"tool": "git", "command": "submodule add git@example.com:o/r.git r"}
+    app.connectors = {"echo": (scripted := Scripted(calls(submodule), {"kind": "text", "text": "Stopped."},
+                                                    calls({"tool": "git", "command": "reset --hard HEAD"}), {"kind": "text", "text": "Stopped."}))}
+    outcome = turn(base, app, "ROOT", "Add the submodule.", modes=[])
+    assert outcome["reply"].startswith("- git submodule add git@example.com:o/r.git r refused: 'submodule' is not a command of the git tool")
+    assert assassin_ui.GIT_SHELL_HINT in outcome["reply"] and "shell tool" in assassin_ui.GIT_SHELL_HINT and "Raw command" in assassin_ui.GIT_SHELL_HINT
+    assert assassin_ui.GIT_SHELL_HINT in scripted.heard[1]["text"]  # the pointer reaches the model with the refusal
+    outcome = turn(base, app, "ROOT", "Reset it.", modes=[])
+    assert "refused" in outcome["reply"] and assassin_ui.GIT_SHELL_HINT not in outcome["reply"]  # never for a command that erases
+    assert "submodule" in synthetic.LIBRARY["git"].text and "shell" in synthetic.LIBRARY["git"].text

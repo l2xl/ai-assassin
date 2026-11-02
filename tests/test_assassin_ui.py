@@ -1437,7 +1437,9 @@ def advanced_entries(page):
 @pytest.mark.syngate("AI_CHAT-PERMISSION-WORKFLOWS")
 @pytest.mark.syngate("AI_CHAT-PERMISSION-BASH")
 def test_the_advanced_list_gathers_the_connectors_own_switches_off_by_default(server, chrome):
-    page = open_chat(server, chrome, echo=EchoConnector(), plain=PlainConnector("Plain"), claude=synthetic.claude_code_connector())
+    base, app = server
+    (app.root / "assassin_settings.json").write_text('{"connections": {"mix": {"label": "MixRoute", "base_url": "http://127.0.0.1:9/v1", "models": ["m"]}}}')
+    page = open_chat(server, chrome, echo=EchoConnector(), claude=synthetic.claude_code_connector())
     pill = "(() => { const pill = document.querySelector('.block-ai .chat-advanced'); return pill && [pill.textContent, pill.className, pill.title]; })()"
     assert page.eval(pill) == ["advanced ▾", "pill chat-advanced", "advanced permissions — Workflows: not allowed; click to switch"]  # off at rest, dim like an off switch
     assert page.eval("getComputedStyle(document.querySelector('.chat-advanced')).color") == css_color(page, "--dim")
@@ -1458,8 +1460,8 @@ def test_the_advanced_list_gathers_the_connectors_own_switches_off_by_default(se
     page.eval("document.querySelector('#status-menu [data-chat-mode=\"bash\"]').click()")
     page.wait("state.chats.get('LEAF-001').modes.includes('bash')")
     assert page.eval(pill)[2] == "advanced permissions — Raw command: allowed, Workflows: not allowed; click to switch"
-    pick(page, "connector", "plain")
-    assert page.eval(pill) is None  # a connector without an advanced mode has no list
+    pick(page, "connector", "mix")
+    assert advanced_entries(page) == [["○ Raw command", "menuitemcheckbox", "false", "run shell commands"]]  # an API connection lists it too, off
 
 
 MENU_RESUME = "[...document.querySelectorAll('#status-menu [data-chat-resume]')].map((b) => b.dataset.chatResume)"

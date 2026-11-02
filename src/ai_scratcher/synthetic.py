@@ -140,11 +140,19 @@ CALL_BLOCK_RE = re.compile(r"```syngate[ \t]*\n(.*?)\n[ \t]*```", re.DOTALL)
 TOOLS = {"add": ("uid", "description"), "edit": ("uid",), "remove": ("uid",), "move": ("uid", "to"), "rename": ("uid", "new_uid")}
 QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
 RUNS = {"test": ("uid",)}
-DELEGATIONS = {"agent": ("uid", "prompt")}
+DELEGATIONS = {"agent": ("uid",)}
+# The message a delegated turn starts with when its agent call names no prompt: the item's statement, in the seed context it is anchored
+# at, is the task, so the parent need not restate it.
+DELEGATION_TEXT = ("Carry out @{uid}: its statement, with the context this chat is seeded with, is your task. Bring the project to what it "
+                   "states, then report what you did and what still blocks it.")
 GITS = {"git": ("command",)}
 SURFS = {"websurf": ("action",)}
-PATCHES = {"patch": ("diff",)}
-CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **SURFS, **PATCHES}
+PATCHES = {"patch": ("diff",), "replace": ("path", "old")}
+SHELLS = {"shell": ("command",)}
+CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **SURFS, **PATCHES, **SHELLS}
+# The Raw command call mode as a connection without a shell of its own lists it: its shell calls run through the harness only while it
+# is on. The Claude Code connector lists its own `bash` mode, which allows the CLI's Bash tool.
+BASH_MODE = {"id": "bash", "label": "Raw command", "hint": "run shell commands", "default": False, "advanced": True}
 GIT_TOOL = "git"
 EDITABLE = ("description", "sources", "tests")
 QUERY_ROUNDS = 8
@@ -283,6 +291,10 @@ def is_patch(call):
     return call["tool"] in PATCHES
 
 
+def is_shell(call):
+    return call["tool"] in SHELLS
+
+
 def offered_library(git, library=None):
     """The library a turn is offered: the git tool only while git is at hand for the project; without a `library` given, the shipped one,
     read from the prompt files at every access."""
@@ -333,16 +345,22 @@ def call_target(anchor, call):
 def split_reply(reply):
     """(text, calls) of an answer: the text said beside its calls, "" when none, and the calls -- None for a plain text answer. A structured
     answer carries them as its `calls` and `text` fields; a plain one as the `syngate` blocks, which join in order, the prose around them
-    being its text with leaked tool markup taken out. Malformed JSON in a block is refused."""
+    being its text with leaked tool markup taken out. Malformed JSON in a block is refused, and so are calls written as native tool-use
+    markup with no block, which would otherwise end the turn as text."""
     if isinstance(reply, dict):
         calls = reply.get("calls")
         if reply.get("kind") == "text" and not calls:
+            if LEAKED_CALL_RE.search(str(reply.get("text") or "")):
+                raise protocol_error(LEAKED_CALL)
             return reply.get("text") or "", None
         return reply.get("text") or "", calls
     blocks = CALL_BLOCK_RE.findall(reply)
     if "```syngate" in CALL_BLOCK_RE.sub("", reply):
         raise protocol_error("tree calls are cut off before their closing fence")
     if not blocks:
+        if LEAKED_CALL_RE.search(reply):
+            # a model trained on native tool use may write its calls that way: ending the turn on them as text would leave them unrun
+            raise protocol_error(LEAKED_CALL)
         return reply, None
     calls = []
     for block in blocks:
@@ -390,7 +408,7 @@ def apply_call(items, anchor, call, syngate_dir=None):
     rather than a silently unreviewed item."""
     at = lambda value: anchor if value == "@" else value
     tool, uid = call["tool"], at(call.get("uid"))
-    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in SURFS or tool in PATCHES:
+    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in SURFS or tool in PATCHES or tool in SHELLS:
         raise syngatelib.tree_error(f"{tool} runs through the page's harness, not against the tree")
     if tool == "skill":
         skill = skills_of(load_prompts()).get(call["name"])
@@ -833,6 +851,9 @@ class claude_code_connector:
 
 # Native tool-use markup a model trained on it may leak around a fenced call block when its tools come as text.
 TOOL_MARKUP_RE = re.compile(r"</?(?:antml:)?(?:function_calls|invoke|parameter)\b[^>]*>")
+# Such markup naming a tool with no call block beside it: the calls the model meant, written where the harness does not read them.
+LEAKED_CALL_RE = re.compile(r"<(?:antml:)?invoke\s+name=\"[^\"]+\"")
+LEAKED_CALL = "tool calls written as native tool-use markup (<invoke name=…>) are not run: write them as JSON in one ```syngate block"
 
 
 # The built-in connectors; the OpenAI-compatible API connections come from the server settings (`api_connection`).

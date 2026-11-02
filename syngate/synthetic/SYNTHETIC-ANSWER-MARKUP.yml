@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOLS]
+order: 55
+test: ~
+---
+Native tool markup answer
+An answer writing its calls as native tool-use markup with no call block shall be refused back to the model within the turn, rather than ending the turn as a text reply.

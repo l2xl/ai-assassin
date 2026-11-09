@@ -120,6 +120,21 @@ started from a managed project's checkout the same install edits that project's 
 .venv/bin/pytest                       # the whole test suite (tests/)
 ```
 
+Every behaviour change is also a tree change: the item stating it is added or reworded under the
+rules of [syngate.md](src/ai_scratcher/prompts/syngate.md), test-first, and the user's review then
+freezes its bound routine (*Process Rules* in [SYNGATE.md](SYNGATE.md)). Because a frozen routine is
+hashed over its raw source, the bound tests import the toolkit modules by their bare names
+(`import syngatelib`, aliased in `tests/conftest.py`), and new tests do the same; test modules name
+the item they cover in their docstring and build fixture trees through the `syngate_tree` fixture.
+
+Code style follows the surrounding code rather than a generic guide: one dense one-line docstring
+per function stating what it returns, rare comments that explain a decision, long lines (~120
+columns) and no formatter — neighbouring code is never reflowed. Every source file opens with the
+three-line copyright header of `src/ai_scratcher/__init__.py`; older files carrying the `Open Trader`
+line keep it, since rewriting it is churn on frozen spans. The standard library comes first, the
+only runtime dependencies being `pyyaml`, `jinja2` and `pytest`. Commit subjects are one line,
+imperative or topic-prefixed (`README: …`), with no body unless it adds something.
+
 `review`/`clear` are user-only here as in any managed project. A managed project's own provisioning
 (e.g. Open Trader's `<build dir>/ai-scratcher-venv`) also carries the `assassin` and `syngate` entry
 points, so `<that venv>/bin/assassin` run from this checkout works too — against the fetched snapshot

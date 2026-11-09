@@ -13,7 +13,7 @@ rollup, as the `syngatelib` library, the `syngate` CLI, `check_self_approval` an
   (`INFRA-066.yml` → `INFRA-066`), globally unique. Folders are external sorting only — moving a
   file between folders changes nothing. Other extensions (`.md`, …) are ignored by tooling.
 - **The tree shape lives inside the items** via `parents`. Multi-parent items form a DAG; exactly
-  one item has empty `parents` (the root, `OPEN-TRADER`). No settings files anywhere.
+  one item has empty `parents` (the root: `AI-ASSASSIN` here, `OPEN-TRADER` in Open Trader). No settings files anywhere.
 - **The rules the items follow are the default skill** [syngate.md](src/ai_scratcher/prompts/syngate.md),
   which heads every seed context: one testable thesis per leaf, design detail in linked files, each
   linked once, `sources` for key source files only, which branches earn their place, the shape of a

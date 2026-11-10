@@ -1,7 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 114
-test: ~
+test: b21f903e00f8c524b5b2173c595d2f6464fad13900fe77dfc6f52e7a9d650ed5
+review: f4f6a7affddbd4f9e6d33905d4a2f883d3f5c64a4e18653076d60325942bafc1
 ---
 Send now
 is the send pill of a running turn, reading `send!`: it stops the turn and sends the typed message as the next turn of the same session, while the stop pill alone sends nothing more and returns the queued messages to the reply line.

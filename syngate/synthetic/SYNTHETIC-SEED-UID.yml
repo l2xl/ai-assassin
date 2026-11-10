@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC]
 order: 60
-test: 5c6617663741ed294f007d7a736b373ee1aec7f0dddc8aa2427134197e9099d3
-review: 84a8fb22959b557f8f99d562b24cda7758904be406f6235d45814ce4eebebbc2
+test: 149af8ed802665245e524e0f8b6fa30b5c54bf93e3bbfd96c4049e4b65cb9cdf
+review: d56c41f1d47ee35a0d240404faf845bec3bb2625bf3d96509918548f73d0c84d
 ---
 Seed context item addressing
 heads the statement of every item in the seed context with its own `@UID` line, so each contained item is addressable by its UID.

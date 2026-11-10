@@ -2,8 +2,8 @@
 parents: [SYNTHETIC-TOOLS]
 order: 20
 sources: [src/ai_scratcher/prompts/agent.md]
-test: 589eba571aef18ce45db3313dbef2077e1dae71cc6213b1f304fa7568488b29d
-review: 7ee4c75f7a49ad9c6660cdfc100afb184c1469c98e8529aecc215bb837d50a8d
+test: b9ead6ee0f7b84a1a9f8847003746eab61466ca99018a156b9d46c1376c93948
+review: 9b96a78352ff60f84cd807156e40b13d7458ffbb21ee1f814b59889e176068ba
 ---
 Agent tool
 The agent tool shall run a turn of the named item's chat with the given prompt, the reports coming back as the next prompt.

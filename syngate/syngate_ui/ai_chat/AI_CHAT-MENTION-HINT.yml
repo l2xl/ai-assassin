@@ -1,8 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 75
-test: {api: 8160c09df5a49bf6c9159bd62e46c101171118e1ee3b12ad35a8731dbdac556b, page: bc4a711364570ec8b69d57db9537204be964b8c9260070adc65ccf75d3ea2018}
-review: 4fbf5252588888c82e61b032b4ef1ef39e56fa6c7a657d9253eb71779fd76613
+test: {api: d1a0e497b3bef19926399b8928077bab1629dcbb94affedba238876e34435980, page: 3d25c699a07977541474c2335e802b744f041b3ffe85fffd673900cd4558b553}
+review: 29db9e5060a10d34fdbde62a1ee42c22829cfd2764f725739d89efada629140d
 ---
 Mention hint
 opens while `@` is typed in a description editor or a reply line, offering the matching items and project files to insert, never the item files under `syngate/`.

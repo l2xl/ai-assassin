@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-PATCH]
 order: 30
-test: 591373c4afccc22cafd7451e994f8a39798e9e72cefd2dcc4b7a8893b1ba7c11
-review: c3468de6837636223e858470cb46645b61b940c14a9f1612f60d7b84bb60e46c
+test: 39e99713007a8fe27efaeb71950bb950b03530dc76fa58b073b2c41f4efe38b6
+review: 46767cb6556ab15692c8c0e64c3eb464a3cbab7a37ce37a3081d0298ebdd03e8
 ---
 Edit files switch
 A patch call shall be refused while the Edit files switch of the chat is off, its refusal coming back as the next prompt.

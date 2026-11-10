@@ -2,8 +2,8 @@
 parents: [SYNTHETIC-TOOL-WEBSURF]
 order: 20
 test: {ready: f7d7227240fe4888cff4f0fe7066cad211c8422c34ecb7db75fd18f20fcddf79, arrive: 12a9875f8d62e37190b5d1fd84369f52474427b9a8a323ee26895832b7be2d25,
-  seconds: 25463862fdad27c500e96cbdfc18d07431b9633ae92c8e0826009cea6c647dcb, stop: 9d15c5e62f0cdfffc6731701415123ec1d9896e2293d4975f544201e8f735a09}
-review: 102589ff80cbc18f94ba998d27db9102e8fa097070474a3d019a87e077366365
+  seconds: c0133d96120250853faaf5b2c36106851e9e73ede3e0ae34ac0ff5626049474d, stop: 8d31d198b7cb7588210d5f17900ca1ab9a8d68283a0dab248ab0220006892fcb}
+review: 419fbb0d323ac84c272a8f2e746f581d9f2250fae4c26139d2ba9fe50b0ff10b
 ---
 WebSurf wait
 is the harness's own websurf action, answering once a page event newer than the turn's last websurf call is recorded.

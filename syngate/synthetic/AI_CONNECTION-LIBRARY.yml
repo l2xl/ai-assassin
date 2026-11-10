@@ -1,8 +1,8 @@
 ---
 parents: [AI_CONNECTION]
 order: 20
-test: 70d667065b8c3d72bf0ce61c94c72338fc75456c2364a40496d33b27c064cc35
-review: 3212e94a5a694677d1228be9bd83a7c15804887ed12e9c311e3c8e66f5f5e5af
+test: 15a928852b8941d6cd3849694bdc474641fa50a09ca41b59f5d77326a4de29a8
+review: 2d61d5f2bea6db20a3ac834fd147ddb10f5e9a3f5bfc53031c0ab4b8047a2ba8
 ---
 Library delivery option
 of an AI connection declares whether it takes the prompt library as text merged into the seed context or natively through its provider's own skill and tool configuration.

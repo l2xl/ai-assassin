@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-GIT]
 order: 30
-test: 8fe93e242105343fe4088ff842f957071e34a72383317b9be3f0d6e4916c6026
-review: 86d6cef9ab413543583542f9ee3073081365f6454c4ec8885542510e8e62b9b8
+test: 7c330354a60dbaca386120a8f76bc3f2cae1d4d4e835a13eec6582858321e6b1
+review: e83ecf9e50f3c571c356a1c11e6b2f6c135d2d67af292449b50698dfc2821de2
 ---
 Git beyond the git tool
 A git command the git tool does not run but which erases nothing shall be refused with the pointer to the shell tool, which runs it while the chat's Raw command permission is on.

@@ -1,8 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 145
-test: b7517c3aae88790c1786b5697c3ae7f6675f3a965e7383c6f396bdec1e853cf6
-review: 04262462a1349cdca24f39a5c9b53fb38365604327f4d7c1f07f1f76f41c2474
+test: 5ae125423ed5686fe6b31e2170f553b398fc83f7ca6c44d606a2181797f24385
+review: 9f8040d6b70e4a7b8e5eeb4ba01c1c96c0991de2bd54db63abf3b5742fd28154
 ---
 Subagent mirror
 shows, in that item's chat and as an agent message once the turn ends, the report and transcript of a subagent the model launched itself with `@UID` as the first line of its prompt.

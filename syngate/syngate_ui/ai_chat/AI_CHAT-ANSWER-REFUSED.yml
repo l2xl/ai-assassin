@@ -1,8 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 180
-test: 5e05c1f404dda0cbc680f8a93ea3c4b0545bb3a1e3da3bc2aa9ef9c90fbd42ed
-review: f2b00aadbc76be002a1a45b2aa14051ef221470b040bc6b793fee1ef0be879d5
+test: 1c0482da9cb2aa10203d2e1b48021c70cfa4a93ad17009c10a7c6906457e9cec
+review: 3e049d1f740c48badd7b817b41b75ca2302d9ad0df36d2b5cdfeae5138a57dcb
 ---
 Malformed AI answer
 shall be refused to the AI itself as its next prompt, naming what is wrong, for it to answer again.

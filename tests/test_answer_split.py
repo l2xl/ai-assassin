@@ -75,6 +75,6 @@ def test_calls_written_as_native_tool_markup_without_a_call_block_are_refused_ba
         "chat", "Write `<invoke>` in a prompt and the model may answer with it.")  # a mention in prose is no markup
     app.connectors = {"echo": (scripted := Scripted(LEAKED, block, {"kind": "text", "text": "Read it."}))}
     outcome = turn(base, app, "ROOT", "Show the status.")
-    assert outcome["reply"].startswith("- answer refused: ") and outcome["reply"].endswith("Read it.")
+    assert outcome["applied"][0].startswith("- answer refused: ") and outcome["reply"] == "Read it."
     assert scripted.heard[1]["text"].startswith("Your last answer was refused") and "syngate" in scripted.heard[1]["text"]
     assert len(scripted.heard) == 3  # the refusal, then the call block's query, then the text answer

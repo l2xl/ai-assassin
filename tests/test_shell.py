@@ -28,13 +28,13 @@ def test_the_raw_command_switch_gates_the_shell_calls_of_a_turn_run_in_the_proje
     app.connectors = {"echo": (scripted := Shelled(calls(shell), {"kind": "text", "text": "Could not."}, calls(shell), {"kind": "text", "text": "Ran."},
                                                     calls({"tool": "shell", "command": "ls syngate"}), {"kind": "text", "text": "Closed."}))}
     outcome = turn(base, app, "ROOT", "Run it.", modes=["tree"])
-    assert outcome["reply"] == f"- shell pwd -P; exit 3 refused: {assassin_ui.SHELL_REFUSAL}\nCould not."
+    assert (outcome["applied"], outcome["reply"]) == ([f"- shell pwd -P; exit 3 refused: {assassin_ui.SHELL_REFUSAL}"], "Could not.")
     assert scripted.heard[0]["modes"] == []
     outcome = turn(base, app, "ROOT", "Run it.", modes=["tree", "bash"])
     ran = f"- shell pwd -P; exit 3:\nexit 3\n{app.root.resolve()}"
     assert scripted.heard[2]["modes"] == ["bash"]  # the mode reaches the connection that lists it
     assert scripted.heard[3]["text"] == synthetic.RESULTS_PREAMBLE + ran  # exit status and output come back as the next prompt
-    assert outcome["reply"] == ran + "\nRan."
+    assert (outcome["applied"], outcome["reply"]) == ([ran], "Ran.")
     outcome = turn(base, app, "ROOT", "List the items.", modes=["tree", "bash"])
-    assert outcome["reply"] == f"- shell ls syngate refused: {assassin_ui.SHELL_TREE}\nClosed."
+    assert (outcome["applied"], outcome["reply"]) == ([f"- shell ls syngate refused: {assassin_ui.SHELL_TREE}"], "Closed.")
     assert [mode["id"] for mode in app.build_model()["connectors"]["echo"]["modes"]] == ["tree", "patch", "bash"]

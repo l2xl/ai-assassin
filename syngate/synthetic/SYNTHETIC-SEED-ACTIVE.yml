@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC]
+order: 80
+test: ~
+---
+Seed context active item mark
+follows the `@UID` of the one statement the seed context is formed for with `(active item)`, or with the one-line `label` a syngate context call names in its place; the statements a message's references append carry none.

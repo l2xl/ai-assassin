@@ -52,9 +52,23 @@ the description, the controls on the panel's bottom-left border, `.block-ai`).
   setup kept — leaving with `▴ done` before anything is sent leaves the conversations as they
   were. A chat whose turn is running is joined instead, and a chat shown in another block of the
   item is simply shown here too. An empty send
-  is refused (`type a message first`). While a turn of the item runs the line stays editable, so
-  the next message is prepared meanwhile, but its send is refused with a notice (`a turn of UID is
-  running — wait for it or stop it`), the send pill dimmed and the typed text kept in the field.
+  is refused (`type a message first`). While a turn of the item runs the line stays editable and
+  its message is never refused; see *Messages while a turn runs* below. The editor's send, a retry
+  and the extraction marks still wait for the turn's end, refused with the notice `a turn of UID is
+  running — wait for it or stop it`.
+- **Messages while a turn runs.** A message sent from the reply line during a turn is **queued**
+  (`AI_CHAT-QUEUE`, Ctrl/⌘+Enter): the line empties and the message stands at the end of the log as
+  a pending user message (`.chat-msg.user.queued`, `queued — goes to the AI at its next step`),
+  held by the server (`queue` of the chat) so every tab shows it. The AI takes it as soon as it
+  can: a turn of the harness's own rounds hands it to the model with the next round's prompt
+  (`The user wrote while you were working:` after the results) and shows it in its place among the
+  turn's blocks (`.chat-msg.user.delivered`, a `user` step); what the turn did not take — a
+  connector running the whole turn in one process, a turn ending on text — goes as the next turn of
+  the same session the moment the running one ends, every queued message a user message of its own.
+  Until taken, the message's `✕` mark withdraws it back into the reply line. The send pill of a
+  running turn reads **`➤ send!`** (`AI_CHAT-SEND-NOW`, Ctrl/⌘+Shift+Enter): stop, send, continue —
+  the typed message is queued and the turn stopped at once, so the message goes as the next turn of
+  the same session, the stopped turn shown as stopped before it.
 - **Edit, then reply.** Clicking the reply line right after an edit saves the item, leaves the
   editor with the chat shown and waits for one more message before anything goes to the AI, so an
   edit never fires an exchange by itself.
@@ -159,6 +173,12 @@ limited by its guard alone.
   the selection is mapped onto the message's text by the alphanumerics shown, so the markup of a
   reply is stepped over. The extraction marks send the selected text alone, as the message's own
   marks send its kept text.
+- **Collapsible sections** (`AI_CHAT-FOLD-LIST`). A reply renders a `<details>` block — its
+  `<summary>…</summary>` on the same line or the next, markdown up to the matching `</details>`
+  line — as a section folded to its summary (`details.md-fold`, `▸` dim), expanded on a click;
+  `<details open>` starts expanded. The reader's choice survives the re-renders of the log. The
+  answer format skill asks the AI to write its long or secondary lists so ([SYNTHETIC.md](SYNTHETIC.md)),
+  the point of the answer staying in sight. The tags are not text: the selection steps over them.
 - **Items as references.** A chat message names an item the way a file is named with `@`: the
   harness resolves every `@UID` into the item's statement for the turn, appended to the seed
   context as one more section (`@UID`, then the statement), the message text staying as typed; in
@@ -178,10 +198,11 @@ limited by its guard alone.
 ## Waiting and the turn's activity
 
 While a turn runs — a single answer, or one with tool calls, subagents or a workflow — the log ends
-with the turn's **activity header** (`.turn-activity`) growing live, and the `▴ done` pill is a
+with the turn's blocks so far and its **activity line** (`.turn-activity`) growing live, and the `▴ done` pill is a
 `■ stop` button (`.chat-stop`, red, `AI_CHAT-STOP-BUTTON`; Ctrl/⌘+. is its keyboard twin): the chat
 can be neither hidden nor its fold marks switched until the turn ends. One press turns it into
-`stopping…`, disabled, until the outcome lands.
+`stopping…`, disabled, until the outcome lands. A plain stop sends nothing more: the messages
+queued meanwhile are withdrawn back into the reply line (`send!` is the stop that sends).
 Stop is an emergency halt: nothing of the turn reaches the tree, the project or the model past it,
 the connector being interrupted and the delegated turns stopped with it ([SYNTHETIC.md](SYNTHETIC.md),
 *Turn*); the steps collected and the calls applied before the stop stay, and the log shows the turn
@@ -192,21 +213,28 @@ The outline mirrors the state: the row of an item that has a chat carries a chat
 a spinner while a turn runs, a dot while a reply this tab has not shown waits, a warning when the
 last turn failed, a dim mark for a hidden chat; a hidden chat's `▾` carries the spinner too.
 
-- **Collapsed by default.** A finished turn is its answer under the activity header — `7 tool
-  calls · 2 subagents · 3 files changed · 48 s · $0.12` — the wall time and, when the connector
-  reports them, the cost and token counts close the header, which a turn without steps still shows
-  as that one line; the step list under it is present only when the turn had steps beyond the
-  answer and is collapsed at rest. Expanding it lists the steps as one-liners (`.turn-step`) in
-  order, each expanding in turn: a tool call to its input and result, `reasoning` to the exposed
-  text, `calls` to the tree calls of a batch (labelled `read` when every tool is a query, `applied`
-  otherwise), a `diff` to its file list (`added` / `changed` / `deleted`), each file to its hunks,
-  a `workflow` to its input and result, an `agent` step to a nested transcript rendered by these
-  same rules.
-- **Rules and shifts, never boxes.** The header sits on the reply's own bottom rule and the steps
-  are shifted under it, as ASSASSIN_UI.md prescribes for every sub-element.
+- **Steps in order, no main message** (`AI_CHAT-TURN-BLOCKS`). A turn is shown as it happened: every
+  step is a block of the log of its own, in the order of the steps, and no reply is chosen to stand
+  above the rest. The messages the AI said on the way — the text beside a batch of calls, an
+  intermediate answer of a connector — are AI messages (`.chat-msg.ai.interim`), right as the reply
+  and carrying its extraction marks but no fold, since they are not the reply's text. Every other
+  step is a line of the harness (`.chat-step`), right with the AI's messages in the dim style of a
+  secondary line, wrapping to a few lines and never merged with the next one: a tool call with its
+  input, `reasoning` with its first line, every call of a `calls` batch on its own line — paired by
+  the server with the call it answers (`inputs`) — every file of a `diff` on its own line
+  (`added` / `changed` / `deleted`), a `workflow`, an `agent` step. Each line unfolds to the whole
+  of it: a call to its input and its result (`read` for a reading call), a file to its hunks,
+  reasoning to its text, an agent step to its prompt, report and nested transcript rendered by these
+  same rules. The reply is the last block, a closing message the reply repeats is not shown twice. It is the AI's
+  own text alone: the harness adds no line of the calls applied, which are blocks already
+  (`AI_CHAT-REPLY-TEXT`), and a turn that ended on its calls shows no reply, only its blocks.
+- **The activity line.** The reply closes with a dim line on its bottom rule — `7 tool calls ·
+  2 subagents · 3 files changed · 48 s · $0.12` — the wall time and, when the connector reports
+  them, the cost and token counts closing it, which a turn without steps still shows; it is a
+  tally, never a fold.
 - **Subagents reach their items.** A subagent anchored at a child item — explicitly, through the
   `agent` tool, or by the `@UID` convention of an implicit one — is also shown in that item's chat
-  as an agent message with its collapsed transcript, an implicit one once the turn ends.
+  as an agent message with its transcript, an implicit one once the turn ends.
 - **Running subagents are links.** Every subagent still running on a known item other than the
   chat's own — an agent step without report in the live activity, or a background one — shows as
   an indicator `.agent-run` (spinner and `@UID`) closing the activity; it is a link that jumps to
@@ -216,7 +244,7 @@ last turn failed, a dim mark for a hidden chat; a hidden chat's `▾` carries th
   and sends (`AI_CHAT-AGENT-BACKGROUND`), while a header `N background subagents running` with
   the indicators stays under the log. A background subagent is stopped in its own item's chat; the
   server lists the running ones as `agents` of the chat. The report of one that ended joins the
-  log as an agent message `report of @UID` with its collapsed transcript.
+  log as an agent message `report of @UID` with its transcript.
 
 ## History
 

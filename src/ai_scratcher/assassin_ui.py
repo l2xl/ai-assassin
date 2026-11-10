@@ -21,6 +21,7 @@ against CSRF and DNS rebinding for localhost tools that run subprocesses.
 """
 
 import argparse
+import collections
 import copy
 import functools
 import hashlib
@@ -124,6 +125,8 @@ SURF_OFF = ("Interactive WebSurf is off for this chat: fill and mouse are refuse
 # The request of the review commit's message, sent to the reviewed item's chat when no single commit names the review.
 # The message heading a turn whose anchored item's statement changed since the conversation's previous turn, or sent from the editor.
 STATEMENT_NOTE = "The statement of @{uid} now reads:\n\n{statement}"
+# How the messages the user queued while a turn ran reach the model at the turn's next round, after the results it asked for.
+QUEUED_NOTE = "\n\nThe user wrote while you were working:\n\n{text}"
 # The engine's own files: the page, read for every request, and the Python sources, watched so a change re-executes the server in place
 # once nothing runs; the restarted process takes the session token and the listening socket over from these variables.
 PAGE_FILE = Path(__file__).resolve().parent / "assassin_ui.html"
@@ -223,6 +226,18 @@ def agent_steps(steps, skip=()):
             yield from agent_steps(step.get("steps") or (), skip)
 
 
+def tallied(lines):
+    """The applied lines of a turn with every repeated one said once, at its first place, its count closing it: `(×3)`."""
+    counts = collections.Counter(lines)
+    return [f"{line} (×{counts[line]})" if counts[line] > 1 else line for line in dict.fromkeys(lines)]
+
+
+def told(outcome):
+    """A turn's outcome as a model reads it where it never saw the turn's log -- a delegating turn's report, the history of a new session:
+    the lines of what the turn applied, then its reply or error. The chat shows the reply alone, the applied calls being blocks of the log."""
+    return "\n".join([*outcome.get("applied", ()), outcome.get("reply", outcome.get("error")) or ""]).strip("\n")
+
+
 class Turn:
     """One chat exchange run on its own thread: the page awaits its outcome by polling, re-attaching after a reload, and may stop it.
     Its steps are recorded as they happen, every change announced through `changed`; `parent` is the turn that delegated it."""
@@ -314,6 +329,7 @@ class Chat:
         self.turn = None
         self.started = None
         self.statement = None
+        self.queue = []
 
     def conversation(self):
         return {"started": self.started, "log": [dict(m) for m in self.log], "session": self.session, "setup": dict(self.setup), "statement": self.statement}
@@ -353,7 +369,8 @@ class Chat:
         """The exchange as it travels: every message but a failed or stopped turn's, its cuts taken out, one left empty left out."""
         kept = []
         for m in self.log:
-            text = kept_text(m["text"], m.get("cuts"))
+            kept += [{"role": "user", "text": step["text"]} for step in m.get("steps") or () if step.get("kind") == "user" and str(step.get("text") or "").strip()]
+            text = "\n".join([*m.get("applied", ()), kept_text(m["text"], m.get("cuts"))]).strip("\n")  # the lines the log shows as blocks
             if m["role"] not in ("error", "stopped") and text.strip():
                 kept.append({"role": m["role"], "text": text})
         return kept
@@ -361,7 +378,8 @@ class Chat:
     def snapshot(self):
         return {"uid": self.uid, "log": [dict(m) for m in self.log], "session": self.session, "started": self.started, **self.setup,
                 "archive": [self.summary(stored) for stored in self.archive], "turn": self.turn.id if self.running else None,
-                **({"steps": list(self.turn.steps)} if self.running else {}), **({"agents": agents} if (agents := self.agents()) else {})}
+                **({"steps": list(self.turn.steps)} if self.running else {}), **({"agents": agents} if (agents := self.agents()) else {}),
+                **({"queue": [dict(m) for m in self.queue]} if self.queue else {})}
 
     def agents(self):
         """The background subagents of the chat still running: the item each runs on and its turn."""
@@ -795,8 +813,8 @@ class AssassinApp:
 
     def list_files(self):
         """{files, truncated}: the project-relative files the mention hint offers -- the git-tracked ones while git is at hand, else a
-        bounded walk -- sorted, never one that resolves outside the project."""
-        root = self.root.resolve()
+        bounded walk -- sorted, never one that resolves outside the project nor an item file under `syngate/`."""
+        root, items = self.root.resolve(), self.syngate_dir.resolve()
         if self.git:
             listed = gitlib.git(self.root, "ls-files", "-z")
             names, cut = [name for name in listed.stdout.split("\0") if name] if listed.returncode == 0 else [], False
@@ -807,9 +825,10 @@ class AssassinApp:
             path = root / rel
             try:
                 inside = path.is_file() and path.resolve().is_relative_to(root)
+                item_file = path.suffix == ".yml" and path.resolve().is_relative_to(items)  # items are mentioned by `@UID`, their files are not offered
             except OSError:
                 continue
-            if inside:
+            if inside and not item_file:
                 files.append(rel)
         return {"files": files[:FILES_LIMIT], "truncated": cut or len(files) > FILES_LIMIT}
 
@@ -896,13 +915,19 @@ class AssassinApp:
         """Change the item's chat in place: its setup, one message's cuts -- the spans of its text folded out of the exchange; a change of
         them ends the connector session, so the next turn carries the kept text -- the removal of a failed or stopped turn's message,
         `reset` -- the session dropped, the log kept -- `erase` of the live conversation, `begin` of a new one -- the live one filed --
-        or `resume` of the filed one at that index; everything but the setup is refused while a turn runs."""
+        or `resume` of the filed one at that index, `unqueue` of the queued message at that index; everything but the setup and the
+        queue is refused while a turn runs."""
         table, defaults = (self.mode_table(), self.chat_defaults()) if any(key in data for key in (*SETUP_KEYS, "begin")) else ({}, {})
         with self._chat_lock:
             chat = self._chat(uid)
             patch = data.get("message") if isinstance(data.get("message"), dict) else {}
             if chat.running and (data.get("erase") or data.get("reset") or data.get("begin") or "resume" in data or "cuts" in patch or patch.get("remove")):
                 raise ApiError(409, f"a turn of {uid} is running; change the exchange once it ends")
+            if "unqueue" in data:
+                index = _number(data["unqueue"], "unqueue", int)
+                if not 0 <= index < len(chat.queue):
+                    raise ApiError(404, f"no queued message {index} of {uid} — it went to the AI already")
+                del chat.queue[index]
             if data.get("erase"):
                 chat.erase()
             if data.get("begin"):
@@ -948,7 +973,11 @@ class AssassinApp:
         first, and is announced into a conversation holding messages; a `retry` resends it without logging it again -- as a job the page
         polls through `turn_snapshot`, delegated by the `parent` turn from its start; -> `{"turn": "<UID>:<n>", "chat": …}`, the chat
         stamped with the chats `version`.
-        A turn of a conversation whose anchored statement changed since its previous turn is headed by the `STATEMENT_NOTE` message."""
+        A turn of a conversation whose anchored statement changed since its previous turn is headed by the `STATEMENT_NOTE` message.
+        While a turn of the chat runs, a plain message marked `queue` joins the chat's queue instead -- the running turn hands it to the
+        model at its next round, or the next turn starts with it once the running one ends -- and one marked `interrupt` joins it and
+        stops the running turn, so the next turn carries it on in the same session; -> `{"queued": n, "chat": …}`. `queued` texts start
+        a turn as messages of their own, sent together."""
         uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
         table, defaults = self.mode_table(), self.chat_defaults()  # read outside the lock: a connector may answer slowly
         item = self._load().get(uid)
@@ -957,7 +986,22 @@ class AssassinApp:
             if self.engine["restarting"]:
                 raise ApiError(503, RESTARTING)
             chat = self._chat(uid)
-            if chat.running:
+            plain = not (data.get("statement") or data.get("retry") or data.get("fresh") or data.get("agent"))
+            if chat.running and plain and (data.get("queue") or data.get("interrupt")) and text.strip():
+                chat.queue.append({"text": text})
+                chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
+                running = chat.turn.id
+                queued = {"queued": len(chat.queue), "chat": self._changed(chat)}
+            elif chat.running:
+                raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
+            else:
+                queued = None
+        if queued:
+            if data.get("interrupt"):
+                self.stop_turn(running, withdraw=False)
+            return queued
+        with self._chat_lock:
+            if chat.running:  # another start won the race meanwhile
                 raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
             if data.get("fresh"):
                 chat.file()
@@ -986,7 +1030,9 @@ class AssassinApp:
                 text = note if data.get("statement") else f"{note}\n\n{text}"
             elif data.get("statement") and not data.get("retry"):
                 text = current or text
-            if not data.get("statement") and not data.get("retry"):
+            if isinstance(data.get("queued"), list):
+                chat.log += [{"role": "user", "text": str(message)} for message in data["queued"]]
+            elif not data.get("statement") and not data.get("retry"):
                 chat.log.append({"role": "user", "text": str(data.get("text") or ""), **({"agent": data["agent"]} if data.get("agent") else {})})
             if current is not None:
                 chat.statement = current
@@ -997,6 +1043,7 @@ class AssassinApp:
             started = self._changed(chat)
 
         def run():
+            waiting = []
             try:
                 outcome = self.chat(exchange, turn)
             except ApiError as err:
@@ -1009,11 +1056,21 @@ class AssassinApp:
                         if outcome.get("session"):
                             chat.session = outcome["session"]
                         role = "ai" if "error" not in outcome else "stopped" if turn.stopped else "error"
-                        chat.log.append({"role": role, "text": outcome.get("error", outcome.get("reply")), **({"steps": list(turn.steps)} if turn.steps else {})})
+                        chat.log.append({"role": role, "text": outcome.get("error", outcome.get("reply")), **({"applied": outcome["applied"]} if outcome.get("applied") else {}),
+                                         **({"steps": list(turn.steps)} if turn.steps else {})})
                         self._mirror(turn, chat.uid)
                         self._bump()
                 finally:
                     turn.finish(outcome)
+                    if chat.turn is turn:
+                        waiting, chat.queue = chat.queue, []
+            if waiting:  # what the user queued and the turn did not take goes now, as the next turn of the same session
+                try:
+                    self.start_turn({**chat.setup, "uid": chat.uid, "text": "\n\n".join(m["text"] for m in waiting), "queued": [m["text"] for m in waiting]})
+                except ApiError as err:
+                    with self._chat_lock:
+                        chat.log.append({"role": "error", "text": f"the queued message was not sent: {err}"})
+                        self._bump()
 
         turn.thread = threading.Thread(target=run, daemon=True)
         turn.thread.start()
@@ -1059,21 +1116,28 @@ class AssassinApp:
         """The turn's state, awaited up to `wait` seconds; its outcome is also the last message of its chat."""
         return self._turn(key).snapshot(wait)
 
-    def stop_turn(self, key):
+    def stop_turn(self, key, withdraw=True):
         """End a running turn the instant the stop lands: its gate closes, so nothing of it is applied past this mark; the turns it
         delegated are stopped the same way, the test run it awaits is cancelled and its connector's live process is interrupted;
-        the exchange then reports as stopped."""
-        turn = self._turn(key)
+        the exchange then reports as stopped. A stop the user pressed `withdraw`s the messages queued meanwhile, handing their texts
+        back -- `unqueued` -- rather than sending them; the stop of a send-now keeps them for the next turn."""
+        turn, unqueued = self._turn(key), []
+        if withdraw:
+            with self._chat_lock:
+                chat = self.chats.get(key.rpartition(":")[0])
+                if chat and chat.queue:
+                    unqueued, chat.queue = [m["text"] for m in chat.queue], []
+                    self._bump()
         turn.stopped = True
         for child in turn.children:
             if child.outcome is None and not child.stopped:
-                self.stop_turn(child.id)
+                self.stop_turn(child.id, withdraw=False)
         if turn.job is not None and turn.job is self.jobs.current and turn.job.returncode is None:
             threading.Thread(target=self.jobs.cancel, daemon=True).start()
         interrupt = getattr(self.connectors.get(turn.connector), "interrupt", None)
         if interrupt and turn.thread:
             interrupt(turn.thread.ident)
-        return {"ok": True}
+        return {"ok": True, **({"unqueued": unqueued} if unqueued else {})}
 
     def chat(self, data, turn=None):
         """One exchange anchored at `uid`: the item's seed context plus the user's text go to the chosen connector.
@@ -1081,7 +1145,8 @@ class AssassinApp:
         into one awaited run through the page's runner after the rest, its agent calls then run as parallel turns of their items' chats
         -- and while it carries queries, runs or delegations their results go back into the same session for the next answer.
         A refused call ends its batch and goes back the same way, with the results of the calls applied before it, for the next
-        answer to correct it or to explain. The reply lists what was applied, ran or was reported; what was read stays in the steps.
+        answer to correct it or to explain. The reply is the AI's own text alone: what was applied, ran or was reported is in the steps,
+        and goes as `applied` -- each repeated line once, with its count -- to where a model reads the outcome without the log (`told`).
         `history` is the kept part of an exchange whose session was dropped: it travels with the text of the first round.
         A `turn` stopped while a round is out ends the exchange there, what was applied so far staying applied.
         A rename carries the item's chat to the new UID, and the exchange with it when the item is the anchor.
@@ -1102,19 +1167,34 @@ class AssassinApp:
             text = TREE_OFF + "\n" + text
         halted = lambda: turn is not None and turn.stopped
         bound = lambda: rounds if events.surfed else synthetic.QUERY_ROUNDS
+        applied_lines = lambda lines: {"applied": tallied(lines)} if lines else {}
 
-        def batch_step(lines, batch=()):
+        def delivered(text):
+            """The next prompt with the messages the user queued meanwhile, taken from the turn's chat and recorded as a step in place."""
+            if turn is None:
+                return text
+            with self._chat_lock:
+                chat = self.chats.get(turn.id.rpartition(":")[0])
+                waiting = chat.queue if chat and chat.turn is turn else []
+                if waiting:
+                    chat.queue = []
+            for message in waiting:
+                turn.add_step({"kind": "user", "text": message["text"], "at": turn.elapsed()})
+            return text + QUEUED_NOTE.format(text="\n\n".join(m["text"] for m in waiting)) if waiting else text
+
+        def batch_step(lines, batch=(), inputs=()):
             if turn and lines:
-                turn.add_step({"kind": "calls", "tools": [call["tool"] for call in batch], "lines": list(lines), "at": turn.elapsed()})
+                turn.add_step({"kind": "calls", "tools": [call["tool"] for call in batch], "lines": list(lines),
+                               "inputs": [*inputs, *[None] * (len(lines) - len(inputs))][:len(lines)], "at": turn.elapsed()})
 
-        def stopped(lines=(), batch=(), shown=()):
-            batch_step(lines, batch)
-            return ApiError(409, "\n".join([*applied, *shown, "turn stopped"]), session=session)
+        def stopped(lines=(), batch=(), shown=(), inputs=()):
+            batch_step(lines, batch, inputs)
+            return ApiError(409, "turn stopped", session=session, **applied_lines([*applied, *shown]))
 
         for done in itertools.count():
             if done >= bound():
                 out = synthetic.ROUNDS_OUT.format(rounds=bound()) if events.surfed else "answer refused: the exchange kept querying"
-                raise ApiError(422, "\n".join([*applied, out]), session=session)
+                raise ApiError(422, out, session=session, **applied_lines(applied))
             on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
             try:
                 reply, session = synthetic.query(self.sync_connections(), self._load(), uid, text, data.get("connector"), data.get("model"),
@@ -1134,13 +1214,13 @@ class AssassinApp:
                 kind, payload = synthetic.parse_reply(reply)
             except synthetic.protocol_error as err:
                 refusal = f"answer refused: {err}"  # the AI hears it as its next prompt and answers again, within the rounds of the turn
-                batch_step([refusal])
+                batch_step([refusal], inputs=[reply])
                 applied.append(f"- {refusal}")
-                text = synthetic.ANSWER_REFUSED.format(error=err)
+                text = delivered(synthetic.ANSWER_REFUSED.format(error=err))
                 continue
             if kind == "chat":
-                return {"ok": True, "reply": "\n".join([*applied, payload]), "session": session, **({"calls": calls} if calls else {})}
-            items, results, shown, refusal, detail = self._load(), [], [], None, ""
+                return {"ok": True, "reply": payload, **applied_lines(applied), "session": session, **({"calls": calls} if calls else {})}
+            items, results, shown, refusal, detail, inputs, refused = self._load(), [], [], None, "", [], None
             named = lambda call: synthetic.call_target(uid, call)
             denied = lambda line, err: f"- {line} refused: {err}"
             runs = [call for call in payload if synthetic.is_run(call)]
@@ -1149,58 +1229,63 @@ class AssassinApp:
                 if synthetic.is_run(call) or synthetic.is_delegation(call):
                     continue
                 if halted():
-                    raise stopped(results, payload, shown)
+                    raise stopped(results, payload, shown, inputs)
                 if synthetic.is_git(call):
                     try:
                         line, records = self._git(call)
                     except ApiError as err:
-                        refusal = denied(f"git {call['command']}", err)
+                        refusal, refused = denied(f"git {call['command']}", err), call
                         break
                     results.append(line)
+                    inputs.append(call)
                     if records:
                         shown.append(line)
                     continue
                 if synthetic.is_patch(call):
                     if not patch:
-                        refusal = denied(call["tool"], ApiError(403, PATCH_REFUSAL))
+                        refusal, refused = denied(call["tool"], ApiError(403, PATCH_REFUSAL)), call
                         break
                     try:
                         line = self._patch(call)
                     except ApiError as err:
-                        refusal = denied(call["tool"], err)
+                        refusal, refused = denied(call["tool"], err), call
                         break
                     results.append(line)
+                    inputs.append(call)
                     shown.append(line)
                     continue
                 if synthetic.is_shell(call):
                     if SHELL_MODE not in modes:
-                        refusal = denied(f"shell {call['command']}", ApiError(403, SHELL_REFUSAL))
+                        refusal, refused = denied(f"shell {call['command']}", ApiError(403, SHELL_REFUSAL)), call
                         break
                     try:
                         line = self._shell(call)
                     except ApiError as err:
-                        refusal = denied(f"shell {call['command']}", err)
+                        refusal, refused = denied(f"shell {call['command']}", err), call
                         break
                     results.append(line)
+                    inputs.append(call)
                     shown.append(line)
                     continue
                 if synthetic.is_surf(call):
                     try:
                         line, shot = self._surf(call, interactive, turn, halted, events)
                     except ApiError as err:
-                        refusal, detail = denied(websurf.label(call), err), err.extra.get("detail", "")  # the model reads the detail, the chat the line
+                        refusal, detail, refused = denied(websurf.label(call), err), err.extra.get("detail", ""), call  # the model reads the detail, the chat the line
                         break
                     results.append(line)
+                    inputs.append(call)
                     images += shot
                     continue
                 if call["tool"] in synthetic.TOOLS and not tree:
-                    refusal = denied(f"{call['tool']} {named(call)}", ApiError(403, TREE_REFUSAL))
+                    refusal, refused = denied(f"{call['tool']} {named(call)}", ApiError(403, TREE_REFUSAL)), call
                     break
                 renamed = named(call) if call["tool"] == "rename" else None
                 try:
                     results.append(self._rename(items, uid, call, turn) if renamed else _call(lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir)))
+                    inputs.append(call)
                 except ApiError as err:
-                    refusal = denied(f"{call['tool']} {named(call)}", err)
+                    refusal, refused = denied(f"{call['tool']} {named(call)}", err), call
                     break
                 if renamed == uid:
                     uid = call["new_uid"]
@@ -1208,32 +1293,36 @@ class AssassinApp:
                     shown.append(results[-1])
             if runs and refusal is None:
                 if halted():
-                    raise stopped(results, payload, shown)
+                    raise stopped(results, payload, shown, inputs)
                 try:
                     results.append(self._run_calls(items, [(named(call), call.get("name") or None) for call in runs], turn))
+                    inputs.append(runs[0] if len(runs) == 1 else runs)
                     shown.append(results[-1])
                 except ApiError as err:
-                    refusal = denied(f"test {' '.join(dict.fromkeys(named(call) for call in runs))}", err)
+                    refusal, refused = denied(f"test {' '.join(dict.fromkeys(named(call) for call in runs))}", err), runs[0] if len(runs) == 1 else runs
             if delegations and refusal is None:
                 reported = len(results)
                 delegated = self._delegate(items, uid, data, delegations, turn, results)
                 shown += results[reported:]
+                by_line = lambda line: next((call for call in delegations if line.startswith(f"- agent {named(call)}:") or line == f"agent {named(call)}"), None)
+                inputs += [by_line(line) for line in results[reported:]]
                 if delegated:
                     err, line = delegated
-                    refusal = denied(line, err)
+                    refusal, refused = denied(line, err), by_line(line)
             if halted():
-                raise stopped(results, payload, shown)
+                raise stopped(results, payload, shown, inputs)
             if refusal:
                 results.append(refusal + detail)
+                inputs.append(refused)
                 shown.append(refusal)
-            batch_step(results, payload)
+            batch_step(results, payload, inputs)
             applied += shown
             calls += payload
             if (refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_surf(call) or synthetic.is_shell(call) for call in payload)
                     and not runs and not delegations):
-                return {"ok": True, "reply": "\n".join(applied), "session": session, "calls": calls}
-            text = (synthetic.RESULTS_PREAMBLE + "\n".join(results) + websurf.events_text(events.take(), *self.surf_lists())
-                    + synthetic.rounds_left(bound() - done - 1))
+                return {"ok": True, "reply": "", **applied_lines(applied), "session": session, "calls": calls}
+            text = delivered(synthetic.RESULTS_PREAMBLE + "\n".join(results) + websurf.events_text(events.take(), *self.surf_lists())
+                             + synthetic.rounds_left(bound() - done - 1))
 
     def _patch(self, call):
         """Apply the unified diff of a patch call to the project's files through the patch tool's guard, all of it or none, or the exact
@@ -1368,7 +1457,7 @@ class AssassinApp:
             step.update(report=outcome.get("reply", outcome.get("error")), steps=outcome.get("steps", []))
             if turn:
                 turn.add_step(step, shift)
-            results.append(f"- agent {step['uid']}: {step['report']}")
+            results.append(f"- agent {step['uid']}: {told(outcome)}")
         return refusal
 
     def _watch(self, parent, child):
@@ -1385,7 +1474,7 @@ class AssassinApp:
             with self._chat_lock:
                 parent.background.remove(child)
                 parent.log.append({"role": "ai", "agent_report": uid, "text": text, "steps": list(child.steps)})
-                parent.reports.append(f"Report of the background subagent @{uid}:\n{text}\n\n")
+                parent.reports.append(f"Report of the background subagent @{uid}:\n{told(outcome)}\n\n")
                 self._bump()
 
         threading.Thread(target=report, daemon=True).start()

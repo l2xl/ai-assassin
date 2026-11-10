@@ -1,0 +1,7 @@
+---
+parents: [AI-CHAT]
+order: 112
+test: ~
+---
+Queued message
+is what a message sent from the reply line while a turn of the chat runs becomes instead of a refusal: it stands at the end of the log until the AI takes it — at the running turn's next step, shown there among its blocks, or as the next turn of the same session the moment the running one ends — and until then its mark withdraws it back into the reply line.

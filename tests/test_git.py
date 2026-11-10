@@ -68,8 +68,8 @@ def test_a_git_call_runs_in_the_project_root_without_a_shell_and_its_outcome_com
                                                     {"kind": "text", "text": "Committed."}))}
     outcome = turn(base, app, "ROOT", "Commit the notes.", modes=[])  # no switch gates git: its records run with every permission off
     assert scripted.heard[1]["text"] == synthetic.RESULTS_PREAMBLE + "- git status --short:\nexit 0\n?? notes.md"  # the read came back, out of the reply
-    assert outcome["reply"].startswith("- git add notes.md:\nexit 0\n- git commit -m 'Add the notes; $(touch pwned)':\nexit 0\n[main ")
-    assert outcome["reply"].endswith("\nCommitted.") and scripted.heard[2]["text"].startswith(synthetic.RESULTS_PREAMBLE + "- git add notes.md:\nexit 0")
+    assert "\n".join(outcome["applied"]).startswith("- git add notes.md:\nexit 0\n- git commit -m 'Add the notes; $(touch pwned)':\nexit 0\n[main ")
+    assert outcome["reply"] == "Committed." and scripted.heard[2]["text"].startswith(synthetic.RESULTS_PREAMBLE + "- git add notes.md:\nexit 0")
     assert git(app.root, "log", "-1", "--format=%s") == "Add the notes; $(touch pwned)\n" and not (app.root / "pwned").exists()  # no shell saw the line
 
 
@@ -87,7 +87,8 @@ def test_the_git_tool_is_offered_only_while_git_finds_a_work_tree_around_the_pro
     assert not bare.git and "git" not in bare.library and "git" not in tools and "query" in tools
     bare.connectors = {"echo": Scripted(calls({"tool": "git", "command": "status"}), {"kind": "text", "text": "No git here."})}
     assert bare.build_model()["git"] is False
-    assert bare.chat({**SETUP, "uid": "ROOT", "text": "Status?", "modes": ["tree"]})["reply"] == f"- git status refused: {assassin_ui.GIT_ABSENT}\nNo git here."
+    outcome = bare.chat({**SETUP, "uid": "ROOT", "text": "Status?", "modes": ["tree"]})
+    assert (outcome["applied"], outcome["reply"]) == ([f"- git status refused: {assassin_ui.GIT_ABSENT}"], "No git here.")
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-GIT-GUARD", "command")
@@ -226,9 +227,9 @@ def test_a_git_command_the_tool_does_not_run_but_erasing_nothing_is_refused_with
     app.connectors = {"echo": (scripted := Scripted(calls(submodule), {"kind": "text", "text": "Stopped."},
                                                     calls({"tool": "git", "command": "reset --hard HEAD"}), {"kind": "text", "text": "Stopped."}))}
     outcome = turn(base, app, "ROOT", "Add the submodule.", modes=[])
-    assert outcome["reply"].startswith("- git submodule add git@example.com:o/r.git r refused: 'submodule' is not a command of the git tool")
-    assert assassin_ui.GIT_SHELL_HINT in outcome["reply"] and "shell tool" in assassin_ui.GIT_SHELL_HINT and "Raw command" in assassin_ui.GIT_SHELL_HINT
+    assert outcome["applied"][0].startswith("- git submodule add git@example.com:o/r.git r refused: 'submodule' is not a command of the git tool")
+    assert assassin_ui.GIT_SHELL_HINT in outcome["applied"][0] and "shell tool" in assassin_ui.GIT_SHELL_HINT and "Raw command" in assassin_ui.GIT_SHELL_HINT
     assert assassin_ui.GIT_SHELL_HINT in scripted.heard[1]["text"]  # the pointer reaches the model with the refusal
     outcome = turn(base, app, "ROOT", "Reset it.", modes=[])
-    assert "refused" in outcome["reply"] and assassin_ui.GIT_SHELL_HINT not in outcome["reply"]  # never for a command that erases
+    assert "refused" in outcome["applied"][0] and assassin_ui.GIT_SHELL_HINT not in outcome["applied"][0]  # never for a command that erases
     assert "submodule" in synthetic.LIBRARY["git"].text and "shell" in synthetic.LIBRARY["git"].text

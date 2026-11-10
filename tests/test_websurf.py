@@ -235,13 +235,14 @@ def test_a_websurf_call_with_no_browser_attached_is_refused_cleanly(server):
     base, app = server
     app.connectors = {"echo": (scripted := Scripted(calls(surf("open", url="https://example.com/")), text("No browser.")))}
     outcome = turn(base, app, "LEAF-001", "Read it.", modes=ON)
-    assert outcome["reply"] == f"- websurf open https://example.com/ refused: {websurf.ABSENT}\nNo browser."
+    assert (outcome["applied"], outcome["reply"]) == ([f"- websurf open https://example.com/ refused: {websurf.ABSENT}"], "No browser.")
     assert scripted.heard[1]["text"] == synthetic.RESULTS_PREAMBLE + f"- websurf open https://example.com/ refused: {websurf.ABSENT}"
     browser = attached(base, app)
     browser.close()
     assert settle(lambda: app.websurf.attached is None)  # a browser gone is detached
     app.connectors = {"echo": Scripted(calls(surf("status")), text("Gone."))}
-    assert turn(base, app, "LEAF-001", "Again.", modes=ON)["reply"] == f"- websurf status refused: {websurf.ABSENT}\nGone."
+    outcome = turn(base, app, "LEAF-001", "Again.", modes=ON)
+    assert (outcome["applied"], outcome["reply"]) == ([f"- websurf status refused: {websurf.ABSENT}"], "Gone.")
 
 
 class Seeing(Scripted):
@@ -322,7 +323,7 @@ def test_a_failed_answer_comes_back_as_the_refusal_of_its_call_with_the_page_the
                                                     text("Found the form.")))}
     outcome = turn(base, app, "LEAF-001", "Fill the form.", modes=ON)
     missing, gone, hidden = (f"- websurf fill #q refused: {error}" for error in errors)
-    assert outcome["reply"] == "\n".join([missing, gone, hidden, "Found the form."])  # the chat reads the error alone; the turn went on
+    assert (outcome["applied"], outcome["reply"]) == ([missing, gone, hidden], "Found the form.")  # the chat reads the error alone; the turn went on
     assert [frame["action"] for frame in browser.heard] == ["fill", "query", "fill", "fill"]  # the refusal ended its batch: the next answer's query went
     told = scripted.heard[1]["text"]
     assert told.startswith(synthetic.RESULTS_PREAMBLE + missing + "\n" + websurf.SHOWS + "\n")
@@ -483,10 +484,10 @@ def test_an_answer_whose_page_is_on_a_refused_origin_is_withheld_but_for_its_ori
     browser = attached(base, app, lambda frame: tab(frame, landed=next(pages)))
     app.connectors = {"echo": (scripted := Scripted(calls(surf("status")), calls(surf("query", origin=ORIGIN)), calls(surf("screenshot", origin=ORIGIN)),
                                                     text("Withheld.")))}
-    reply = turn(base, app, "LEAF-001", "Look.", modes=ON)["reply"]
-    assert reply == "\n".join([
+    outcome = turn(base, app, "LEAF-001", "Look.", modes=ON)
+    assert (outcome["applied"], outcome["reply"]) == ([
         "- websurf status refused: the page landed on https://login.bank.example, blocked by the host lists of the server settings: its answer is withheld",
-        "- websurf screenshot refused: the page landed on about:, not an http or https page: its answer is withheld", "Withheld."])
+        "- websurf screenshot refused: the page landed on about:, not an http or https page: its answer is withheld"], "Withheld.")
     said = "".join(heard["text"] for heard in scripted.heard)
     assert "secret" not in said and "/session" not in said  # the URL past the origin is the page's to write
     assert [frame["action"] for frame in browser.heard] == ["status", "query", "screenshot"]
@@ -539,7 +540,8 @@ def test_a_page_action_names_the_origin_of_its_page_judged_before_anything_reach
                                                  "page": info("https://other.example/x")})
     app.connectors = {"echo": (scripted := Scripted(calls(surf("query", origin="https://login.bank.example")), calls(surf("query")),
                                                     calls(surf("query", origin="https://Example.com/a")), text("The page changed.")))}
-    lines = turn(base, app, "LEAF-001", "Read.", modes=["tree"])["reply"].split("\n")
+    outcome = turn(base, app, "LEAF-001", "Read.", modes=["tree"])
+    lines = [*outcome["applied"], outcome["reply"]]
     assert lines[0] == "- websurf query refused: https://login.bank.example is blocked by the host lists of the server settings"
     assert lines[1].startswith("- websurf query refused: query needs the `origin`")
     assert lines[2:] == ["- websurf query refused: the surf tab's page is on https://other.example, not https://example.com", "The page changed."]
@@ -665,11 +667,13 @@ def test_a_wait_blocks_until_a_page_event_arrives(server):
 def test_a_wait_given_seconds_ends_without_a_page_event_and_none_waits_without_a_browser(server):
     base, app = server
     app.connectors = {"echo": Scripted(calls(surf("wait", seconds=5)), text("No browser."))}
-    assert turn(base, app, "LEAF-001", "Wait.", modes=ON)["reply"] == f"- websurf wait refused: {websurf.ABSENT}\nNo browser."
+    outcome = turn(base, app, "LEAF-001", "Wait.", modes=ON)
+    assert (outcome["applied"], outcome["reply"]) == ([f"- websurf wait refused: {websurf.ABSENT}"], "No browser.")
     browser = attached(base, app)
     app.connectors = {"echo": Scripted(calls(surf("wait", seconds=0.3)), text("Nothing came."))}
     begun = time.monotonic()
-    assert turn(base, app, "LEAF-001", "Wait.", modes=ON)["reply"] == "- websurf wait refused: no page event within 0.3 s\nNothing came."
+    outcome = turn(base, app, "LEAF-001", "Wait.", modes=ON)
+    assert (outcome["applied"], outcome["reply"]) == (["- websurf wait refused: no page event within 0.3 s"], "Nothing came.")
     assert 0.3 <= time.monotonic() - begun < 5
     browser.close()
 
@@ -688,7 +692,8 @@ def test_a_wait_ends_on_the_turns_stop_and_on_the_browser_detaching(server):
     key = start(base, app, "LEAF-001", "Await.", modes=ON)
     assert settle(lambda: surf_steps({"steps": app._turn(key).steps}))
     browser.close()
-    assert outcome_of(base, app, key)["reply"] == "- websurf wait refused: the browser detached\nGone."
+    outcome = outcome_of(base, app, key)
+    assert (outcome["applied"], outcome["reply"]) == (["- websurf wait refused: the browser detached"], "Gone.")
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-HOLD", "other")
@@ -703,9 +708,10 @@ def test_another_running_turn_holding_the_surf_tab_refuses_open_and_close_but_no
     assert settle(lambda: len(holding.heard) == 2)  # it opened and runs on
     denied = websurf.HELD.format(turn=key)
     assert key in denied and "origin" in denied
-    reply = turn(base, app, "ROOT", "Open another.", connector="other", modes=ON)["reply"]
-    assert reply == f"- websurf open https://example.com/b refused: {denied}\n- websurf close refused: {denied}\nRead."
-    assert app.chat({**SETUP, "connector": "sync", "uid": "ROOT", "text": "Open.", "modes": ON})["reply"] == f"- websurf open https://example.com/c refused: {denied}\nHeld."
+    outcome = turn(base, app, "ROOT", "Open another.", connector="other", modes=ON)
+    assert (outcome["applied"], outcome["reply"]) == ([f"- websurf open https://example.com/b refused: {denied}", f"- websurf close refused: {denied}"], "Read.")
+    outcome = app.chat({**SETUP, "connector": "sync", "uid": "ROOT", "text": "Open.", "modes": ON})
+    assert (outcome["applied"], outcome["reply"]) == ([f"- websurf open https://example.com/c refused: {denied}"], "Held.")
     assert [frame["action"] for frame in browser.heard] == ["open", "query"]
     gate.set()
     assert outcome_of(base, app, key)["reply"] == "late"
@@ -722,7 +728,8 @@ def test_the_turns_the_holder_delegated_directly_or_not_open_and_close_its_tab(s
                                        calls({"tool": "agent", "uid": "LEAF-002", "prompt": "Open the next page"}),
                                        calls(surf("open", url="https://example.com/next"), surf("close")), text("Grandchild done."),
                                        calls(surf("open", url="https://example.com/third")), text("Child done."), text("Done."))}
-    assert turn(base, app, "ROOT", "Open and delegate.", modes=ON)["reply"] == "- agent LEAF-001: - agent LEAF-002: Grandchild done.\nChild done.\nDone."
+    outcome = turn(base, app, "ROOT", "Open and delegate.", modes=ON)
+    assert (outcome["applied"], outcome["reply"]) == (["- agent LEAF-001: - agent LEAF-002: Grandchild done.\nChild done."], "Done.")
     assert [frame.get("url", frame["action"]) for frame in browser.heard] == [NEWS, "https://example.com/next", "close", "https://example.com/third"]
     assert app.websurf.holder.id == "LEAF-001:1"  # the last turn whose open passed
     browser.close()
@@ -783,7 +790,7 @@ def test_fill_and_mouse_are_refused_while_the_switch_is_off_and_a_child_cannot_s
     for call in (surf("fill", origin=ORIGIN, selector="#q", value="x"), surf("mouse", origin=ORIGIN, steps=[{"type": "click", "x": 5, "y": 5}])):
         app.connectors = {"echo": Scripted(calls(call), text("Off."))}
         reply = turn(base, app, "LEAF-001", "Act.", modes=["tree", "edit"])["reply"]
-        assert reply == f"- {websurf.label(call)} refused: {assassin_ui.SURF_OFF}\nOff." and "Interactive WebSurf" in assassin_ui.SURF_OFF
+        assert reply == "Off." and app.chats["LEAF-001"].log[-1]["applied"] == [f"- {websurf.label(call)} refused: {assassin_ui.SURF_OFF}"] and "Interactive WebSurf" in assassin_ui.SURF_OFF
     assert all(action in assassin_ui.SURF_OFF for action in ("open", "close", "status", "query", "screenshot", "wait")) and browser.heard == []
     app.connectors = {"echo": Seeing(calls(surf("open", url="https://example.com/"), surf("screenshot", origin=ORIGIN)), text("Read."))}
     assert turn(base, app, "LEAF-001", "Look.", modes=["tree", "edit"])["reply"] == "Read."
@@ -791,10 +798,10 @@ def test_fill_and_mouse_are_refused_while_the_switch_is_off_and_a_child_cannot_s
     denied = f"- websurf fill #q refused: {assassin_ui.SURF_OFF}"
     fill = surf("fill", origin=ORIGIN, selector="#q", value="x")
     app.connectors = {"echo": (scripted := Scripted(calls(child), calls(fill), text("Could not."), text("Reported.")))}
-    assert turn(base, app, "ROOT", "Delegate.", modes=["tree", "edit"])["reply"] == f"- agent LEAF-001: {denied}\nCould not.\nReported."
+    assert turn(base, app, "ROOT", "Delegate.", modes=["tree", "edit"])["reply"] == "Reported." and app.chats["ROOT"].log[-1]["applied"] == [f"- agent LEAF-001: {denied}\nCould not."]
     assert scripted.heard[1]["modes"] == ["edit"] and [frame["action"] for frame in browser.heard] == ["open", "screenshot"]
     app.connectors = {"echo": Scripted(calls(child), calls(fill), text("Filled."), text("Reported."))}
-    assert turn(base, app, "ROOT", "Delegate.", modes=ON)["reply"] == "- agent LEAF-001: Filled.\nReported."  # a parent with the switch on passes it down
+    assert turn(base, app, "ROOT", "Delegate.", modes=ON)["reply"] == "Reported." and app.chats["ROOT"].log[-1]["applied"] == ["- agent LEAF-001: Filled."]  # a parent with the switch on passes it down
     browser.close()
 
 

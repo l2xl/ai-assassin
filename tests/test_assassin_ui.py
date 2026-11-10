@@ -895,7 +895,7 @@ def test_the_reply_line_waits_under_every_item_outside_the_tab_order_with_its_hi
 
 @pytest.mark.syngate("AI_CHAT-REPLY-HINT")
 @pytest.mark.syngate("AI_CHAT-REPLY-DRAFT")
-def test_while_a_turn_runs_the_reply_line_shows_a_spinner_at_its_left_and_keeps_the_next_message_unsent(server, chrome):
+def test_while_a_turn_runs_the_reply_line_shows_a_spinner_at_its_left_and_its_draft_is_queued_not_refused(server, chrome):
     base, app = server
     gated = GatedConnector()
     page = open_chat(server, chrome, echo=gated)
@@ -904,15 +904,17 @@ def test_while_a_turn_runs_the_reply_line_shows_a_spinner_at_its_left_and_keeps_
     spinner = f"(() => {{ const spin = {LEAF}.querySelector('.reply-wait .spinner'), line = {LEAF}.querySelector('.chat-input'), box = spin.getBoundingClientRect();" \
               " return [line.placeholder, box.width > 0, box.right <= line.getBoundingClientRect().left]; })()"
     assert page.eval(spinner) == [WAIT_HINT, True, True]  # beside the field, never over its text
-    page.eval(f"{LEAF}.querySelector('.chat-input').value = 'Next one'")
-    page.eval(f"{LEAF}.querySelector('.block-ai .chat-send').click()")
-    assert page.eval(TOASTS) == ["toast info:a turn of LEAF-001 is running — wait for it or stop it"] and page.eval(f"{LEAF}.querySelector('.chat-input').value") == "Next one"
-    assert [m["role"] for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"]] == ["user"]
+    page.eval(f"{LEAF}.querySelector('.chat-input').value = 'Next one'")  # the line stays editable while the AI answers
+    assert page.eval(f"{LEAF}.querySelector('.chat-input').value") == "Next one"
+    queue(page, "Next one")  # its send queues the draft instead of refusing it
+    page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued')")
+    assert page.eval(TOASTS) == [] and page.eval(f"{LEAF}.querySelector('.chat-input').value") == ""
+    assert [m["role"] for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"]] == ["user"]  # held by the server, not yet in the log
+    assert [m["text"] for m in app.chats["LEAF-001"].queue] == ["Next one"]
     gated.release.set()
-    page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
+    page.wait(f"{LEAF}.querySelectorAll('.chat-msg.user').length === 2 && {LEAF}.querySelectorAll('.chat-msg.ai').length === 2 && !{LEAF}.querySelector('.block-ai .chat-stop')")
     assert page.eval(spinner)[:2] == [OPEN_HINT, False]
-    page.eval(f"{LEAF}.querySelector('.block-ai .chat-send').click()")
-    page.wait(f"{LEAF}.querySelectorAll('.chat-msg.user').length === 2")
+    assert [m["role"] for m in app.chats["LEAF-001"].log] == ["user", "ai", "user", "ai"]  # the turn ended: the draft went as the next turn
 
 
 @pytest.mark.syngate("AI_CHAT-REPLY-NEW")
@@ -1092,8 +1094,12 @@ def test_typing_at_in_a_reply_line_or_an_editor_hints_items_and_files_and_a_pick
     page.wait(f"document.activeElement === {reply}")
     assert page.eval(MENTION) == [False, []]
     type_keys(page, "@lea")
-    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 3")  # the items at once, the files once the listing arrives
-    assert page.eval(MENTION) == [True, ["item:@LEAF-001*", "file:docs/leaf-notes.md", "file:syngate/LEAF-001.yml"]]
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 2")  # the items at once, the files once the listing arrives
+    assert page.eval(MENTION) == [True, ["item:@LEAF-001*", "file:docs/leaf-notes.md"]]  # the item files under syngate/ are not offered
+    press(page, "ArrowDown", "ArrowDown", 40)
+    assert page.eval(MENTION)[1] == ["item:@LEAF-001", "file:docs/leaf-notes.md*"]
+    press(page, "ArrowUp", "ArrowUp", 38)
+    assert page.eval(MENTION)[1][0] == "item:@LEAF-001*"
     assert page.eval("document.getElementById('mention-hint').style.length") == 2  # only the computed position is inline
     press(page, "Escape", "Escape", 27)
     assert page.eval(MENTION)[0] is False and page.eval(f"[{reply}.value, {LEAF_BLOCK}.classList.contains('chatting'), document.activeElement === {reply}]") == ["@lea", True, True]
@@ -1101,19 +1107,15 @@ def test_typing_at_in_a_reply_line_or_an_editor_hints_items_and_files_and_a_pick
     assert page.eval(MENTION)[0] is False  # dismissed for this word
     set_text(page, reply, "")
     type_keys(page, "@oo")
-    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 2")
-    assert page.eval(MENTION) == [True, ["item:@ROOT*", "file:syngate/ROOT.yml"]]
-    press(page, "ArrowDown", "ArrowDown", 40)
-    assert page.eval(MENTION)[1] == ["item:@ROOT", "file:syngate/ROOT.yml*"]
-    press(page, "ArrowUp", "ArrowUp", 38)
-    assert page.eval(MENTION)[1][0] == "item:@ROOT*"
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 1")
+    assert page.eval(MENTION) == [True, ["item:@ROOT*"]]
     press(page, "Enter", "Enter", 13)
     assert page.eval(MENTION)[0] is False and page.eval(f"[{reply}.value, {LEAF_BLOCK}.querySelectorAll('.chat-msg').length]") == ["@ROOT", 0]  # picked, not sent, no newline
     type_keys(page, " @zzz")
     assert page.eval(MENTION) == [False, []]  # nothing matches
     set_text(page, reply, "")
     type_keys(page, "@lea")
-    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 3")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 2")
     page.eval(f"{reply}.setSelectionRange(0, 0)")
     page.wait("!document.getElementById('mention-hint').matches(':popover-open')")  # the caret left the word
     set_text(page, reply, "")
@@ -1129,7 +1131,7 @@ def test_typing_at_in_a_reply_line_or_an_editor_hints_items_and_files_and_a_pick
     editor = "document.querySelector('#doc .block.editing textarea.block-text')"
     page.wait(f"document.activeElement === {editor}")
     type_keys(page, " see @oo")
-    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 2")
+    page.wait("document.querySelectorAll('#mention-hint .mention-entry').length === 1")
     press(page, "Tab", "Tab", 9)
     assert page.eval(MENTION)[0] is False and page.eval(f"{editor}.value") == "It shall leaf. see @ROOT"
     type_keys(page, " @guide")
@@ -1212,7 +1214,7 @@ def test_a_message_mark_sends_its_kept_text_as_a_turn_asking_the_ai_for_a_child_
     assert page.eval(PATHS % "#tree") == ["ROOT", "ROOT/LEAF-001"]  # the page writes no item of its own: the AI words and names it
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-sibling').click()")
     settled(page, "LEAF-001", 6)
-    assert logged(app, "LEAF-001")[4:] == [("user", SIBLING_ASK + statement), ("ai", "- added LEAF-EXTRACTED under ROOT\n- agent LEAF-EXTRACTED: Delivered.\nDelivered.")]
+    assert logged(app, "LEAF-001")[4:] == [("user", SIBLING_ASK + statement), ("ai", "Delivered.")]
     assert logged(app, "LEAF-EXTRACTED") == [("user", "Deliver it."), ("ai", "Delivered.")]  # the task went on in the new item's own chat
     page.wait("document.querySelector('#tree [data-path=\"ROOT/LEAF-EXTRACTED\"]')")
     assert tree_item(server, "LEAF-EXTRACTED")["description_raw"] == statement + "\n"
@@ -1276,7 +1278,7 @@ def test_an_at_reference_brings_the_named_item_into_the_turn(server, chrome, syn
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     reply = page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent")
     assert reply.endswith("|Compare with @SIDE-001 and @ROOT please|model-a|low|edit,internet|None")  # the text stays as typed
-    assert reply.split("|Compare with")[0].endswith("@LEAF-001 It shall leaf.@SIDE-001 Beside it.")  # the missing statement follows the seed context
+    assert reply.split("|Compare with")[0].endswith("@LEAF-001 (active item) It shall leaf.@SIDE-001 Beside it.")  # the missing statement follows the seed context
     assert reply.split("|Compare with")[0].count("@ROOT") == 1  # the contained one brings no second copy
 
 
@@ -1558,7 +1560,7 @@ def test_the_chat_window_opens_under_the_item_and_sends_through_the_chosen_setup
     page.wait("document.querySelector('.chat-msg.ai')")
     user, ai = page.eval("[...document.querySelectorAll('.chat-msg')].map((el) => el.textContent.trim())")
     assert user == "What is missing?"
-    assert ai.startswith("Tool calls") and ai.endswith("@ROOT Root branch@LEAF-001 It shall leaf.|What is missing?|model-b|high|edit,internet|None")  # the default prompt heads the seed
+    assert ai.startswith("Answer format") and ai.endswith("@ROOT Root branch@LEAF-001 (active item) It shall leaf.|What is missing?|model-b|high|edit,internet|None")  # the default prompt heads the seed
     send(page, "LEAF-001", "And next?")
     page.wait("document.querySelectorAll('.chat-msg.ai').length === 2")
     assert page.eval("document.querySelectorAll('.chat-msg.ai')[1].textContent").endswith("|And next?|model-b|high|edit,internet|session-1")
@@ -1888,7 +1890,7 @@ def test_a_tree_call_answer_is_applied_to_the_tree_with_or_without_text_beside_i
              {"tool": "remove", "uid": "NEW-002"}]
     status, result = _chat(server, "```syngate\n" + json.dumps(calls) + "\n```")
     assert status == 200 and result["session"] == "session-2" and result["calls"] == calls
-    assert result["reply"] == "- added NEW-001 under ROOT\n- added NEW-002 under NEW-001\n- moved LEAF-001 under NEW-001\n- removed NEW-002"
+    assert result["reply"] == "" and result["applied"] == ["- added NEW-001 under ROOT", "- added NEW-002 under NEW-001", "- moved LEAF-001 under NEW-001", "- removed NEW-002"]  # the reply is the AI's own text: none
     items, errors = syngatelib.load_tree(syngate_dir)
     assert errors == [] and sorted(items) == ["LEAF-001", "NEW-001", "ROOT"]
     assert (items["NEW-001"].title, items["NEW-001"].description, items["NEW-001"].parents, items["NEW-001"].tests) == ("New branch", "New branch\n\nIt groups.\n", ["ROOT"], None)
@@ -1896,9 +1898,9 @@ def test_a_tree_call_answer_is_applied_to_the_tree_with_or_without_text_beside_i
     status, result = _chat(server, "Just talking.")
     assert (status, result["reply"]) == (200, "Just talking.")
     status, result = _chat(server, "Applying:\n```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-004", "description": "D"}]) + "\n```\nDone.")
-    assert (status, result["reply"]) == (200, "- added NEW-004 under ROOT")  # the text beside the calls is a message of the turn, the calls apply
+    assert (status, result["reply"], result["applied"]) == (200, "", ["- added NEW-004 under ROOT"])  # the text beside the calls is a message of the turn, the calls apply
     status, result = _chat(server, "```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-003", "description": "D"}, {"tool": "remove", "uid": "@"}]) + "\n```", "Root stays.")
-    assert status == 200 and result["reply"].startswith("- added NEW-003 under ROOT\n- remove ROOT refused: ROOT still has children") and result["reply"].endswith("\nRoot stays.")
+    assert status == 200 and result["reply"] == "Root stays." and result["applied"][0] == "- added NEW-003 under ROOT" and result["applied"][1].startswith("- remove ROOT refused: ROOT still has children")
     assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "NEW-001", "NEW-003", "NEW-004", "ROOT"]  # the refusal ended the batch and came back as the next prompt
 
 
@@ -1914,20 +1916,20 @@ def test_a_rename_carries_the_items_chat_and_the_anchor_to_the_new_uid_and_is_re
     chat = app.chats["ROOT"]
     call(base, app, "/api/turn", {**setup, "uid": "ROOT", "text": "Rename yourself."})
     outcome = chat.turn.snapshot(wait=10)
-    assert (outcome["turn"], outcome["reply"]) == ("TOP:1", "- renamed ROOT to TOP\nRenamed.")  # the second round ran anchored at TOP
+    assert (outcome["turn"], outcome["applied"], outcome["reply"]) == ("TOP:1", ["- renamed ROOT to TOP"], "Renamed.")  # the second round ran anchored at TOP
     assert [step["lines"][1].split(": ", 1)[0] for step in outcome["steps"] if step["kind"] == "calls"] == ["- TOP"]  # so did the query after the rename
     assert not (syngate_dir / "ROOT.yml").exists() and syngatelib.load_tree(syngate_dir)[0]["LEAF-001"].parents == ["TOP"]
     chats = call(base, app, "/api/chats")[1]["chats"]
     assert sorted(chats) == ["TOP"] and chats["TOP"]["uid"] == "TOP"
-    assert [(m["role"], m["text"]) for m in chats["TOP"]["log"]] == [("user", "Rename yourself."), ("ai", "- renamed ROOT to TOP\nRenamed.")]
+    assert [(m["role"], m["text"], m.get("applied")) for m in chats["TOP"]["log"]] == [("user", "Rename yourself.", None), ("ai", "Renamed.", ["- renamed ROOT to TOP"])]
     app.save_chats()
     stored = json.loads(app.chats_file.read_text())
-    assert sorted(stored) == ["TOP"] and [m["text"] for m in stored["TOP"]["log"]] == ["Rename yourself.", "- renamed ROOT to TOP\nRenamed."]
+    assert sorted(stored) == ["TOP"] and [(m["text"], m.get("applied")) for m in stored["TOP"]["log"]] == [("Rename yourself.", None), ("Renamed.", ["- renamed ROOT to TOP"])]
 
     held = call(base, app, "/api/turn", {**setup, "connector": "gated", "uid": "LEAF-001", "text": "Hold on."})[1]["turn"]
     app.connectors["echo"] = CallsConnector(batch({"tool": "rename", "uid": "LEAF-001", "new_uid": "LEAF-002"}), "Left as it is.")
     status, result = call(base, app, "/api/chat", {**setup, "uid": "TOP", "text": "Rename the leaf."})
-    assert (status, result["reply"]) == (200, f"- rename LEAF-001 refused: a turn of LEAF-001 is running ({held})\nLeft as it is.")
+    assert (status, result["reply"], result["applied"]) == (200, "Left as it is.", [f"- rename LEAF-001 refused: a turn of LEAF-001 is running ({held})"])
     assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "TOP"] and app.chats["LEAF-001"].running
     gated.release.set()
     assert call(base, app, f"/api/turn/{held}?wait=5")[1]["reply"] == "late reply to Hold on."
@@ -2012,7 +2014,7 @@ class NarratingConnector(GatedConnector):
 
 LEAF = "document.querySelector('.block[data-uid=\"LEAF-001\"]')"
 HEAD = f"{LEAF}.querySelector('.turn-activity .turn-head')"
-STEPS = f"[...{LEAF}.querySelectorAll('.turn-activity > .turn-steps > .turn-step > .step-line')].map((line) => line.textContent)"
+STEPS = f"[...{LEAF}.querySelectorAll('.chat-step > .turn-step > .step-line')].map((line) => line.textContent)"  # every step a block of the log
 
 
 @pytest.mark.syngate("AI_CHAT-060")
@@ -2023,17 +2025,15 @@ def test_a_turn_is_awaited_on_the_server_and_a_reloaded_page_re_attaches_to_it(s
     send(page, "LEAF-001", "Slow one")
     page.wait(f"{HEAD} && {HEAD}.querySelector('.spinner') && {HEAD}.textContent.trim().startsWith('1 tool call')")
     assert page.eval(f"Boolean({LEAF}.querySelector('.chat-msg.note'))") is False  # the activity stands for the spinner note
-    page.eval(f"{HEAD}.click()")
     assert page.eval(STEPS) == ["reasoningThinking about Slow one", "Readdocs/GUIDE.md …"]
     gated.more.set()
     page.wait(f"{HEAD}.textContent.trim().startsWith('1 tool call · 1 subagent · 1 file changed · ')")  # grows live
-    assert page.eval(STEPS) == ["reasoningThinking about Slow one", "Readdocs/GUIDE.md · 0.1 s", "agent @ROOTCheck the root", "diff1 file changed"]
+    assert page.eval(STEPS) == ["reasoningThinking about Slow one", "Readdocs/GUIDE.md · 0.1 s", "agent @ROOTCheck the root", "changeddocs/GUIDE.md"]
     turn = page.eval("state.chats.get('LEAF-001').turn")
     snapshot = call(base, app, f"/api/turn/{turn}")[1]
     assert turn == "LEAF-001:1" and snapshot["running"] and len(snapshot["steps"]) == 4
     reload(page)
     page.wait(f"{HEAD} && {HEAD}.querySelector('.spinner')")
-    page.eval(f"{HEAD}.click()")
     assert page.eval(f"{LEAF}.querySelectorAll('.chat-msg.ai').length") == 0 and len(page.eval(STEPS)) == 4  # the steps so far
     gated.release.set()
     page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
@@ -2066,11 +2066,10 @@ def test_while_a_turn_runs_the_hide_pill_is_a_stop_button_pressed_once_and_the_t
     assert page.eval(f"getComputedStyle({LEAF}.querySelector('.chat-msg.stopped .msg-body'), '::before').content") == '"■ stopped — "'
     assert page.eval(f"[...{LEAF}.querySelectorAll('.chat-msg.stopped .msg-tools button')].map((el) => el.className)") == ["msg-fold"]  # not an error: no retry, nothing to keep
     assert page.eval(pills) == [True, False, False] and page.eval("state.stopping.size") == 0
-    page.eval(f"{LEAF}.querySelector('.chat-msg.stopped + .turn-activity .turn-head').click()")
-    assert page.eval(f"{LEAF}.querySelector('.chat-msg.stopped + .turn-activity .turn-head').textContent").startswith("2 tool calls · 2 subagents · 1 file changed · ")
-    calls = f"[...{LEAF}.querySelectorAll('.turn-activity > .turn-steps > .turn-step > .step-line')].find((line) => line.textContent.startsWith('calls'))"
+    assert page.eval(f"{LEAF}.querySelector('.chat-msg.stopped + .turn-activity .turn-head').textContent").startswith("2 tool calls · 2 subagents · 1 file changed · ")  # a tally, never a fold
+    calls = f"[...{LEAF}.querySelectorAll('.chat-step .step-line')].find((line) => line.textContent.startsWith('query'))"  # every step is a block of the log
     page.eval(f"{calls}.click()")
-    assert page.eval(f"[{calls}.tagName, {calls}.textContent, {calls}.parentElement.querySelector('.step-detail .step-label').textContent]") == ["BUTTON", "callsquery", "read"]  # a read is not applied
+    assert page.eval(f"[{calls}.tagName, {calls}.textContent.startsWith('queryLEAF-001: '), [...{calls}.parentElement.querySelectorAll('.step-detail .step-label')].map((el) => el.textContent)]") == ["BUTTON", True, ["call", "read"]]  # a read is not applied
 
 
 class BackgroundConnector(EchoConnector):
@@ -2126,8 +2125,7 @@ def test_the_run_indicator_of_a_subagent_on_another_item_is_a_link_jumping_to_th
     page.wait(f"{LEAF}.querySelector('.turn-activity a.agent-run')")
     runs = f"[...{LEAF}.querySelectorAll('a.jump.agent-run')].map((a) => [a.dataset.uid, a.textContent.trim(), Boolean(a.querySelector('.spinner'))])"
     assert page.eval(runs) == [["ROOT", "@ROOT", True]]  # neither the chat's own item nor an unknown one
-    page.eval(f"{HEAD}.click()")
-    assert page.eval(f"[...{LEAF}.querySelectorAll('.turn-steps .step-line a.jump')].map((a) => a.dataset.uid)") == ["ROOT", "LEAF-001"]  # the step lines name their items alike
+    assert page.eval(f"[...{LEAF}.querySelectorAll('.chat-step .step-line a.jump')].map((a) => a.dataset.uid)") == ["ROOT", "LEAF-001"]  # the step lines name their items alike
     page.eval(f"{LEAF}.querySelector('a.agent-run').click()")
     landed = "[state.selected, document.querySelector('#doc .block.selected')?.dataset.uid, document.activeElement.dataset.uid]"
     assert page.eval(landed) == ["ROOT", "ROOT", "ROOT"]
@@ -2534,7 +2532,8 @@ def test_every_control_is_a_button_with_a_focus_ring_operable_by_keyboard(server
     ring = "(() => { const s = getComputedStyle(document.activeElement); return [document.activeElement.className, s.outlineStyle, s.outlineColor]; })()"
     assert page.eval(ring) == ["pill chat-hide", "solid", css_color(page, "--accent")]  # reached by Tab: the focus ring
     assert tab(page, back=True) == "block-text" and page.eval("document.activeElement.classList.contains('chat-input')")
-    assert tab(page, back=True) == "step-line"  # the unfolded steps are in the order too
+    for mark in ("msg-sibling", "msg-child", "msg-fold", "step-line"):  # the reply's marks precede its line, the turn's steps come before them
+        assert tab(page, back=True) == mark
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-fold').focus()")
     assert page.eval(f"[{FOCUS}, getComputedStyle(document.activeElement.parentElement).opacity]") == ["msg-fold", "1"]  # the marks of a message take the focus, and show with it
     press(page, " ", "Space", 32)
@@ -2683,3 +2682,144 @@ def test_every_message_carries_its_marks_on_the_border_lines_shown_under_the_poi
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-fold').click()")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai.dropped')")
     assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').getBoundingClientRect().height <= 2 * parseFloat(getComputedStyle({LEAF_BLOCK}.querySelector('.chat-msg.ai')).lineHeight)")  # the mark acts on the whole message: both paragraphs fold away
+
+
+@pytest.mark.syngate("AI_CHAT-TURN-BLOCKS")
+def test_a_turns_steps_are_blocks_of_the_log_in_order_each_call_its_own_line_unfolding_to_its_input_and_result(server, chrome):
+    _, app = server
+    batch = [{"tool": "query", "uid": "@"}, {"tool": "context", "uid": "@"}]
+    narrated = NarratingConnector({"kind": "calls", "text": "Let me look first.", "calls": batch})
+    narrated.more.set()
+    narrated.release.set()
+    page = open_chat(server, chrome, echo=narrated)
+    send(page, "LEAF-001", "Hi")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai:not(.interim)')")
+    blocks = f"[...{LEAF}.querySelector('.chat-log').children].map((el) => [el.className, (el.querySelector('.step-line, .msg-part') || el).textContent.trim().slice(0, 24)])"
+    round = [["chat-step", "reasoningThinking about "], ["chat-step", "Readdocs/GUIDE.md · 0.1 "], ["chat-step", "agent @ROOTCheck the roo"],
+             ["chat-step", "changeddocs/GUIDE.md"]]
+    assert page.eval(blocks) == [
+        ["chat-msg user", "Hi"], *round,
+        ["chat-msg ai interim", "Let me look first."],  # said beside the calls: an AI message of its own, before what the calls brought
+        ["chat-step", "queryLEAF-001: {\"uid\": \""], ["chat-step", "contextcontext of LEAF-0"], *round,  # one line per call of the batch
+        ["chat-msg ai", "late reply to Results of"],  # the reply is the last block, no step folded under it
+        ["turn-activity", "2 tool calls · 2 subagen"]]
+    assert page.eval(f"{LEAF}.querySelectorAll('.turn-activity .turn-steps, .turn-activity button').length") == 0
+    steps = app.chats["LEAF-001"].log[-1]["steps"]
+    assert [step["inputs"] for step in steps if step["kind"] == "calls"] == [batch]  # every line of a batch knows its call
+    query = f"[...{LEAF}.querySelectorAll('.chat-step .step-line')].find((line) => line.textContent.startsWith('query'))"
+    page.eval(f"{query}.click()")
+    detail = f"[...{query}.parentElement.querySelectorAll('.step-detail > *')].map((el) => el.textContent)"
+    shown = page.eval(detail)
+    assert shown[:2] == ["call", json.dumps(batch[0], indent=2)] and shown[2] == "read" and shown[3].startswith("- LEAF-001: {\"uid\": \"LEAF-001\"")
+
+
+class QueueConnector(EchoConnector):
+    """Answers each dispatch from `script` in turn -- `(reply, gate)`, held until the gate is set when there is one -- recording what it
+    heard in which session; interrupted, the held dispatch fails as a killed process does."""
+
+    def __init__(self, *script):
+        super().__init__()
+        self.script, self.heard, self.held, self.interrupted = list(script), [], None, False
+
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=None):
+        self.heard.append((text, session))
+        reply, self.held = self.script.pop(0)
+        if self.held is not None:
+            self.held.wait(10)
+            if self.interrupted:
+                self.interrupted = False
+                raise synthetic.connection_error("claude exited with -9")
+        return reply, f"session-{len(self.heard)}"
+
+    def interrupt(self, ident):
+        self.interrupted = True
+        self.held.set()
+
+
+def queue(page, text, now=False):
+    page.eval(f"{LEAF}.querySelector('.chat-input').value = '{text}'")
+    page.eval(f"{LEAF}.querySelector('.chat-input').dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', ctrlKey: true, shiftKey: {str(now).lower()}, bubbles: true }}))")
+
+
+@pytest.mark.syngate("AI_CHAT-QUEUE")
+def test_a_message_sent_while_a_turn_runs_is_queued_reaches_the_ai_at_its_next_step_or_next_turn_and_can_be_withdrawn(server, chrome):
+    _, app = server
+    first, second = threading.Event(), threading.Event()
+    connector = QueueConnector(({"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]}, first), ({"kind": "text", "text": "Took it."}, second),
+                               ({"kind": "text", "text": "And that."}, None))
+    page = open_chat(server, chrome, echo=connector)
+    send(page, "LEAF-001", "First")
+    page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
+    queue(page, "Mid")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued')")
+    queued = f"[...{LEAF}.querySelectorAll('.chat-msg.user.queued')].map((el) => el.textContent.trim())"
+    assert page.eval(queued) == ["queued — goes to the AI at its next stepMid"] and page.eval(f"{LEAF}.querySelector('.chat-input').value") == ""
+    assert page.eval(TOASTS) == []  # not refused
+    first.set()
+    page.wait(f"{LEAF}.querySelector('.chat-msg.user.delivered')")  # the next round took it, in its place among the turn's blocks
+    assert connector.heard[1][0].startswith(synthetic.RESULTS_PREAMBLE) and connector.heard[1][0].endswith(assassin_ui.QUEUED_NOTE.format(text="Mid"))
+    order = f"[...{LEAF}.querySelector('.chat-log').children].map((el) => el.className)"
+    assert page.eval(order) == ["chat-msg user", "chat-step", "chat-msg user delivered", "turn-activity"] and page.eval(queued) == []
+    queue(page, "Oops")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued .msg-drop')")
+    page.eval(f"{LEAF}.querySelector('.chat-msg.user.queued .msg-drop').click()")  # withdrawn: back into the reply line
+    page.wait(f"!{LEAF}.querySelector('.chat-msg.user.queued') && {LEAF}.querySelector('.chat-input').value === 'Oops'")
+    assert app.chats["LEAF-001"].queue == []
+    queue(page, "Later")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued')")
+    second.set()  # the turn ends on text: what is still queued goes at once as the next turn, in the same session
+    page.wait(f"{LEAF}.querySelectorAll('.chat-msg.ai:not(.interim)').length === 2 && !{LEAF}.querySelector('.block-ai .chat-stop')")
+    log = app.chats["LEAF-001"].log
+    assert [(m["role"], m["text"]) for m in log] == [("user", "First"), ("ai", "Took it."), ("user", "Later"), ("ai", "And that.")]
+    assert [step["text"] for step in log[1]["steps"] if step["kind"] == "user"] == ["Mid"]
+    assert connector.heard[2] == ("Later", "session-2") and app.chats["LEAF-001"].kept()[1] == {"role": "user", "text": "Mid"}
+
+
+@pytest.mark.syngate("AI_CHAT-SEND-NOW")
+def test_send_bang_stops_the_running_turn_and_sends_the_message_in_the_same_session_while_stop_withdraws_the_queue(server, chrome):
+    _, app = server
+    slow, again = threading.Event(), threading.Event()
+    connector = QueueConnector(({"kind": "text", "text": "Hello."}, None), ({"kind": "text", "text": "never"}, slow),
+                               ({"kind": "text", "text": "Now then."}, None), ({"kind": "text", "text": "never"}, again))
+    page = open_chat(server, chrome, echo=connector)
+    send(page, "LEAF-001", "Hi")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
+    assert page.eval(f"{LEAF}.querySelector('.chat-send').textContent") == "➤ send"
+    send(page, "LEAF-001", "Slow")
+    page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
+    sender = f"{LEAF}.querySelector('.chat-send')"
+    assert page.eval(f"[{sender}.textContent, getComputedStyle({sender}).pointerEvents]") == ["➤ send!", "auto"]  # no longer disabled
+    send(page, "LEAF-001", "Now")  # send!: stop, send, carry on
+    page.wait(f"{LEAF}.querySelectorAll('.chat-msg.ai').length === 2 && !{LEAF}.querySelector('.block-ai .chat-stop')")
+    assert [m["role"] for m in app.chats["LEAF-001"].log] == ["user", "ai", "user", "stopped", "user", "ai"]
+    assert connector.heard[2] == ("Now", "session-1")  # the session the stopped turn ran in
+    send(page, "LEAF-001", "Slower")
+    page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
+    queue(page, "Keep me")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued')")
+    page.eval(f"{LEAF}.querySelector('.block-ai .chat-stop').click()")  # a plain stop sends nothing more: the queue is back in the line
+    page.wait(f"{LEAF}.querySelectorAll('.chat-msg.stopped').length === 2 && !{LEAF}.querySelector('.block-ai .chat-stop')")
+    page.wait(f"{LEAF}.querySelector('.chat-input').value === 'Keep me'")
+    assert page.eval(f"Boolean({LEAF}.querySelector('.chat-msg.user.queued'))") is False and len(connector.heard) == 4 and app.chats["LEAF-001"].queue == []
+
+
+@pytest.mark.syngate("AI_CHAT-FOLD-LIST")
+def test_a_details_section_of_a_reply_renders_collapsed_to_its_summary_expands_and_keeps_its_state_over_re_renders(server, chrome):
+    _, app = server
+    reply = ("All done.\n\n<details>\n<summary>3 tests passed</summary>\n\n- test_one\n- test_two\n- test_three\n</details>\n\n"
+             "<details open><summary>2 items reworded</summary>\n\n- ITEM-1\n- ITEM-2\n</details>\n\nPlease review.")
+    gated = QueueConnector(({"kind": "text", "text": reply}, None), ({"kind": "text", "text": "Second."}, threading.Event()))
+    page = open_chat(server, chrome, echo=gated)
+    send(page, "LEAF-001", "Report")
+    page.wait(f"{LEAF}.querySelector('.chat-msg.ai details.md-fold')")
+    folds = f"[...{LEAF}.querySelectorAll('.chat-msg.ai details.md-fold')].map((d) => [d.open, d.querySelector('summary').textContent, d.querySelectorAll('li').length, d.querySelector('li').checkVisibility()])"
+    assert page.eval(folds) == [[False, "3 tests passed", 3, False], [True, "2 items reworded", 2, True]]  # folded unless marked open
+    assert page.eval(f"[...{LEAF}.querySelectorAll('.chat-msg.ai .msg-part > p')].map((p) => p.textContent)") == ["All done.", "Please review."]
+    page.eval(f"{LEAF}.querySelector('.chat-msg.ai details.md-fold summary').click()")
+    page.eval(f"{LEAF}.querySelectorAll('.chat-msg.ai details.md-fold')[1].querySelector('summary').click()")
+    assert [fold[0] for fold in page.eval(folds)] == [True, False]
+    send(page, "LEAF-001", "More")  # the log re-renders with the running turn: the reader's choice stays
+    page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
+    assert [fold[0] for fold in page.eval(folds)] == [True, False]
+    page.eval(f"{LEAF}.querySelector('.block-ai .chat-stop').click()")
+    page.wait(f"!{LEAF}.querySelector('.block-ai .chat-stop')")

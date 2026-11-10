@@ -139,6 +139,8 @@ PROMPTS = live_mapping(lambda: prompt_texts(load_prompts()))
 CALL_BLOCK_RE = re.compile(r"```syngate[ \t]*\n(.*?)\n[ \t]*```", re.DOTALL)
 TOOLS = {"add": ("uid", "description"), "edit": ("uid",), "remove": ("uid",), "move": ("uid", "to"), "rename": ("uid", "new_uid")}
 QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
+# The mark of the statement a seed context is formed for, the exchange's own item; a `context` call of another item names its own label instead.
+ACTIVE_LABEL = "active item"
 RUNS = {"test": ("uid",)}
 DELEGATIONS = {"agent": ("uid",)}
 # The message a delegated turn starts with when its agent call names no prompt: the item's statement, in the seed context it is anchored
@@ -192,15 +194,17 @@ def answer_schema(library):
 ANSWER_SCHEMA = live_mapping(lambda: answer_schema(load_prompts()))
 
 
-def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None):
+def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None, label=None):
     """The named prompt of the library -- or the `head` text given in its place -- then the tree's test switch, then the statements of every
     ancestor, parents first, the item's own and those of all its descendants in sibling order -- an item reached twice enters once, at its
     first occurrence -- then the design files their statements link that no key source lists, each once, then the key source files those
-    items list, each once, all read from `root`."""
+    items list, each once, all read from `root`. The item's own statement is the one marked, with the `label` -- one line, the active item
+    unless the caller names another -- after its `@UID`."""
     if uid not in items:
         raise syngatelib.unknown_uid(f"unknown UID '{uid}'")
     selection = syngatelib.walk(items, uid, descendants=True)
-    statements = "".join(statement_section(selected, items[selected].description) for selected in selection)
+    label = " ".join(str(label or ACTIVE_LABEL).split()) or ACTIVE_LABEL
+    statements = "".join(statement_section(selected, items[selected].description, label if selected == uid else None) for selected in selection)
     sources = dict.fromkeys(rel for selected in selection for rel in items[selected].sources)
     designs = [rel for rel in dict.fromkeys(rel for selected in selection for rel in syngatelib.linked_files(items[selected].description))
                if rel not in sources and (Path(root or syngatelib.ROOT) / rel).is_file()]
@@ -213,9 +217,9 @@ def features_section(items):
     return TREE_FEATURES.format("enabled" if syngatelib.features(items)["test"] else "disabled")
 
 
-def statement_section(uid, description):
-    """One item's statement as a section of the seed context: its `@UID` line over its text, ending in a line break."""
-    return f"\n@{uid}\n{description}" + ("" if description.endswith("\n") else "\n")
+def statement_section(uid, description, label=None):
+    """One item's statement as a section of the seed context: its `@UID` line -- followed by the `label` in parentheses where one is given -- over its text, ending in a line break."""
+    return f"\n@{uid}{f' ({label})' if label else ''}\n{description}" + ("" if description.endswith("\n") else "\n")
 
 
 def design_section(rel, root=None):
@@ -392,6 +396,8 @@ def parse_reply(reply, known=CALLS):
             raise protocol_error(f"{tool}: missing {', '.join(missing)}")
         if "background" in call and not isinstance(call["background"], bool):
             raise protocol_error(f"{tool}: background must be true or false")
+        if tool == "context" and "label" in call and not (isinstance(call["label"], str) and call["label"].strip()):
+            raise protocol_error("context: label must be a line of text")
         if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip())
                                    or any(isinstance(call.get(field), list) for field in ("sources", "tests"))):
             raise protocol_error(f"edit: missing {' or '.join(EDITABLE)}")
@@ -418,7 +424,7 @@ def apply_call(items, anchor, call, syngate_dir=None):
     if tool == "query":
         return f"- {uid}: {json.dumps(item_view(items, uid), ensure_ascii=False)}"
     if tool == "context":
-        return f"- context of {uid}:\n{seed_context(items, uid, root=Path(syngate_dir).parent if syngate_dir else None)}"
+        return f"- context of {uid}:\n{seed_context(items, uid, root=Path(syngate_dir).parent if syngate_dir else None, label=call.get('label'))}"
     if tool == "add":
         parent = at(call.get("parent") or "@")
         family = syngatelib.sorted_children(items, syngatelib.children_map(items), parent) if parent in items else []

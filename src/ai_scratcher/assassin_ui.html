@@ -227,15 +227,27 @@ button.pill { appearance: none; line-height: 1.55; }
 .chat-pill > button { position: relative; font: inherit; color: inherit; background: none; border: none; padding: 0; border-radius: 0; cursor: pointer; }
 .chat-pill > button:hover { color: var(--accent); }
 .chat-pill > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.chat-pill.busy .chat-send { opacity: 0.45; pointer-events: none; }
+.chatting.editing .chat-pill.busy .chat-send { opacity: 0.45; pointer-events: none; }
+.chat-msg.user.queued { color: var(--dim); } .chat-msg.user.queued .msg-body { border-left: 2px dashed var(--line); padding-left: 0.5rem; }
 .chat-msg.user.agent .msg-body { margin-left: 1.1rem; }
 .msg-from { font: 0.66rem/1.55 ui-monospace, Menlo, Consolas, monospace; color: var(--accent); white-space: normal; }
-/* A turn's activity: its header is a dim line under the rule closing the reply, the steps are shifted under it, every one a line unfolding to its content. */
+/* A turn's steps are blocks of the log in their order, right as the AI's replies: its messages said on the way are replies, every other step
+   a dim line of the harness of its own -- wrapping to a few lines, never merged with the next -- unfolding to its full input and result. The
+   activity line closes the reply on its bottom rule. */
+/* A collapsible section of rendered markdown: its summary is a dim line with the fold triangle, the content shifted under it. */
+details.md-fold { margin: 0.3rem 0; }
+details.md-fold > summary { cursor: pointer; color: var(--dim); list-style: none; }
+details.md-fold > summary::-webkit-details-marker { display: none; }
+details.md-fold > summary::before { content: "▸ "; } details.md-fold[open] > summary::before { content: "▾ "; }
+details.md-fold > summary:hover { color: var(--accent); }
+details.md-fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+details.md-fold > :not(summary) { margin-left: 1.1rem; }
+.chat-msg.ai.interim .msg-body { background: color-mix(in oklab, var(--accent-soft) 55%, transparent); }
+.chat-step { align-self: stretch; margin: -0.25rem 0 -0.15rem 8%; font-size: 0.8rem; }
+.chat-step > .turn-step > .step-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; white-space: normal; overflow-wrap: anywhere; }
+.chat-step > .turn-step > .step-detail { padding-right: 0; }
 .turn-activity { align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; margin: -0.1rem 0 0.3rem 8%; border-top: 1px solid var(--line); }
-.turn-head { max-width: 100%; margin-top: 0.15rem; padding: 0; border: none; background: none; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; color: var(--dim); text-align: right; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
-.turn-head:hover { color: var(--accent); }
-.turn-head::after { content: " ▸"; } .turn-head[aria-expanded=true]::after { content: " ▾"; }
-.turn-head.bare { cursor: default; } .turn-head.bare::after { content: none; }
+.turn-head { max-width: 100%; margin-top: 0.15rem; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; color: var(--dim); text-align: right; overflow-wrap: anywhere; }
 .turn-activity .spinner, .pill .spinner { width: 0.8em; height: 0.8em; border-width: 1.5px; }
 .agent-runs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0 0.9em; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; }
 .agent-run, .msg-from a.jump, .step-kind a.jump { color: var(--accent); text-decoration: none; cursor: pointer; }
@@ -409,7 +421,8 @@ textarea.block-text:focus { outline: none; }
   <dt>Enter</dt><dd>edit the statement</dd>
   <dt>Esc</dt><dd>done</dd>
   <dt>@</dt><dd>in a statement or reply: hint the items and files to mention · ↑ ↓ choose · Enter Tab pick · Esc close</dd>
-  <dt>Ctrl/⌘+Enter</dt><dd>send</dd>
+  <dt>Ctrl/⌘+Enter</dt><dd>send · while a turn runs, queue the message for the AI's next step</dd>
+  <dt>Ctrl/⌘+Shift+Enter</dt><dd>send! — stop the running turn and send the message now, the session carrying on</dd>
   <dt>Ctrl/⌘+.</dt><dd>stop the turn</dd>
   <dt>m · s</dt><dd>row menu · status popup of the focused block</dd>
   <dt>Alt+Shift+arrows</dt><dd>move the row</dd>
@@ -468,11 +481,16 @@ const drafts = new Map();
 const shown = new Map();
 const draftKey = (uid, field) => uid + " " + field;
 
+// A collapsible section the reader opened or closed keeps that state over the re-renders of its pane.
 function setHtml(el, html) {
   if (el._html === html) return;
+  const folds = new Map([...el.querySelectorAll("details.md-fold")].map((d) => [foldKey(d), d.open]));
   el.innerHTML = html;
   el._html = html;
+  if (folds.size) for (const d of el.querySelectorAll("details.md-fold")) if (folds.has(foldKey(d))) d.open = folds.get(foldKey(d));
 }
+const foldKey = (d) => { const host = d.closest("[data-index], [data-step], [data-queued], [data-uid], [data-file]");
+  return `${host ? host.dataset.index ?? host.dataset.step ?? host.dataset.queued ?? host.dataset.uid ?? host.dataset.file : ""}|${d.dataset.at}|${d.querySelector(":scope > summary")?.textContent}`; };
 
 async function api(path, payload) {
   const sent = payload === undefined ? undefined : JSON.stringify(payload);
@@ -1013,14 +1031,35 @@ function inline(raw, base) {
     .replace(/\u0000(\d+)\u0000/g, (_, i) => parts[i]);
 }
 
+// A collapsible section is written as on GitHub: a `<details>` line (`<details open>` shown expanded), its `<summary>…</summary>` -- on
+// the same line or the next -- then markdown up to the matching `</details>` line; it is the only markup of the text taken as such.
+const FOLD_OPEN = /^\s*<details(\s+open)?\s*>\s*(?:<summary>(.*?)<\/summary>)?\s*$/i, FOLD_EDGE = /^\s*<\/?details[\s>]/i;
 function md(text, base) {
   const lines = text.split("\n"), out = [];
   const listAt = (line) => /^(\s*)([-*]|\d+[.)])\s+(.*)$/.exec(line);
-  const blockStart = (line) => /^(```|#{1,6}\s|>|\||(-{3,}|\*{3,})\s*$)/.test(line) || listAt(line);
+  const blockStart = (line) => /^(```|#{1,6}\s|>|\||(-{3,}|\*{3,})\s*$)/.test(line) || listAt(line) || FOLD_EDGE.test(line);
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
     if (/^\s*$/.test(line)) { i++; continue; }
+    const fold = FOLD_OPEN.exec(line);
+    if (fold) {
+      const buf = [], at = i;
+      let summary = fold[2], depth = 1, fence = false;
+      for (i++; i < lines.length; i++) {
+        const l = lines[i];
+        if (l.startsWith("```")) fence = !fence;
+        if (!fence) {
+          const named = summary == null && !buf.some((b) => b.trim()) && /^\s*<summary>(.*?)<\/summary>\s*$/i.exec(l);
+          if (named) { summary = named[1]; continue; }
+          if (FOLD_OPEN.test(l)) depth++;
+          else if (/^\s*<\/details>\s*$/i.test(l) && !--depth) { i++; break; }
+        }
+        buf.push(l);
+      }
+      out.push(`<details class="md-fold" data-at="${at}"${fold[1] ? " open" : ""}><summary>${inline(summary?.trim() || "details", base)}</summary>${md(buf.join("\n"), base)}</details>`);
+      continue;
+    }
     if (line.startsWith("```")) {
       const buf = [];
       for (i++; i < lines.length && !lines[i].startsWith("```"); i++) buf.push(lines[i]);
@@ -1046,7 +1085,7 @@ function md(text, base) {
     }
     if (listAt(line)) {
       const stack = [];
-      for (; i < lines.length && !/^\s*$/.test(lines[i]); i++) {
+      for (; i < lines.length && !/^\s*$/.test(lines[i]) && !FOLD_EDGE.test(lines[i]); i++) {
         const at = listAt(lines[i]);
         if (!at) { out.push(" " + inline(lines[i].trim(), base)); continue; }
         const indent = at[1].length, tag = /\d/.test(at[2]) ? "ol" : "ul";
@@ -1303,19 +1342,20 @@ function mergeCuts(cuts, length) {
   return out;
 }
 
-// A turn's steps ride on its reply: the activity header summarises them and unfolds to one line per step, each unfolding to its content,
-// an agent step to its own steps the same way. What is unfolded is this tab's, keyed by the reply's place in the log, which the running
-// turn's reply takes when it lands.
+// A turn is shown as it happened: every step is a block of the log in its order -- the AI's own messages as replies, the harness's steps
+// (a tool call, every call of a batch, every file of a diff, a reasoning, a subagent) each as its own line unfolding to its full input and
+// result -- and the reply is the last of them, closed by the activity line. What is unfolded is this tab's, keyed by the reply's place in
+// the log, which the running turn's reply takes when it lands.
 const seconds = (s) => (s < 10 ? Math.round(s * 10) / 10 : Math.round(s)) + " s";
 const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 const firstLine = (text) => String(text ?? "").trim().split("\n")[0];
 const brief = (value) => firstLine(value && typeof value === "object" ? Object.values(value).find((v) => typeof v === "string") ?? JSON.stringify(value) : value);
 const pending = (value) => (value == null ? " …" : "");
 const kilo = (n) => (n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
-const READS = ["query", "context", "skill", "websurf"];
+const READS = ["query", "context", "skill", "websurf", "git", "shell"];
 const FILE_STATUS = { A: "added", M: "changed", D: "deleted" };
 
-// The header line: the tally of the steps, the wall time, then the cost and tokens when the connector's closing usage step names them.
+// The activity line: the tally of the steps, the wall time, then the cost and tokens when the connector's closing usage step names them.
 function activitySummary(steps) {
   const count = (kind) => steps.filter((s) => s.kind === kind).length, usage = steps.find((s) => s.kind === "usage"), shown = steps.length - (usage ? 1 : 0);
   const files = new Set(steps.filter((s) => s.kind === "diff").flatMap((s) => s.files.map((f) => f.path))).size;
@@ -1337,37 +1377,59 @@ function foldHtml(key, line, detail) {
 const partHtml = (label, value) => (value == null ? ""
   : `<div class="step-label">${label}</div><pre>${esc(typeof value === "string" ? value : JSON.stringify(value, null, 2))}</pre>`);
 
+// The steps one block each: a batch of tree calls is opened into its calls, every one paired with its own input and result line, a diff into
+// its files; the closing message of a turn whose reply repeats it is the reply itself.
+function blocksOf(steps = [], reply = null) {
+  const said = steps.map((s, i) => [s, i]).filter(([s]) => s.kind === "message").pop(), out = [];
+  const repeated = said && reply != null && said[0].text.trim() && String(reply).trim().endsWith(said[0].text.trim()) ? said[1] : -1;
+  steps.forEach((step, i) => {
+    if (step.kind === "usage" || i === repeated) return;
+    if (step.kind === "calls") step.lines.forEach((line, j) => out.push([{ kind: "call", line, input: step.inputs?.[j],
+      tool: callTool(step.inputs?.[j]) ?? (step.tools?.length === step.lines.length ? step.tools[j] : null) }, `${i}/${j}`]));
+    else if (step.kind === "diff") step.files.forEach((file, j) => out.push([{ kind: "file", file }, `${i}/${j}`]));
+    else out.push([step, String(i)]);
+  });
+  return out;
+}
+const callTool = (input) => (Array.isArray(input) ? input[0]?.tool : input && typeof input === "object" ? input.tool : input == null ? undefined : "answer");
+
 function stepHtml(step, key) {
   const kind = (label) => `<span class="step-kind">${esc(label)}</span>`;
   switch (step.kind) {
     case "tool": return foldHtml(key, kind(step.name) + esc(brief(step.input)) + (step.result == null ? " …" : step.seconds == null ? "" : " · " + seconds(step.seconds)),
       () => partHtml("input", step.input) + partHtml("result", step.result));
+    case "call": return foldHtml(key, kind(step.tool || "call") + esc(firstLine(step.line).replace(/^- /, "")),
+      () => partHtml(step.tool === "answer" ? "answer" : "call", step.input) + partHtml(READS.includes(step.tool) ? "read" : "result", step.line));
     case "message": return foldHtml(key, kind("message") + esc(firstLine(step.text)), () => `<div class="md">${md(step.text, "")}</div>`);
     case "reasoning": return foldHtml(key, kind("reasoning") + esc(firstLine(step.text)), () => `<div class="step-text">${esc(step.text)}</div>`);
     case "prompt": return foldHtml(key, kind("prompt") + `${kilo(step.processed)} / ${kilo(step.total)} tokens read`
       + (step.processed < step.total ? ` (${Math.floor(100 * step.processed / Math.max(step.total, 1))}%) …` : "")
       + (step.cached ? ` · ${kilo(step.cached)} cached` : "") + (step.seconds ? " · " + seconds(step.seconds) : ""), () => partHtml("prompt", step));
-    case "calls": return foldHtml(key, kind("calls") + esc(step.tools ? step.tools.join(", ") : plural(step.lines.length, "line")),
-      () => partHtml(step.tools?.every((tool) => READS.includes(tool)) ? "read" : "applied", step.lines.join("\n")));
-    case "usage": return "";
-    case "diff": return foldHtml(key, kind("diff") + plural(step.files.length, "file changed", "files changed"),
-      () => step.files.map((f, i) => foldHtml(`${key}/${i}`, kind(FILE_STATUS[f.status] || f.status) + esc(f.path), () => `<pre>${esc(f.hunks)}</pre>`)).join(""));
+    case "file": return foldHtml(key, kind(FILE_STATUS[step.file.status] || step.file.status) + esc(step.file.path), () => `<pre>${esc(step.file.hunks)}</pre>`);
     case "agent": return foldHtml(key, `<span class="step-kind">agent${step.uid ? " " + uidLink(step.uid) : ""}</span>` + esc(firstLine(step.prompt)) + pending(step.report),
       () => partHtml("prompt", step.prompt) + partHtml("report", step.report) + (step.steps?.length ? `<div class="turn-steps">${stepsHtml(step.steps, key)}</div>` : ""));
     case "workflow": return foldHtml(key, kind("workflow") + esc(brief(step.input)) + pending(step.result), () => partHtml("input", step.input) + partHtml("result", step.result));
     default: return foldHtml(key, kind(step.kind), () => partHtml(step.kind, step));
   }
 }
-const stepsHtml = (steps, key) => steps.map((step, i) => stepHtml(step, `${key}/${i}`)).join("");
+// A subagent's transcript inside its step: the same blocks, shifted under it.
+const stepsHtml = (steps, key) => blocksOf(steps, null).map(([step, at]) => stepHtml(step, `${key}/${at}`)).join("");
 
-// Every reply closes with its activity header; the header unfolds to the steps only when the turn had some beyond the answer.
+// The blocks of a turn in the log: the AI's messages said on the way are replies of their own -- carrying the extraction marks, out of
+// the exchange's folds -- every other step a line of the harness, all in the order they happened.
+function turnHtml(steps, key, reply, index) {
+  return blocksOf(steps, reply).map(([step, at]) => step.kind === "user"
+    ? `<div class="chat-msg user delivered"><div class="msg-body"><div class="msg-from">sent while the AI worked</div>${jumps(esc(step.text))}</div></div>`
+    : step.kind === "message"
+    ? `<div class="chat-msg ai interim" data-step="${index}/${at}"><div class="msg-body"><div class="msg-part md">${md(step.text, "")}</div></div>`
+      + `<span class="msg-tools right"><button type="button" class="msg-child" title="ask the AI to make the text a child item">${MARK.child}</button>`
+      + `<button type="button" class="msg-sibling" title="ask the AI to make the text the next sibling item">${MARK.sibling}</button></span></div>`
+    : `<div class="chat-step">${stepHtml(step, `${key}/${at}`)}</div>`).join("");
+}
+
+// Every reply closes with its activity line, the tally of what its turn did.
 function activityHtml(steps = [], key, running = false, extra = "") {
-  const open = state.unfolded.has(key), listed = steps.some((s) => s.kind !== "usage");
-  const summary = (running ? '<span class="spinner"></span> ' : "") + esc(activitySummary(steps));
-  return '<div class="turn-activity">' + (listed
-    ? `<button type="button" class="turn-head" aria-expanded="${open}" data-fold="${esc(key)}" title="${open ? "fold" : "unfold"} the turn's steps">${summary}</button>`
-      + (open ? `<div class="turn-steps">${stepsHtml(steps, key)}</div>` : "")
-    : `<span class="turn-head bare">${summary}</span>`) + extra + "</div>";
+  return `<div class="turn-activity"><span class="turn-head bare">${running ? '<span class="spinner"></span> ' : ""}${esc(activitySummary(steps))}</span>${extra}</div>`;
 }
 
 // The subagents still running on known items other than the chat's own: the unreported agent steps of the live turn and the chat's
@@ -1382,13 +1444,18 @@ function agentRunsHtml(chat) {
   const uids = runningAgents(chat);
   return uids.length ? '<div class="agent-runs">' + uids.map((uid) => `<a class="jump agent-run" data-uid="${esc(uid)}" title="a subagent runs on ${esc(uid)} — jump there"><span class="spinner"></span> @${esc(uid)}</a>`).join("") + "</div>" : "";
 }
-// The end of the log while something runs: the running turn's activity, or, the turn over and background subagents going on, a header of
-// theirs; the run indicators close either.
+// The end of the log while something runs: the running turn's blocks so far and its growing activity line, or, the turn over and background
+// subagents going on, a line of theirs; the run indicators close either.
 function liveHtml(chat, running) {
   const key = `${chat.uid}:${chat.log.length}`, background = chat.agents?.length || 0;
-  if (running) return chat.steps?.length ? activityHtml(chat.steps, key, true, agentRunsHtml(chat)) : '<div class="chat-msg note"><span class="spinner"></span> waiting for the reply…</div>';
-  return background ? `<div class="turn-activity"><span class="turn-head bare"><span class="spinner"></span> ${esc(plural(background, "background subagent"))} running</span>${agentRunsHtml(chat)}</div>` : "";
+  if (running) return (chat.steps?.length ? turnHtml(chat.steps, key, null, chat.log.length) + activityHtml(chat.steps, key, true, agentRunsHtml(chat))
+    : '<div class="chat-msg note"><span class="spinner"></span> waiting for the reply…</div>') + queueHtml(chat);
+  return queueHtml(chat) + (background ? `<div class="turn-activity"><span class="turn-head bare"><span class="spinner"></span> ${esc(plural(background, "background subagent"))} running</span>${agentRunsHtml(chat)}</div>` : "");
 }
+// The messages queued while the turn runs, after it: each waits for the AI's next step, its mark withdrawing it into the reply line.
+const queueHtml = (chat) => (chat.queue || []).map((m, i) => `<div class="chat-msg user queued" data-queued="${i}"><div class="msg-body">`
+  + `<div class="msg-from">queued — goes to the AI at its next step</div>${jumps(esc(m.text))}</div><span class="msg-tools right">`
+  + `<button type="button" class="msg-drop" title="withdraw the message — it goes back into the reply line">${MARK.remove}</button></span></div>`).join("");
 
 function toggleFold(key) {
   if (!state.unfolded.delete(key)) state.unfolded.add(key);
@@ -1418,16 +1485,19 @@ function decorateChat(el, row) {
     return;
   }
   const connector = state.model.connectors[chat.connector], advanced = advancedModes(chat.connector), running = busy(chat), several = Object.keys(state.model.connectors).length > 1;
-  setHtml(box.querySelector(".chat-log"), chat.log.map((m, i) => messageHtml(m, i, running, i === chat.log.length - 1) + (m.role === "user" ? "" : activityHtml(m.steps, `${chat.uid}:${i}`))).join("")
+  setHtml(box.querySelector(".chat-log"), chat.log.map((m, i) => m.role === "user" ? messageHtml(m, i, running, i === chat.log.length - 1)
+    : turnHtml(m.steps, `${chat.uid}:${i}`, m.text, i) + (m.role === "ai" && !m.text.trim() ? "" : messageHtml(m, i, running, i === chat.log.length - 1))
+      + activityHtml(m.steps, `${chat.uid}:${i}`)).join("")  // a turn that ended on its calls says nothing more: its blocks are the answer
     + liveHtml(chat, running));
-  const sendTitle = running ? `a turn of ${chat.uid} is running — wait for it or stop it` : !editing ? "send the message (Ctrl/⌘+Enter)" : chat.log.length
+  const sendTitle = running ? (editing ? `a turn of ${chat.uid} is running — wait for it or stop it`
+      : "send! — stop the running turn and send the message now, the session carrying on (Ctrl/⌘+Shift+Enter); Ctrl/⌘+Enter queues it instead") : !editing ? "send the message (Ctrl/⌘+Enter)" : chat.log.length
     ? "save the statement and send it into this conversation (Ctrl/⌘+Enter)" : "save the statement and send it as the first message of a new conversation — the previous one is kept, ▾ lists it (Ctrl/⌘+Enter)";
   const statePill = running ? (state.stopping.has(chat.turn) ? '<button type="button" class="pill chat-stop" disabled><span class="spinner"></span> stopping…</button>'
       : '<button type="button" class="pill chat-stop" title="stop the turn now — nothing more of it is applied">■ stop</button>')
     : `<button type="button" class="pill chat-hide" title="${editing ? "done — the statement is saved, the editor and the chat closed (Esc)" : "hide the chat here — ▾ lists it again, nothing is lost"}">▴ done</button>`;
   setHtml(tools, statePill + (editing ? `<span class="pill save-mark" data-uid="${esc(row.uid)}"></span>` : "")
     + `<span class="pill chat-pill${running ? " busy" : ""}">`
-    + `<button type="button" class="chat-send" title="${sendTitle}">➤ send</button>`
+    + `<button type="button" class="chat-send" title="${sendTitle}">➤ send${running && !editing ? "!" : ""}</button>`
     + `<button type="button" class="rev chat-setup" title="${several ? "connector" : esc(connector.label)} · model · effort — click to change">`
     + [several && connector.label, connector.models.find((m) => m.id === chat.model)?.name ?? chat.model, effortsOf(chat.connector, chat.model).includes(chat.effort) && chat.effort]
       .filter(Boolean).map(esc).join(" · ") + " ▾</button></span>"
@@ -1572,10 +1642,13 @@ function toggleChatMode(chat, mode) {
 // A turn: the typed text -- or the `composed` one of a mark -- joins the log as the user's message; a statement sent from the editor is the
 // content itself, not repeated, as the first message of a new conversation, and is announced into a conversation holding messages; a fresh
 // view's first send files the live conversation; a retry sends the last message again without logging it twice.
-async function sendChat(row, statement = null, retry = false, composed = null) {
+// While a turn runs, a message typed in the reply line is not refused: `queue`d it waits for the AI's next step, sent `now` (send!) it stops
+// the turn and goes as the next one, the session carrying on; a statement, a retry or an extraction still waits for the turn's end.
+async function sendChat(row, statement = null, retry = false, composed = null, how = null) {
   const chat = row && chatAt(row), input = chat && chatInput(row.path);
   const text = retry ? chat?.log.findLast((m) => m.role === "user")?.text ?? "" : statement ?? composed ?? (input ? input.value.trim() : "");
   if (!chat) return;
+  if (busy(chat) && how && statement === null && composed === null && !retry) return queueChat(chat, input, text, how);
   if (busy(chat)) { toast(`a turn of ${chat.uid} is running — wait for it or stop it`, "info"); return; }
   if (!text) { toast("type a message first", "info"); return; }
   if (input && statement === null && composed === null && !retry) input.value = "";
@@ -1591,17 +1664,53 @@ async function sendChat(row, statement = null, retry = false, composed = null) {
   } catch (err) { if (fresh) view.fresh = true; toast(err.message); renderDoc(); }
 }
 
-// One press stops the turn; the pill reads as stopping until the outcome lands.
+async function queueChat(chat, input, text, how) {
+  if (!text) { toast("type a message first", "info"); return; }
+  if (how === "now" && state.stopping.has(chat.turn)) { toast(`the turn of ${chat.uid} is stopping — send once it has stopped`, "info"); return; }
+  const { uid, connector, model, effort, modes } = chat, turn = chat.turn;
+  if (input) input.value = "";
+  if (how === "now") state.stopping.add(turn);
+  try {
+    takeChat((await api("/api/turn", { uid, connector, model, effort, modes, text, [how === "now" ? "interrupt" : "queue"]: true })).chat);
+    watchChats();
+  } catch (err) {
+    state.stopping.delete(turn);
+    if (input && !input.value) input.value = text;
+    toast(err.message);
+  }
+  renderDoc();
+}
+
+// A queued message withdrawn goes back into the reply line, after whatever is typed there.
+function backToLine(uid, texts) {
+  const row = state.docRows.find((r) => r.uid === uid), input = row && chatInput(row.path);
+  const joined = texts.join("\n\n");
+  if (input) input.value = input.value.trim() ? `${input.value.trim()}\n\n${joined}` : joined;
+  else state.replies.set(uid, joined);
+}
+
+// One press stops the turn; the pill reads as stopping until the outcome lands. The messages queued meanwhile are withdrawn into the line.
 function stopTurn(chat) {
   if (!chat?.turn || state.stopping.has(chat.turn)) return;
   state.stopping.add(chat.turn);
   renderDoc();
-  api(`/api/turn/${chat.turn}/stop`, {}).catch((err) => { state.stopping.delete(chat.turn); renderDoc(); toast(err.message); });
+  api(`/api/turn/${chat.turn}/stop`, {}).then((done) => { if (done.unqueued?.length) backToLine(chat.uid, done.unqueued); })
+    .catch((err) => { state.stopping.delete(chat.turn); renderDoc(); toast(err.message); });
 }
 
 // The marks of one message: a fold mark cuts its part out of the exchange or lets a cut back in (either rebuilds the exchange from the kept
 // text on the next turn), the extraction marks make the kept text an item, and a failed turn's message is retried or removed.
 function messageTool(chat, row, msg, tool) {
+  if (msg.dataset.queued) {  // withdrawn before the AI took it: back into the reply line
+    const index = Number(msg.dataset.queued), queued = chat.queue?.[index];
+    if (queued && tool.classList.contains("msg-drop")) updateChat(chat.uid, { unqueue: index }).then(() => backToLine(chat.uid, [queued.text]));
+    return;
+  }
+  if (msg.dataset.step) {  // a message said on the way of a turn: only extracted, never folded
+    const [index, ...at] = msg.dataset.step.split("/").map(Number), steps = index < chat.log.length ? chat.log[index].steps : chat.steps, said = steps?.[at[0]];
+    if (said?.kind === "message") extractItem(row, said.text, tool.classList.contains("msg-sibling"));
+    return;
+  }
   const index = Number(msg.dataset.index), m = chat.log[index];
   if (!m) return reloadChats().then(renderDoc);
   if (tool.classList.contains("msg-fold") && tool.getAttribute("aria-disabled") !== "true") {
@@ -2254,7 +2363,7 @@ const doc = $("doc");
 doc.addEventListener("keydown", (event) => {
   if (!event.target.classList.contains("chat-input")) return;
   const block = event.target.closest(".block"), row = state.docRows.find((r) => r.path === block.dataset.path);
-  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendChat(row); }
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); sendChat(row, null, false, null, event.shiftKey ? "now" : "queue"); }
   if (stopKey(event)) { event.preventDefault(); stopTurn(chatOf(row.uid)); }
   if (event.key === "Escape") { event.preventDefault(); !busy(chatOf(row.uid)) ? closeChat(row) : block.focus({ preventScroll: true }); }
   event.stopPropagation();
@@ -2280,7 +2389,7 @@ doc.addEventListener("click", (event) => {
     else if (target.closest(".chat-show")) showHidden(row, target.closest(".chat-show"));
     else if (target.closest(".chat-hide")) closeChat(row);
     else if (target.closest(".chat-stop")) stopTurn(chat);
-    else if (target.closest(".chat-send")) state.editing === path ? sendEdited(row) : sendChat(row);
+    else if (target.closest(".chat-send")) state.editing === path ? sendEdited(row) : sendChat(row, null, false, null, "now");
     else if (target.closest(".chat-setup")) openChatMenu(chat, target.closest(".chat-setup"));
     else if (target.closest(".chat-advanced")) openAdvancedMenu(chat, target.closest(".chat-advanced"));
     else if (target.closest(".chat-mode")) toggleChatMode(chat, target.closest(".chat-mode").dataset.chatMode);
@@ -2355,6 +2464,8 @@ function shownWords(text, from, to, markdown) {
   const at = [];
   for (let i = from; i < to; i++) {
     if (markdown && text[i] === "]" && text[i + 1] === "(") { const close = text.indexOf(")", i); if (close >= 0 && close < to) { i = close; continue; } }
+    const tag = markdown && text[i] === "<" && /^<\/?(details|summary)\b[^>\n]*>/i.exec(text.slice(i, i + 40));
+    if (tag) { i += tag[0].length - 1; continue; }
     if (markdown && text.startsWith("```", i) && (i === 0 || text[i - 1] === "\n")) { const eol = text.indexOf("\n", i); if (eol < 0 || eol >= to) break; i = eol; continue; }
     if (WORD.test(text[i])) at.push(i);
   }

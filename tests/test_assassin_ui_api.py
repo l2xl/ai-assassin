@@ -81,14 +81,14 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
     modes = call(base, app, "/api/tree")[1]["connectors"]["echo"]["modes"]
     assert modes[0] == assassin_ui.TREE_MODE and modes[0]["default"] is True and [mode["id"] for mode in modes] == ["tree", "patch", "edit"]
     outcome = call(base, app, "/api/chat", {**SETUP, "uid": "ROOT", "modes": ["edit"], "text": "Add it."})[1]
-    assert outcome["reply"] == f"- add NEW-001 refused: {assassin_ui.TREE_REFUSAL}\nI would add it."  # the query was read but stays out of the reply
+    assert outcome["reply"] == "I would add it." and outcome["applied"] == [f"- add NEW-001 refused: {assassin_ui.TREE_REFUSAL}"]  # the query was read but stays out of the reply
     assert scripted.heard[0] == {"text": assassin_ui.TREE_OFF + "\nAdd it.", "modes": ["edit"], "session": None}  # the mode is never sent
     assert scripted.heard[1]["text"].startswith(synthetic.RESULTS_PREAMBLE + "- ROOT: {") and scripted.heard[1]["text"].endswith(f"\n- add NEW-001 refused: {assassin_ui.TREE_REFUSAL}")
     assert "NEW-001" not in app._load() and len(scripted.heard) == 2
 
     app.connectors = {"echo": (scripted := Scripted(calls(add)))}
     outcome = turn(base, app, "ROOT", "Add it.", modes=["edit", "tree"])
-    assert outcome["reply"] == "- added NEW-001 under ROOT" and "NEW-001" in app._load()
+    assert outcome["reply"] == "" and outcome["applied"] == ["- added NEW-001 under ROOT"] and "NEW-001" in app._load()
     assert scripted.heard == [{"text": "Add it.", "modes": ["edit"], "session": None}]
     assert outcome["steps"][-1]["kind"] == "calls" and outcome["steps"][-1]["tools"] == ["add"] and outcome["steps"][-1]["lines"] == ["- added NEW-001 under ROOT"]
 
@@ -96,7 +96,7 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
     denied = f"- add NEW-002 refused: {assassin_ui.TREE_REFUSAL}"
     app.connectors = {"echo": (scripted := Scripted(calls(child), calls(dict(add, uid="NEW-002")), {"kind": "text", "text": "Could not."}, {"kind": "text", "text": "Reported."}))}
     outcome = turn(base, app, "ROOT", "Delegate.", modes=["edit"])
-    assert outcome["reply"] == f"- agent LEAF-001: {denied}\nCould not.\nReported."
+    assert outcome["reply"] == "Reported." and outcome["applied"] == [f"- agent LEAF-001: {denied}\nCould not."]
     assert scripted.heard[1]["text"] == assassin_ui.TREE_OFF + "\nAdd one more" and scripted.heard[1]["modes"] == ["edit"] and "NEW-002" not in app._load()
     assert scripted.heard[2]["text"] == synthetic.RESULTS_PREAMBLE + denied  # the child hears its refusal and answers in text
     assert scripted.heard[3]["text"] == synthetic.RESULTS_PREAMBLE + f"- agent LEAF-001: {denied}\nCould not."
@@ -105,7 +105,7 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
     app.connectors = {"echo": (scripted := Scripted(calls({"tool": "agent", "uid": "LEAF-001", "prompt": "Add one more"}), calls(dict(add, uid="NEW-003")), {"kind": "text", "text": "Could not."}, {"kind": "text", "text": "Reported."}))}
     started = call(base, app, "/api/turn", {**SETUP, "uid": "ROOT", "text": "Delegate."})[1]  # no modes key at all: Tree edit is off
     outcome = call(base, app, f"/api/turn/{started['turn']}?wait=10")[1]
-    assert outcome["reply"] == f"- agent LEAF-001: - add NEW-003 refused: {assassin_ui.TREE_REFUSAL}\nCould not.\nReported."
+    assert outcome["reply"] == "Reported." and outcome["applied"] == [f"- agent LEAF-001: - add NEW-003 refused: {assassin_ui.TREE_REFUSAL}\nCould not."]
     assert scripted.heard[1]["modes"] == ["edit"] and "NEW-003" not in app._load()
 
     status, body = refused(base, app, "/api/chat", {**SETUP, "uid": "ROOT", "modes": ["edit"], "text": "  "})
@@ -178,7 +178,7 @@ def test_a_subagents_report_is_mirrored_into_its_items_chat_but_not_the_anchors_
     app.connectors = {"echo": Scripted(calls({"tool": "agent", "uid": "LEAF-001", "prompt": "Do the leaf"}), {"kind": "text", "text": "did it"}, narrate)}
     outcome = turn(base, app, "ROOT", "Check everything.")
     chats = call(base, app, "/api/chats")[1]["chats"]
-    assert outcome["reply"] == "- agent LEAF-001: did it\nAll checked." and sorted(chats) == ["LEAF-001", "LEAF-002", "ROOT"]
+    assert outcome["reply"] == "All checked." and outcome["applied"] == ["- agent LEAF-001: did it"] and sorted(chats) == ["LEAF-001", "LEAF-002", "ROOT"]
     assert [m["role"] for m in chats["ROOT"]["log"]] == ["user", "ai"]
     assert [(m["role"], m["text"], m.get("agent")) for m in chats["LEAF-001"]["log"]] == [("user", "Do the leaf", "ROOT:1"), ("ai", "did it", None)]  # delegated: its own chat, not mirrored twice
     assert [{**m, "steps": without_at(m["steps"])} for m in chats["LEAF-002"]["log"]] == [
@@ -412,7 +412,7 @@ def test_the_project_files_endpoint_lists_tracked_files_else_a_bounded_walk_insi
 
     app.git = False
     listed = call(base, app, "/api/files")[1]
-    assert listed["files"] == sorted(["README.md", "src/main.py", "src/deep/util.py", "syngate/LEAF-001.yml", "syngate/ROOT.yml"]) and listed["truncated"] is False
+    assert listed["files"] == sorted(["README.md", "src/main.py", "src/deep/util.py"]) and listed["truncated"] is False  # the item files under syngate/ are not offered
     monkeypatch.setattr(assassin_ui, "FILES_LIMIT", 2)
     capped = call(base, app, "/api/files")[1]
     assert len(capped["files"]) == 2 and capped["truncated"] is True
@@ -431,3 +431,20 @@ def test_the_project_files_endpoint_lists_tracked_files_else_a_bounded_walk_insi
     assert app.git is True
     tracked = call(base, app, "/api/files")[1]["files"]
     assert tracked == ["README.md", "node_modules/pkg/index.js", "src/main.py"]  # tracked files only: no untracked, deleted or outside-pointing ones
+
+
+@pytest.mark.syngate("AI_CHAT-REPLY-TEXT")
+def test_the_reply_is_the_ais_text_alone_and_the_applied_lines_tallied_go_only_where_a_model_reads_the_outcome_without_the_log(server, syngate_tree):
+    base, app = server
+    edit = {"tool": "edit", "uid": "LEAF-001", "description": "It shall leaf again.\n"}
+    app.connectors = {"echo": Scripted(calls(edit, edit, {"tool": "query", "uid": "@"}), calls(dict(edit, uid="ROOT"), edit, {"tool": "query", "uid": "@"}), {"kind": "text", "text": "Done."})}
+    outcome = turn(base, app, "ROOT", "Edit it.", modes=["tree"])
+    assert outcome["reply"] == "Done." and outcome["applied"] == ["- edited LEAF-001 (×3)", "- edited ROOT"]  # in the order first said; what was read stays out
+    assert [step["lines"] for step in outcome["steps"] if step["kind"] == "calls"][0][:2] == ["- edited LEAF-001", "- edited LEAF-001"]  # the log keeps every call
+    assert app.chats["ROOT"].log[-1]["text"] == "Done." and app.chats["ROOT"].kept()[-1]["text"] == "- edited LEAF-001 (×3)\n- edited ROOT\nDone."
+    assert assassin_ui.told(outcome) == "- edited LEAF-001 (×3)\n- edited ROOT\nDone." and assassin_ui.tallied(["- a", "- b", "- a"]) == ["- a (×2)", "- b"]
+
+    app.connectors = {"echo": (scripted := Scripted(calls({"tool": "agent", "uid": "LEAF-001", "prompt": "Edit the leaf"}), calls(edit), {"kind": "text", "text": "Reported."}))}
+    outcome = turn(base, app, "ROOT", "Delegate.", modes=["tree"])
+    assert outcome["reply"] == "Reported." and app.chats["LEAF-001"].log[-1]["text"] == ""  # the child's turn ended on its calls: nothing more to say
+    assert scripted.heard[2]["text"] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-001: - edited LEAF-001"  # the parent model is told what the child applied

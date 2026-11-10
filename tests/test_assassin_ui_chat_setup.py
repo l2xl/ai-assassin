@@ -111,4 +111,4 @@ def test_a_malformed_answer_is_refused_to_the_ai_as_its_next_prompt_and_answered
     outcome = turn(base, app, "LEAF-001", "First", modes=["tree"])
     refusal = "answer refused: unknown tree call 'bogus'"
     assert scripted.heard[1]["text"] == synthetic.ANSWER_REFUSED.format(error="unknown tree call 'bogus'")
-    assert outcome["reply"] == f"- {refusal}\nFixed"
+    assert outcome["reply"] == "Fixed" and outcome["applied"] == [f"- {refusal}"]

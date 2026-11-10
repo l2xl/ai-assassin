@@ -66,10 +66,10 @@ def test_the_edit_files_switch_gates_the_patch_calls_of_a_turn(repo_server):
     app.connectors = {"echo": (scripted := Scripted(calls({"tool": "patch", "diff": GUIDE}), {"kind": "text", "text": "Could not."},
                                                     calls({"tool": "patch", "diff": GUIDE})))}
     outcome = turn(base, app, "ROOT", "Edit the guide.", modes=["tree"])
-    assert outcome["reply"].startswith("- patch refused: ") and outcome["reply"].endswith("\nCould not.")
+    assert outcome["applied"][0].startswith("- patch refused: ") and outcome["reply"] == "Could not."
     assert app.root.joinpath("GUIDE.md").read_text() == "# Guide\n"
     outcome = turn(base, app, "ROOT", "Edit the guide.", modes=["patch"])
-    assert outcome["reply"] == "- patch changed GUIDE.md"
+    assert (outcome["applied"], outcome["reply"]) == (["- patch changed GUIDE.md"], "")
     assert app.root.joinpath("GUIDE.md").read_text() == "# Guide\nRead it.\n"
     assert [mode["id"] for mode in app.build_model()["connectors"]["echo"]["modes"]][:2] == ["tree", "patch"]
 
@@ -106,15 +106,15 @@ def test_a_replace_call_changes_the_one_occurrence_of_an_exact_text_under_the_pa
                                                     calls({**replace, "old": "absent"}), {"kind": "text", "text": "Not there."},
                                                     calls({**replace, "path": "syngate/ROOT.yml", "old": "Root"}), {"kind": "text", "text": "Tree."},
                                                     calls({"tool": "replace", "path": "paper.md", "old": "Twice. Twice.\n"}), calls(replace)))}
-    assert turn(base, app, "ROOT", "Fix the number.", modes=["patch"])["reply"] == "- replace changed paper.md"
+    assert turn(base, app, "ROOT", "Fix the number.", modes=["patch"])["applied"] == ["- replace changed paper.md"]
     text = app.root.joinpath("paper.md").read_text()
     assert text == "# Paper\n" + paragraph.replace("at 313% of the stake, bounds the staking; end.", "at 308% of the stake, bounds the staking; end.") + "Twice. Twice.\n"
     outcome = turn(base, app, "ROOT", "Again.", modes=["patch"])
-    assert outcome["reply"].startswith("- replace refused: ") and "2 times" in outcome["reply"] and outcome["reply"].endswith("Unique needed.")
-    assert "not in paper.md" in turn(base, app, "ROOT", "Again.", modes=["patch"])["reply"]
-    assert "tree calls" in turn(base, app, "ROOT", "Again.", modes=["patch"])["reply"]
+    assert outcome["applied"][0].startswith("- replace refused: ") and "2 times" in outcome["applied"][0] and outcome["reply"] == "Unique needed."
+    assert "not in paper.md" in turn(base, app, "ROOT", "Again.", modes=["patch"])["applied"][0]
+    assert "tree calls" in turn(base, app, "ROOT", "Again.", modes=["patch"])["applied"][0]
     assert app.root.joinpath("paper.md").read_text() == text
-    assert turn(base, app, "ROOT", "Drop it.", modes=["patch"])["reply"] == "- replace changed paper.md"  # no `new` deletes the text
+    assert turn(base, app, "ROOT", "Drop it.", modes=["patch"])["applied"] == ["- replace changed paper.md"]  # no `new` deletes the text
     assert not app.root.joinpath("paper.md").read_text().endswith("Twice.\n")
-    assert turn(base, app, "ROOT", "Off.", modes=[])["reply"].startswith(f"- replace refused: {assassin_ui.PATCH_REFUSAL}")
+    assert turn(base, app, "ROOT", "Off.", modes=[])["applied"][0].startswith(f"- replace refused: {assassin_ui.PATCH_REFUSAL}")
     assert '"tool": "replace"' in synthetic.LIBRARY["patch"].text

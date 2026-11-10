@@ -30,10 +30,16 @@ print(json.dumps({"type": "result", "result": json.dumps({"argv": argv, "prompt"
 
 
 TESTS_ON = "\n# Tree features\ntest: enabled\n"
+ACTIVE = " (active item)"
 
 
-def _sections(*statements):
-    return "".join(f"\n@{uid}\n{text}\n" for uid, text in statements)
+def _sections(*statements, active=None):
+    return "".join(f"\n@{uid}{ACTIVE if uid == active else ''}\n{text}\n" for uid, text in statements)
+
+
+def _unmarked(seed):
+    """The seed context without its active item mark, so the seeds of two items of one selection compare equal."""
+    return seed.replace(ACTIVE + "\n", "\n")
 
 
 @pytest.mark.syngate("SYNTHETIC-010")
@@ -50,10 +56,10 @@ def test_seed_context_opens_with_the_default_prompt_then_the_ancestry_the_item_a
     prompt = synthetic.PROMPTS["default"] + TESTS_ON
     root, side_a, side_b = ("ROOT", "Root."), ("SIDE-A", "Side A."), ("SIDE-B", "Side B.")
     leaf, note, deep = ("LEAF-001", "It shall leaf."), ("NOTE-001", "A note."), ("DEEP-001", "It shall go deep.")
-    assert synthetic.seed_context(items, "ROOT") == prompt + _sections(root, side_a, leaf, side_b, note, deep)
-    assert synthetic.seed_context(items, "SIDE-B") == prompt + _sections(root, side_b, note, deep, leaf)
-    assert synthetic.seed_context(items, "NOTE-001") == prompt + _sections(root, side_b, note, deep)
-    assert synthetic.seed_context(items, "LEAF-001") == prompt + _sections(root, side_a, side_b, leaf)
+    assert synthetic.seed_context(items, "ROOT") == prompt + _sections(root, side_a, leaf, side_b, note, deep, active="ROOT")
+    assert synthetic.seed_context(items, "SIDE-B") == prompt + _sections(root, side_b, note, deep, leaf, active="SIDE-B")
+    assert synthetic.seed_context(items, "NOTE-001") == prompt + _sections(root, side_b, note, deep, active="NOTE-001")
+    assert synthetic.seed_context(items, "LEAF-001") == prompt + _sections(root, side_a, side_b, leaf, active="LEAF-001")
 
 
 @pytest.mark.syngate("SYNTHETIC-SEED-UID")
@@ -64,8 +70,8 @@ def test_a_referenced_item_the_seed_context_holds_brings_no_second_copy_and_a_mi
     make_item(syngate_dir, "SIDE-B", "Side B", parents=("ROOT",), order=20)
     items, _ = syngatelib.load_tree(syngate_dir)
     seed = synthetic.seed_context(items, "SIDE-A")
-    assert seed.endswith("\n@ROOT\nRoot.\n\n@SIDE-A\nSide A.\n")
-    assert synthetic.seed_context(items, "SIDE-B").endswith("\n@SIDE-B\nSide B\n")
+    assert seed.endswith("\n@ROOT\nRoot.\n\n@SIDE-A (active item)\nSide A.\n")
+    assert synthetic.seed_context(items, "SIDE-B").endswith("\n@SIDE-B (active item)\nSide B\n")
     contained = syngatelib.walk(items, "SIDE-A", descendants=True)
     assert synthetic.referenced(items, "See @ROOT and @SIDE-A.", contained) == ""
     assert synthetic.referenced(items, "See @ROOT, @SIDE-B and @SIDE-B again, not @GONE.", contained) == "\n@SIDE-B\nSide B\n"
@@ -98,10 +104,11 @@ def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(t
     prompt = synthetic.PROMPTS["default"] + TESTS_ON
     root_source = "\n# Source src/root.py\n````\nROOT = 1\n````\n"
     leaf_sources = "\n# Source src/leaf.py\n````\n```\nLEAF = 2\n````\n" + "\n# Source docs/GONE.md\n(file not found)\n"
-    assert synthetic.seed_context(items, "ROOT", root=tmp_path) == prompt + _sections(("ROOT", "Root."), ("SIDE-A", "Side A."), ("LEAF-001", "It shall leaf.")) + root_source + leaf_sources
-    assert synthetic.seed_context(items, "SIDE-A", root=tmp_path) == synthetic.seed_context(items, "ROOT", root=tmp_path)
+    statements = (("ROOT", "Root."), ("SIDE-A", "Side A."), ("LEAF-001", "It shall leaf."))
+    assert synthetic.seed_context(items, "ROOT", root=tmp_path) == prompt + _sections(*statements, active="ROOT") + root_source + leaf_sources
+    assert _unmarked(synthetic.seed_context(items, "SIDE-A", root=tmp_path)) == _unmarked(synthetic.seed_context(items, "ROOT", root=tmp_path))
     seed = synthetic.seed_context(items, "LEAF-001", root=tmp_path)
-    assert seed == prompt + _sections(("ROOT", "Root."), ("SIDE-A", "Side A."), ("LEAF-001", "It shall leaf.")) + root_source + leaf_sources
+    assert seed == prompt + _sections(*statements, active="LEAF-001") + root_source + leaf_sources
     assert synthetic.apply_call(items, "ROOT", {"tool": "context", "uid": "LEAF-001"}, syngate_dir=syngate_dir) == f"- context of LEAF-001:\n{seed}"
     app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     app.connectors = {"echo": EchoAnswer()}
@@ -140,7 +147,7 @@ def test_the_prompt_library_is_read_from_front_matter_markdown_files_by_name_as_
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     items, _ = syngatelib.load_tree(syngate_dir)
-    assert synthetic.seed_context(items, "ROOT") == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n"
+    assert synthetic.seed_context(items, "ROOT") == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT (active item)\nRoot.\n"
 
 
 @pytest.mark.syngate("SYNTHETIC-PROMPTS-DEFAULT")
@@ -214,7 +221,7 @@ def test_the_delivery_skill_is_a_default_skill_carrying_reworked_items_into_test
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",))
     items, _ = syngatelib.load_tree(syngate_dir)
     assert synthetic.features_section(items) == "\n# Tree features\ntest: disabled\n"
-    assert synthetic.seed_context(items, "LEAF-001") == synthetic.PROMPTS["default"] + "\n# Tree features\ntest: disabled\n" + _sections(("ROOT", "Root."), ("LEAF-001", "It shall leaf."))
+    assert synthetic.seed_context(items, "LEAF-001") == synthetic.PROMPTS["default"] + "\n# Tree features\ntest: disabled\n" + _sections(("ROOT", "Root."), ("LEAF-001", "It shall leaf."), active="LEAF-001")
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     items, _ = syngatelib.load_tree(syngate_dir)
     assert synthetic.seed_context(items, "LEAF-001").startswith(synthetic.PROMPTS["default"] + TESTS_ON + "\n@ROOT\n")
@@ -242,7 +249,7 @@ def test_the_skill_call_brings_the_named_skill_back_as_the_next_prompt_and_an_un
     app.connectors = {"scripted": (scripted := ScriptedConnection(calls({"tool": "skill", "name": "fly"}), {"kind": "text", "text": "No such skill."}))}
     result = ask()
     assert scripted.prompts[1] == (synthetic.RESULTS_PREAMBLE + "- skill fly refused: unknown skill 'fly'", "session-1")
-    assert result["reply"] == "- skill fly refused: unknown skill 'fly'\nNo such skill."
+    assert (result["applied"], result["reply"]) == (["- skill fly refused: unknown skill 'fly'"], "No such skill.")
 
 
 class EchoConnection:
@@ -268,7 +275,7 @@ def test_query_goes_through_the_selected_connection_model_and_effort(syngate_tre
     items, _ = syngatelib.load_tree(syngate_dir)
     connectors = {"echo": EchoConnection(), "other": None}
     reply, session = synthetic.query(connectors, items, "LEAF-001", "What is missing?", "echo", "model-b", "high", modes=["edit"], session="session-0")
-    assert (reply, session) == (synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n\n@LEAF-001\nIt shall leaf.\n|What is missing?|model-b|high|edit|session-0", "session-1")
+    assert (reply, session) == (synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n\n@LEAF-001 (active item)\nIt shall leaf.\n|What is missing?|model-b|high|edit|session-0", "session-1")
     with pytest.raises(synthetic.query_error):
         synthetic.query(connectors, items, "LEAF-001", "hi", "echo", "model-a", "low", modes=["fly"])
     for uid, text, connector, model, effort in (("NOPE", "hi", "echo", "model-a", "low"), ("LEAF-001", "hi", "absent", "model-a", "low"),
@@ -395,7 +402,7 @@ def test_the_seed_context_is_the_appended_system_prompt(tmp_path, syngate_tree):
     stub.write_text(STUB_CLAUDE)
     connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
     echoed = json.loads(connector.dispatch(synthetic.seed_context(items, "ROOT"), "Go.")[0])
-    assert echoed["seed"] == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT\nRoot.\n" and "--append-system-prompt" not in echoed["argv"]
+    assert echoed["seed"] == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + TESTS_ON + "\n@ROOT (active item)\nRoot.\n" and "--append-system-prompt" not in echoed["argv"]
     assert synthetic.LIBRARY["syngate_api"].text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
 
 
@@ -468,7 +475,7 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
         assert prompt.startswith(synthetic.RESULTS_PREAMBLE) and json.loads(prompt.split("- ROOT: ", 1)[1])["children"] == children
     assert scripted.prompts[2][0].split("\n")[1] == "- added LEAF-002 under ROOT"
     assert result["session"] == "session-5" and result["calls"] == [query, add, query, agent]
-    assert result["reply"] == "- added LEAF-002 under ROOT\n- agent LEAF-002: Checked.\nDone."  # what was read stays out of the reply
+    assert (result["applied"], result["reply"]) == (["- added LEAF-002 under ROOT", "- agent LEAF-002: Checked."], "Done.")  # what was read stays out of the reply
 
     app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}
     with pytest.raises(assassin_ui.ApiError, match="kept querying") as refused:
@@ -478,7 +485,7 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     app.connectors = {"scripted": (unknown := ScriptedConnection(calls(query, {"tool": "query", "uid": "LEAF-009"}), {"kind": "text", "text": "No such leaf."}))}
     result = ask(unknown)
     assert unknown.prompts[1][0].startswith(synthetic.RESULTS_PREAMBLE + "- ROOT: ") and unknown.prompts[1][0].endswith("\n- query LEAF-009 refused: unknown UID 'LEAF-009'")
-    assert result["reply"] == "- query LEAF-009 refused: unknown UID 'LEAF-009'\nNo such leaf." and len(unknown.prompts) == 2
+    assert (result["applied"], result["reply"]) == (["- query LEAF-009 refused: unknown UID 'LEAF-009'"], "No such leaf.") and len(unknown.prompts) == 2
 
 
 # Stub `syngate test`: records one coverage line per addressed binding -- `two` failing with a log -- and keeps the argv it was run with.
@@ -524,7 +531,7 @@ def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports
     assert again == synthetic.RESULTS_PREAMBLE + "- LEAF-001:two: fail\nLEAF-001:two output:\nboom"
     assert unrun == synthetic.RESULTS_PREAMBLE + ("- LEAF-001:one: pass\n- LEAF-001:two: fail\n- LEAF-002: pass\n- LEAF-001:three: fail\n"  # a glob addresses its leaves
                                                   "LEAF-001:two output:\nboom\nLEAF-001:three output:\nLEAF-001: no binding named three")  # no record: the runner's own words
-    assert result["calls"] == [everything, narrowed, matched, undeclared] and result["reply"].endswith("no binding named three\nDone.") and result["session"] == "session-4"
+    assert result["calls"] == [everything, narrowed, matched, undeclared] and result["applied"][-1].endswith("no binding named three") and result["reply"] == "Done." and result["session"] == "session-4"
     axes = syngatelib.compute_axes(app._load(), syngatelib.load_coverage([app.run_coverage])[0])
     assert (axes["LEAF-001"]["test"], axes["LEAF-002"]["test"], axes["ROOT"]["test"]) == (syngatelib.TEST_FAILED, syngatelib.TEST_PASSED, syngatelib.TEST_FAILED)
 
@@ -533,7 +540,7 @@ def test_a_test_call_runs_the_bound_routines_through_the_page_runner_and_reports
     try:
         result = ask()
         assert busy.prompts[1][0].startswith(synthetic.RESULTS_PREAMBLE + "- test ROOT refused: a run is already in progress")
-        assert result["reply"].startswith("- test ROOT refused: a run is already in progress") and result["reply"].endswith("\nLater.")
+        assert result["applied"][0].startswith("- test ROOT refused: a run is already in progress") and result["reply"] == "Later."
         assert len((tmp_path / "runner_stub.py.argv").read_text().splitlines()) == 3
     finally:
         app.jobs.cancel()
@@ -617,7 +624,7 @@ def test_a_stop_closes_the_turns_gate_so_no_call_run_or_delegation_is_applied_pa
     assert app.chats["LEAF-001"].turn.stopped
     connection.release.set()
     stopped = app.turn_snapshot(parent, wait=5)
-    assert (stopped["status"], stopped["error"]) == (409, "- agent LEAF-001: turn stopped\nturn stopped")
+    assert (stopped["status"], stopped["applied"], stopped["error"]) == (409, ["- agent LEAF-001: turn stopped"], "turn stopped")
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-AGENT")
@@ -636,7 +643,8 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
     started = app.start_turn({**setup, "uid": "ROOT", "text": "Split the work."})
     outcome = app.turn_snapshot(started["turn"], wait=10)
     chats = app.chats_snapshot()["chats"]
-    assert started["turn"] == "ROOT:1" and outcome["reply"].endswith("- agent LEAF-001: did: Do the leaf\n- agent LEAF-002: did: Do the other\nAll done.")
+    assert started["turn"] == "ROOT:1" and outcome["applied"] == ["- agent LEAF-001: did: Do the leaf", "- agent LEAF-002: did: Do the other"]
+    assert outcome["reply"] == "All done."
     assert connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-001: did: Do the leaf\n- agent LEAF-002: did: Do the other"
     for child, prompt, model in (("LEAF-001", "Do the leaf", "model-b"), ("LEAF-002", "Do the other", "model-a")):
         assert chats[child]["log"][0] == {"role": "user", "text": prompt, "agent": "ROOT:1"}
@@ -651,7 +659,7 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
     threading.Timer(0.3, connection.release.set).start()
     result = app.chat({**setup, "uid": "ROOT", "text": "Again."})
     busy = f"- agent LEAF-002: Held.\n- agent LEAF-001 refused: a turn of LEAF-001 is running ({held})"
-    assert result["reply"] == busy + "\nNoted." and connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + busy  # the refusal ends the batch and comes back
+    assert ("\n".join(result["applied"]), result["reply"]) == (busy, "Noted.") and connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + busy  # the refusal ends the batch and comes back
     assert app.turn_snapshot(held, wait=5)["reply"] == "Held."
 
     connection.release.clear()
@@ -662,12 +670,12 @@ def test_the_agent_calls_of_a_batch_run_as_parallel_turns_of_their_items_chats_a
     assert _awaited(lambda: app.chats["LEAF-002"].turn.stopped)
     connection.release.set()
     stopped = app.turn_snapshot(parent, wait=5)
-    assert (stopped["status"], stopped["error"]) == (409, "- agent LEAF-002: turn stopped\nturn stopped")
+    assert (stopped["status"], stopped["applied"], stopped["error"]) == (409, ["- agent LEAF-002: turn stopped"], "turn stopped")
 
     connection.prompts.clear()
     connection.answers = [calls({"tool": "agent", "uid": "@", "prompt": "Me"}), {"kind": "text", "text": "Alone then."}]
     itself = app.turn_snapshot(app.start_turn({**setup, "uid": "ROOT", "text": "Delegate to yourself."})["turn"], wait=5)
-    assert itself["reply"] == "- agent ROOT refused: the anchored item runs this turn — delegate to another item or do the work in this turn\nAlone then."
+    assert (itself["applied"], itself["reply"]) == (["- agent ROOT refused: the anchored item runs this turn — delegate to another item or do the work in this turn"], "Alone then.")
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-AGENT-BACKGROUND")
@@ -691,7 +699,7 @@ def test_a_background_agent_call_is_answered_at_once_the_parent_turn_ends_while_
     started = app.start_turn({**setup, "uid": "ROOT", "text": "Start it."})
     outcome = app.turn_snapshot(started["turn"], wait=5)
     line = "- agent LEAF-001: started in the background (turn LEAF-001:1)"
-    assert outcome["reply"] == line + "\nCarry on." and connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + line
+    assert (outcome["applied"], outcome["reply"]) == ([line], "Carry on.") and connection.prompts[1][0] == synthetic.RESULTS_PREAMBLE + line
     assert app.chats["LEAF-001"].running and not app.chats["LEAF-001"].turn.stopped and not app.chats["ROOT"].running
     assert app.chats_snapshot()["chats"]["ROOT"]["agents"] == [{"uid": "LEAF-001", "turn": "LEAF-001:1"}]
 
@@ -995,7 +1003,7 @@ def test_the_design_files_the_statements_link_follow_them_each_once_under_a_desi
     design = "\n# Design DESIGN.md\n````\n# Design\nWhole.\n````\n"
     part = "\n# Design docs/PART.md\n````\nPart.\n````\n"
     assert synthetic.seed_context(items, "ROOT", root=tmp_path) == statements + design + part  # each linked file once, a missing one and a URL left out
-    assert synthetic.seed_context(items, "LEAF-001", root=tmp_path) == synthetic.seed_context(items, "ROOT", root=tmp_path)  # the same selection
+    assert _unmarked(synthetic.seed_context(items, "LEAF-001", root=tmp_path)) == _unmarked(synthetic.seed_context(items, "ROOT", root=tmp_path))  # the same selection
     items["SIDE-A"].sources.append("docs/PART.md")
     seed = synthetic.seed_context(items, "ROOT", root=tmp_path)
     assert seed.endswith(design + "\n# Source docs/PART.md\n````\nPart.\n````\n") and "# Design docs/PART.md" not in seed  # a key source is not repeated as a design file
@@ -1029,13 +1037,23 @@ def test_an_agent_call_without_a_prompt_starts_the_items_chat_on_its_statement_a
     app.connectors = {"scripted": (connection := Briefed(calls(bare), {"kind": "text", "text": "Handed on."}))}
     outcome = app.chat({**setup, "text": "Release it."})
     assert connection.briefs == [synthetic.DELEGATION_TEXT.format(uid="LEAF-001")] and "@LEAF-001" in connection.briefs[0]
-    assert outcome["reply"] == "- agent LEAF-001: Leaf delivered.\nHanded on."
+    assert (outcome["applied"], outcome["reply"]) == (["- agent LEAF-001: Leaf delivered."], "Handed on.")
     assert app.chats_snapshot()["chats"]["LEAF-001"]["log"][0]["text"] == connection.briefs[0]
     app.connectors = {"scripted": (connection := Briefed(calls(short), {"kind": "text", "text": "Handed on."}))}
     app.chat({**setup, "text": "Release it."})
     assert connection.briefs == ["Use the tag v2."]  # a short prompt goes as it is
     app.connectors = {"scripted": (connection := Briefed(calls(long), {"kind": "text", "text": "Kept."}))}
     outcome = app.chat({**setup, "text": "Release it."})
-    assert connection.briefs == [] and outcome["reply"].startswith("- agent LEAF-001 refused: ")
-    assert f"at most {assassin_ui.DELEGATION_PROMPT_LIMIT} characters" in outcome["reply"] and "statement" in outcome["reply"]
+    assert connection.briefs == [] and outcome["applied"][0].startswith("- agent LEAF-001 refused: ") and outcome["reply"] == "Kept."
+    assert f"at most {assassin_ui.DELEGATION_PROMPT_LIMIT} characters" in outcome["applied"][0] and "statement" in outcome["applied"][0]
     assert connection.prompts[-1][0].startswith(synthetic.RESULTS_PREAMBLE + "- agent LEAF-001 refused: ")  # the refusal comes back to the model
+
+
+@pytest.mark.syngate("SYNTHETIC-SKILL-ANSWER")
+def test_the_answer_format_skill_is_a_default_skill_asking_long_or_secondary_lists_to_go_collapsed():
+    skill = synthetic.SKILLS["answer"]
+    assert skill.default and skill.text.startswith("# Answer format\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    for phrase in ("Do not repeat that log", "never list the calls, tools or commands you ran", "never write the same line twice",
+                   "the same file edited several times", "Lead with what the user needs", "more than about five entries", "the tests run",
+                   "<details>\n<summary>14 tests passed</summary>\n\n- test_one", "</details>", "<details open>", "never collapse the whole answer"):
+        assert phrase in skill.text

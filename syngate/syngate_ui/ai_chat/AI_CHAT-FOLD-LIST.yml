@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-025]
+order: 10
+test: ~
+---
+Collapsible section
+of a rendered message is a `<details>` block with its `<summary>` line, shown folded to the summary unless marked `open`, the reader expanding or folding it and the choice kept while the log re-renders.

@@ -28,6 +28,8 @@ calls:
     required: [uid]
   context:
     required: [uid]
+    optional:
+      label: {type: string}
   test:
     required: [uid]
     optional:
@@ -37,7 +39,7 @@ calls:
 The files under syngate/ are closed to your file tools, to read as to write: the tree is read and changed only through these calls.
 ```syngate
 [{"tool": "query", "uid": "@"},
- {"tool": "context", "uid": "AREA-010"},
+ {"tool": "context", "uid": "AREA-010", "label": "item to split"},
  {"tool": "add", "uid": "AREA-030", "parent": "@", "description": "…", "sources": ["src/area.py"], "kind": "leaf"},
  {"tool": "edit", "uid": "@", "description": "…", "sources": ["src/area.py", "docs/AREA.md"], "tests": ["api", "page"]},
  {"tool": "remove", "uid": "AREA-020"},
@@ -48,7 +50,7 @@ The files under syngate/ are closed to your file tools, to read as to write: the
 "@" stands for the anchored item; any other item is addressed by its UID, the stem of its file under syngate/.
 The chat's Tree edit permission decides whether add, edit, move, rename and remove are applied — query and context always are; while it is off they are refused and the refusal comes back as your next prompt: answer in text and say what you would change.
 - query: read an item back — description, parents, sources, children in sibling order, kind and a leaf's test bindings. Query the parent before adding under it, to pick a free UID and the place among its children.
-- context: read the seed context of an item, as an exchange anchored at it is seeded.
+- context: read the seed context of an item, as an exchange anchored at it is seeded: the item's own statement stands under `@UID (active item)`. The item you read is usually not the one you are anchored at, so name a `label` — one line saying what the item is to this reading (`item to split`, `candidate parent`) — to mark its statement so instead; the label keeps the context you read from passing for your own, whose active item is the one your seed context marks.
 - add: a new item under `parent` (default "@") with its `description` — the statement, whose first line is the statement condensed and whose further lines add only what it cannot hold — and optionally its `sources`, the root-relative paths of the key source files that enter the seed context of every exchange anchored at the item, above or below it; `kind` "leaf" (default) carries a test binding, "branch" does not.
 - edit: the `description`, `sources` and/or `tests` of an item; a given `sources` list replaces the item's, a given `tests` list replaces a leaf's test bindings by their names — `[""]` the default one, bound by a routine tagged with the UID alone, else names in lowercase letters, digits and underscores, each bound by a routine tagged with the UID followed by the name.
 - remove: a childless item.

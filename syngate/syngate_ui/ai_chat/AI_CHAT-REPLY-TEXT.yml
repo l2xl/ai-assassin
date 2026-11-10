@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-TURN-BLOCKS]
+order: 10
+test: ~
+---
+Reply text
+is the AI's own text alone, the harness adding no line of the calls applied, which the turn's blocks already show; those lines, each repeated one once with its count, go only where a model reads the outcome without the log — the report a delegating turn receives and the history a new session starts from.

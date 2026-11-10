@@ -94,7 +94,7 @@ def cmd_query(args):
 
 
 def cmd_context(args):
-    return _mutate(lambda items: synthetic.seed_context(items, args.uid).rstrip("\n"))
+    return _mutate(lambda items: synthetic.seed_context(items, args.uid, label=args.label).rstrip("\n"))
 
 
 def _require(items, feature):
@@ -449,6 +449,8 @@ def main():
                              ("context", "print the seed AI-context of an item as an AI call anchored at it is formed", cmd_context)):
         p = sub.add_parser(name, help=help)
         p.add_argument("uid")
+        if name == "context":
+            p.add_argument("--label", help="the mark of the item's statement in the context, instead of 'active item'")
         p.set_defaults(func=func)
 
     p = sub.add_parser("review", help="user-only: stamp items reviewed, running and freezing the bound tests of those that carry any (stamps even on a failing test -- TDD red state)")

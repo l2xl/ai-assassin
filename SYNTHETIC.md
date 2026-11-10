@@ -22,7 +22,7 @@ judgement — when disabled.
   brings its own ancestry, not its other children.
 - **Every statement is addressable.** Each selected item enters as its own `@<UID>` line followed
   by its statement, a section opening with a blank line, so a message may name any contained item
-  by `@UID`. A message referencing items the seed context already holds brings no second copy; only
+  by `@UID`. The item the context is formed for — the active item of the exchange — has its line marked `@<UID> (active item)`, the one statement so marked; a `context` call may name another one-line `label` for it, and the statements appended for a message's references carry no mark. A message referencing items the seed context already holds brings no second copy; only
   the missing ones are appended after it, each in the same `@<UID>` form.
 - **Linked design files follow the statements.** Every project file the selected statements link,
   each once and none a key source already lists, follows them as a `# Design <path>` section holding
@@ -69,8 +69,10 @@ is one non-interactive turn of the chosen connector.
   views that build themselves from the files at every access, a turn taking one consistent read of them per round. Each file is opened by a front matter: `kind` — `skill` or `tool` — a
   `description` and, for a skill, `default`. A *tool* defines the format of a structured answer the
   harness turns into a call whose result reaches the model with the next turn; a *skill* is
-  description only — the rules of calling tools (`call_tool.md`) and the rules of the DAG
-  (`syngate.md`) are skills. The default prompt — deliberately not a `CLAUDE.md` — is composed from
+  description only — the rules of calling tools (`call_tool.md`), the rules of the DAG
+  (`syngate.md`) and the format of an answer (`answer.md`: the lead first, a long or secondary list —
+  tests run, items reworded, files changed — written as a collapsed `<details>` section the chat
+  shows folded to its summary) are skills. The default prompt — deliberately not a `CLAUDE.md` — is composed from
   the library: the default skills, the list of the skills on request by name and description, then
   every tool definition. `{"tool": "skill", "name"}` brings a skill on request back as the next
   prompt, the way a query's result comes back.
@@ -127,11 +129,14 @@ is one non-interactive turn of the chosen connector.
   calls in order through `add_item`, `edit_item`, `delete_item` and `move_item` and stops at the
   first refused one: the refusal goes back to the model as its next prompt with the results of the
   calls applied before it, so the model corrects the call or answers in text. The history shows
-  every batch with what it applied, read or had refused; the reply lists what was applied, ran or
-  was reported, never what was read; the user reviews the result as any other edit.
+  every batch with what it applied, read or had refused, every call a block of the chat's log; the
+  reply is the model's own text alone, never a line of the calls (`AI_CHAT-REPLY-TEXT`). What was
+  applied, ran or was reported — each repeated line once, with its count, never what was read — goes
+  only where a model reads the outcome without the log: the report a delegating turn receives and the
+  history a new session starts from; the user reviews the result as any other edit.
 - **Queries read the DAG back the same way.** `{"tool": "query", "uid"}` returns the item's
   description, parents, sources, children in sibling order and kind; `{"tool": "context", "uid"}`
-  its seed context; `{"tool": "skill", "name"}` the named skill. What a batch read goes back into
+  its seed context, its item marked as the active item or, with the optional `label` the call names, as that label says, so a context read for another item is not taken for the exchange's own; `{"tool": "skill", "name"}` the named skill. What a batch read goes back into
   the same session as the next prompt and the exchange continues with the next answer, for a
   bounded number of rounds — `synthetic.QUERY_ROUNDS`, or `websurf.rounds` of the server settings
   (`websurf.ROUNDS`, 40, without one) once the turn has surfed — the results prompt naming the rounds
@@ -234,13 +239,13 @@ next change of the chats (`GET /api/chats?since=<version>&wait=<s>`), one connec
 chats are open. A turn is a tree of steps closed by an answer, never the answer alone:
 
 - **Steps.** `message` (an intermediate answer of the model), `reasoning` (its exposed thinking), `tool` (name, input, result, duration),
-  `calls` (the syngate calls applied), `diff` (the files the turn changed, with hunks), `agent` (a
+  `calls` (the syngate calls applied, each result line paired with its call in `inputs`), `diff` (the files the turn changed, with hunks), `agent` (a
   subagent: its prompt, the item it is anchored at if any, its own steps and its final report) and
   `workflow` (opaque: input and result). The connector streams every event into the turn as it
   happens, and each appended step bumps the chats version, so the pages render the progress live
   rather than a spinner. The connector closes the turn with a `usage` step — `seconds`, `cost_usd`,
   `input_tokens`, `output_tokens` as the CLI's `result` event reports them — which the page folds
-  into the activity header; the dispatch's `(reply, session)` shape stays as it is.
+  into the activity line; the dispatch's `(reply, session)` shape stays as it is.
 - **Reasoning is requested whenever it may be had.** The harness always asks the connection to
   expose the model's reasoning when the call mode allows it, and records it only when it comes. For
   the Claude Code connector every model offers the effort levels, Haiku included, yet whether the
@@ -282,7 +287,7 @@ chats are open. A turn is a tree of steps closed by an answer, never the answer 
   connector reads the session's transcript files for the subagents' own turns and attaches them to
   the `agent` steps. The delegation skill asks the model to open every subagent prompt with its
   target item (`@UID` on the first line), and the harness mirrors such a subagent's report and
-  collapsed transcript into that item's chat as an agent message once the turn ends — every `agent`
+  transcript into that item's chat as an agent message once the turn ends — every `agent`
   step naming a known item other than the turn's anchor and its explicitly delegated children. Disk changes are the connector's
   own record: snapshots of the project files before and after the turn yield the `diff` step, the
   `Edit` / `Write` events its order.

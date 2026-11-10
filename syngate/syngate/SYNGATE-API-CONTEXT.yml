@@ -6,4 +6,4 @@ review: 5d7808cc40dea552c5a0230d0bf5986d3e430d1556ebd635d133e8f060112c1e
 ---
 Node context
 
-The syngate context call shall return an item's seed AI-context exactly as an AI call anchored at the item is seeded from it.
+The syngate context call shall return an item's seed AI-context exactly as an AI call anchored at the item is seeded from it, the item marked as the active item or, where the call names a `label`, as that label says.

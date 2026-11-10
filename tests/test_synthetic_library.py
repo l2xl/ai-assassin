@@ -63,7 +63,7 @@ def test_a_connection_declares_text_or_native_library_delivery_and_a_native_one_
     items, _ = syngatelib.load_tree(syngate_dir)
     library = native_library()
     asked = lambda connection, **kwargs: synthetic.query({"c": connection}, items, "ROOT", "Go.", "c", "model-a", "low", **kwargs)[0]
-    tail = "\n# Tree features\ntest: enabled\n\n@ROOT\nRoot.\n|Go.|model-a|low||None"
+    tail = "\n# Tree features\ntest: enabled\n\n@ROOT (active item)\nRoot.\n|Go.|model-a|low||None"
     assert asked(EchoConnection(), library=library) == synthetic.default_prompt(library) + tail
     assert asked(EchoConnection()) == synthetic.PROMPTS[synthetic.DEFAULT_PROMPT] + tail
     assert asked(NativeEcho(), library=library) == synthetic.native_prompt(library) + tail + "|['answers', 'stamp', 'zeta']"
@@ -81,9 +81,9 @@ def test_the_claude_connector_takes_the_library_natively_so_its_seed_prompt_hold
     stub.write_text(STUB_NATIVE)
     connectors = {"claude_code": synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)}
     ask = lambda **kwargs: json.loads(synthetic.query(connectors, items, "ROOT", "Go.", "claude_code", "sonnet", "low", **kwargs)[0])
-    assert ask(library=native_library())["seed"] == "# Answers\nAnswer in the text kind unless a tool applies.\n\n# Tree features\ntest: enabled\n\n@ROOT\nRoot.\n"
+    assert ask(library=native_library())["seed"] == "# Answers\nAnswer in the text kind unless a tool applies.\n\n# Tree features\ntest: enabled\n\n@ROOT (active item)\nRoot.\n"
     seed = ask()["seed"]
-    assert seed == synthetic.native_prompt(synthetic.LIBRARY) + "\n# Tree features\ntest: enabled\n\n@ROOT\nRoot.\n"
+    assert seed == synthetic.native_prompt(synthetic.LIBRARY) + "\n# Tree features\ntest: enabled\n\n@ROOT (active item)\nRoot.\n"
     assert "Skills on request" not in seed and not [entry for entry in synthetic.LIBRARY.values() if entry.kind == "tool" and entry.text in seed]
     assert all(entry.text in seed for entry in synthetic.LIBRARY.values() if entry.kind == "skill" and entry.default)
 

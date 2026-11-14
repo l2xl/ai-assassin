@@ -1,0 +1,6 @@
+---
+parents: [CLAUDE_CODE, SYNTHETIC-AGENT-VERDICT]
+test: ~
+---
+Verdict schema delivery
+hands a verdict agent's schema to the CLI as the answer schema of its call.

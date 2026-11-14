@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+test: ~
+---
+Late verdict
+of the prune agent, arriving after the next message, waits for the conversation's next session.

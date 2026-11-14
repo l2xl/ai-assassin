@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-MULTI-010]
+test: ~
+---
+Connector session handover
+drops the session and its owning connector when a turn starts on a chat whose connector changed since the session was opened, so the new connector's first turn carries the kept messages as its transcript instead of presenting a stale session token.

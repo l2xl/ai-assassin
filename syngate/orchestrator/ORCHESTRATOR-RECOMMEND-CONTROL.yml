@@ -1,0 +1,9 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND-BEHAVIOUR, AI-CHAT]
+order: 390
+test: ~
+---
+Behaviour control
+stands among the chat's setup controls and changes the chat's recommendation behaviour at any time.
+
+[design/chat/behaviour_control.md](design/chat/behaviour_control.md)

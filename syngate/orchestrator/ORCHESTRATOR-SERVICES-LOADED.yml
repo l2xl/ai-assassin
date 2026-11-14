@@ -1,0 +1,8 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+order: 420
+sources: [src/ai_scratcher/api_connection.py]
+test: {resolve: ~, router: ~}
+---
+Loaded-model locator
+names, by the model `@loaded`, whichever model its connection reports loaded, resolved at every probe and every call to the first one its listing reports; while none is loaded the locator fails, the role moving on to its next one.

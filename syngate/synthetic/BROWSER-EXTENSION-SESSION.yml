@@ -9,3 +9,5 @@ review: 2474de31d1000d372347bf7f5ad0cc23cf64602c45f3db75081609fe6403422d
 ---
 Session map
 of the extension is read from the URLs of the browser's tabs, each harness origin with an Assassin tab open being one session with one bridge, ending with its last tab.
+
+[design/extension/sessions.md](design/extension/sessions.md)

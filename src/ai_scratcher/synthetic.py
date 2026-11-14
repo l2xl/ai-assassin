@@ -5,6 +5,7 @@
 """Synthetic, the AI harness core of AI Assassin: the prompt library of skills and tools, item seed context, AI connections and the tool call protocol of a reply."""
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import uuid
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +22,8 @@ from typing import NamedTuple
 
 import yaml
 
-from . import syngatelib
+from . import cc_transcript, syngatelib
+from . import tiering
 
 CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 CLAUDE_MODEL_EFFORTS = {"fable": CLAUDE_EFFORTS, "opus": CLAUDE_EFFORTS, "sonnet": CLAUDE_EFFORTS, "haiku": CLAUDE_EFFORTS}
@@ -36,18 +39,36 @@ PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 DEFAULT_PROMPT = "default"
 FRONT_MATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 SKILLS_ON_REQUEST = "# Skills on request\nLoad one with the `skill` tool:\n"
+# The library deliveries a connection declares, and a skill may name to enter the system prompts of those connections alone.
+DELIVERIES = ("text", "native")
+# The tokens the content of the files of a seed context may take before the rest is held back as references (`orchestrator.budget` of the server settings).
+FILE_BUDGET = 50000
+HELD_BACK = "File held back: {reference} -- not included, read it with the files tool\n"
+CONTEXT_UPDATE = "Context update -- what changed since this session started:\n"
 
 
 class prompt(NamedTuple):
-    """One markdown file of the library: its stem is the name, its front matter the `kind` (skill|tool), the `description`
+    """One markdown file of the library: its stem is the name, its front matter the `kind` (skill|tool|agent), the `description`
     listing it and, for a skill, whether it is in the default prompt; the text is the body after the front matter. A tool's `calls`
-    map each call it defines to its `required` string fields and its `optional` JSON-schema properties."""
+    map each call it defines to its `required` string fields and its `optional` JSON-schema properties. An agent's `tools` and `skills`
+    are the lists of the library prompts its system prompt holds, its `schema` the answer schema of a verdict agent and its
+    `examples` the phrasings it is matched from a message by. A skill's `delivery` names the library delivery of the connections
+    whose system prompts it enters, None for every connection."""
     name: str
     kind: str
     description: str
     default: bool
     text: str
     calls: dict | None = None
+    tools: tuple = ()
+    skills: tuple = ()
+    schema: dict | None = None
+    examples: tuple = ()
+    delivery: str | None = None
+
+
+def names_of(value):
+    return tuple(str(name) for name in value) if isinstance(value, list) else ()
 
 
 def read_prompt(path):
@@ -56,7 +77,9 @@ def read_prompt(path):
     meta = (yaml.safe_load(match.group(1)) if match else None) or {}
     body = raw[match.end():] if match else raw
     return prompt(path.stem, str(meta.get("kind") or "skill"), str(meta.get("description") or ""), bool(meta.get("default")),
-                  body.strip("\n") + "\n", meta.get("calls") or None)
+                  body.strip("\n") + "\n", meta.get("calls") or None, names_of(meta.get("tools")), names_of(meta.get("skills")),
+                  meta.get("schema") if isinstance(meta.get("schema"), dict) else None, names_of(meta.get("examples")),
+                  meta["delivery"] if meta.get("delivery") in DELIVERIES else None)
 
 
 def load_prompts(prompts_dir=None):
@@ -111,24 +134,79 @@ def prompt_texts(library):
     return {**{name: entry.text for name, entry in library.items()}, DEFAULT_PROMPT: default_prompt(library)}
 
 
+def delivers(entry, delivery):
+    """Whether the skill enters a system prompt sent over a connection of the library `delivery`: it names none, or that one."""
+    return entry.delivery in (None, delivery)
+
+
 def default_prompt(library):
-    """The default prompt composed from the library: the default skills, the list of the skills on request by name and
-    description, then every tool definition."""
+    """The default prompt composed from the library: the default skills of text delivery, the list of the skills on request by
+    name and description, then every tool definition."""
     skills = [entry for entry in library.values() if entry.kind == "skill"]
     on_request = "\n".join(f"- `{entry.name}`: {entry.description}" for entry in skills if not entry.default) or "none"
-    return "\n".join([*(entry.text for entry in skills if entry.default), SKILLS_ON_REQUEST + on_request + "\n",
+    return "\n".join([*(entry.text for entry in skills if entry.default and delivers(entry, "text")), SKILLS_ON_REQUEST + on_request + "\n",
                       *(entry.text for entry in library.values() if entry.kind == "tool")])
 
 
 def native_prompt(library):
-    """The head of a seed context for a connection that takes the library natively: the default skills only, the skills on request
-    and the tool definitions reaching the provider through its own configuration."""
-    return "\n".join(entry.text for entry in library.values() if entry.kind == "skill" and entry.default)
+    """The head of a seed context for a connection that takes the library natively: the default skills of native delivery only, the
+    skills on request and the tool definitions reaching the provider through its own configuration."""
+    return "\n".join(entry.text for entry in library.values() if entry.kind == "skill" and entry.default and delivers(entry, "native"))
 
 
 def library_calls(library):
     """The calls the tools of `library` define: name -> its required fields."""
     return {name: tuple(spec.get("required") or ()) for entry in library.values() if entry.kind == "tool" for name, spec in (entry.calls or {}).items()}
+
+
+def load_agents(library=None):
+    """The agents by name: the prompts of `kind: agent` of the library -- the shipped one by default -- and no others."""
+    return {name: entry for name, entry in read_library(library).items() if entry.kind == "agent"}
+
+
+def is_verdict(agent):
+    """Whether the agent is a verdict agent: one whose prompt declares an answer schema."""
+    return agent.schema is not None
+
+
+def agent_library(agent, library=None, delivery=None):
+    """The prompts of the library an agent's lists name -- its skills, then its tools, in their order -- the library's other
+    prompts left out; a verdict agent has none. With a `delivery`, a listed skill naming another one is left out too."""
+    library = read_library(library)
+    if is_verdict(agent):
+        return {}
+    return {**{name: library[name] for name in agent.skills if name in library and library[name].kind == "skill"
+               and (delivery is None or delivers(library[name], delivery))},
+            **{name: library[name] for name in agent.tools if name in library and library[name].kind == "tool"}}
+
+
+def agent_prompt(agent, library=None, delivery="text"):
+    """The whole system prompt of an agent's turn on a connection of the library `delivery`: its own text, then the skills and tools
+    its lists name, a skill naming another delivery left out."""
+    return "\n".join([agent.text, *(entry.text for entry in agent_library(agent, library, delivery).values())])
+
+
+def agent_calls(agent, library=None):
+    """The calls an agent's answer may carry: those of the tools its `tools` list names, with their required fields."""
+    return library_calls(agent_library(agent, library))
+
+
+def agent_schema(agent, library=None, text=True):
+    """The answer schema of an agent's turn: a verdict agent's own, else the structured answer of the tools its `tools` list names, with
+    its `text` field or without as `answer_schema` builds it."""
+    return agent.schema if is_verdict(agent) else answer_schema(agent_library(agent, library), text)
+
+
+def agent_locator(section, name):
+    """The model locator of the agent `name` in the `orchestrator` section of the server settings -- the head of the `agents` entry of its name,
+    one locator or a list of them best first, else of the `default` one -- as {connection, model, effort}; None while neither names one."""
+    agents = section.get("agents") if isinstance(section, dict) and isinstance(section.get("agents"), dict) else {}
+    for entry in (agents.get(name), agents.get("default")):
+        for locator in entry if isinstance(entry, list) else [entry]:
+            if isinstance(locator, dict) and all(isinstance(locator.get(key), str) and locator[key].strip() for key in ("connection", "model")):
+                return {"connection": locator["connection"], "model": locator["model"],
+                        "effort": locator.get("effort") if isinstance(locator.get("effort"), str) else None}
+    return None
 
 
 # The shipped library and what derives from it, each re-read from the prompt files whenever it is read: an edit of a prompt reaches the
@@ -142,7 +220,8 @@ QUERIES = {"query": ("uid",), "context": ("uid",), "skill": ("name",)}
 # The mark of the statement a seed context is formed for, the exchange's own item; a `context` call of another item names its own label instead.
 ACTIVE_LABEL = "active item"
 RUNS = {"test": ("uid",)}
-DELEGATIONS = {"agent": ("uid",)}
+# An agent call names the item it delegates to by `uid`, or the off-context agent of the library it runs by `name`: one of the two.
+DELEGATIONS = {"agent": ()}
 # The message a delegated turn starts with when its agent call names no prompt: the item's statement, in the seed context it is anchored
 # at, is the task, so the parent need not restate it.
 DELEGATION_TEXT = ("Carry out @{uid}: its statement, with the context this chat is seeded with, is your task. Bring the project to what it "
@@ -151,19 +230,33 @@ GITS = {"git": ("command",)}
 SURFS = {"websurf": ("action",)}
 PATCHES = {"patch": ("diff",), "replace": ("path", "old")}
 SHELLS = {"shell": ("command",)}
-CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **SURFS, **PATCHES, **SHELLS}
+FILES = {"list": (), "read": ("path",)}
+LOGS = {"log": ()}
+SETUPS = {"models": (), "setup": ("connection", "model", "reason")}
+CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **SURFS, **PATCHES, **SHELLS, **FILES, **LOGS, **SETUPS}
 # The Raw command call mode as a connection without a shell of its own lists it: its shell calls run through the harness only while it
 # is on. The Claude Code connector lists its own `bash` mode, which allows the CLI's Bash tool.
 BASH_MODE = {"id": "bash", "label": "Raw command", "hint": "run shell commands", "default": False, "advanced": True}
 GIT_TOOL = "git"
 EDITABLE = ("description", "sources", "tests")
-QUERY_ROUNDS = 8
+QUERY_ROUNDS = 100  # a fuse far above normal work, `orchestrator.rounds` of the server settings in its place: a count of rounds cannot tell a loop from work
+# What a turn the harness closes -- at its fuse or stalled -- is asked with its last prompt: one text answer, the turn's reply.
+TURN_CLOSING = ("\nThe harness closes this turn here: answer now in text alone, with no calls -- what you did, what its tests showed and what is left. "
+                "Calls in this answer end the turn refused.")
+# The line heading the reply of a turn the harness closed, `why` telling the limit: the turn that delegated it reads it and decides how the task goes on.
+TURN_CLOSED = "[turn closed by the harness: {why} — this is its closing report, the task may be unfinished]\n"
+CLOSED_FUSE, CLOSED_STALL = "it reached its round fuse", "it stalled, repeating the same calls with the same results"
+# What a turn is told the first time a round repeats the calls and results of the round before; the second repetition closes it.
+STALL_NUDGE = ("\nThis round repeated the calls and results of the round before: change what you do, or answer in text. "
+               "One more such round closes the turn.")
 # A turn is told the rounds it has left once this few remain, so it finishes in text rather than runs out; a round past its bound is refused.
 ROUNDS_WARNING = 3
 ROUNDS_LEFT = "\nRounds of calls left in this turn: {left} — answer in text before they run out."
 ROUNDS_OUT = "answer refused: the turn ran out of its {rounds} rounds (`websurf.rounds` of the server settings sets the bound of a turn that surfs)"
 RUN_TAIL = 40
 ANSWER_REFUSED = "Your last answer was refused, none of it was applied: {error}\nAnswer again in the answer format."
+# A text answer ends the turn as its reply, so one with no text would end it on nothing.
+EMPTY_ANSWER = "a text answer carries no text: write the reply that ends the turn, or hand over calls"
 RESULTS_PREAMBLE = "Results of the calls in your last answer:\n"
 # A message names an item the way a file is named: `@UID` brings the item's statement into the turn.
 REFERENCE_RE = re.compile(r"@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\b")
@@ -180,13 +273,14 @@ def _call_schema(tool, spec):
             "required": ["tool", *required], "additionalProperties": False}
 
 
-def answer_schema(library):
+def answer_schema(library, text=True):
     """The structured answer as the JSON schema a connection hands its model, built from the call definitions of the library's tools --
-    their texts as the description of the answer -- so the shape of a call is enforced by the model side rather than by the parser alone."""
+    their texts as the description of the answer -- so the shape of a call is enforced by the model side rather than by the parser alone.
+    Without `text` it has no field for the text: the schema of a carrier whose model writes its text outside the answer."""
     tools = [entry for entry in library.values() if entry.kind == "tool"]
     shapes = [_call_schema(name, spec) for entry in tools for name, spec in (entry.calls or {}).items()]
     return {"type": "object", "description": "\n".join(entry.text for entry in tools),
-            "properties": {"kind": {"enum": ["text", "calls"] if shapes else ["text"]}, "text": STRING,
+            "properties": {"kind": {"enum": ["text", "calls"] if shapes else ["text"]}, **({"text": STRING} if text else {}),
                            **({"calls": {"type": "array", "minItems": 1, "items": {"anyOf": shapes}}} if shapes else {})},
             "required": ["kind"], "additionalProperties": False}
 
@@ -194,22 +288,37 @@ def answer_schema(library):
 ANSWER_SCHEMA = live_mapping(lambda: answer_schema(load_prompts()))
 
 
-def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None, label=None):
+def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None, label=None, heavy=None):
     """The named prompt of the library -- or the `head` text given in its place -- then the tree's test switch, then the statements of every
     ancestor, parents first, the item's own and those of all its descendants in sibling order -- an item reached twice enters once, at its
     first occurrence -- then the design files their statements link that no key source lists, each once, then the key source files those
     items list, each once, all read from `root`. The item's own statement is the one marked, with the `label` -- one line, the active item
-    unless the caller names another -- after its `@UID`."""
+    unless the caller names another -- after its `@UID`. The `heavy` files -- path -> reference -- stay out of the file sections: every item
+    naming one keeps its reference under its statement, the statements themselves never cut."""
     if uid not in items:
         raise syngatelib.unknown_uid(f"unknown UID '{uid}'")
     selection = syngatelib.walk(items, uid, descendants=True)
     label = " ".join(str(label or ACTIVE_LABEL).split()) or ACTIVE_LABEL
-    statements = "".join(statement_section(selected, items[selected].description, label if selected == uid else None) for selected in selection)
-    sources = dict.fromkeys(rel for selected in selection for rel in items[selected].sources)
+    heavy = heavy or {}
+    statements = "".join(statement_section(selected, items[selected].description, label if selected == uid else None) + held_back(items, selected, heavy)
+                         for selected in selection)
+    designs, sources = seed_files(items, selection, root)
+    return ((PROMPTS[prompt] if head is None else head) + features_section(items) + statements
+            + "".join(design_section(rel, root) for rel in designs if rel not in heavy) + "".join(source_section(rel, root) for rel in sources if rel not in heavy))
+
+
+def seed_files(items, selection, root=None):
+    """(designs, sources) of a selection: the key source files its items list, each once in order, and the design files their statements link
+    that no key source lists and that exist under `root`."""
+    sources = list(dict.fromkeys(rel for selected in selection for rel in items[selected].sources))
     designs = [rel for rel in dict.fromkeys(rel for selected in selection for rel in syngatelib.linked_files(items[selected].description))
                if rel not in sources and (Path(root or syngatelib.ROOT) / rel).is_file()]
-    return ((PROMPTS[prompt] if head is None else head) + features_section(items) + statements + "".join(design_section(rel, root) for rel in designs)
-            + "".join(source_section(rel, root) for rel in sources))
+    return designs, sources
+
+
+def held_back(items, uid, heavy):
+    """The lines under an item's statement naming the heavy files it names, each as its reference; \"\" for an item naming none."""
+    return "".join(HELD_BACK.format(reference=heavy[rel]) for rel in tiering.item_files(items, uid) if rel in heavy)
 
 
 def features_section(items):
@@ -245,6 +354,107 @@ def referenced(items, text, contained=()):
     each as one more section after the seed context."""
     found = [uid for uid in dict.fromkeys(REFERENCE_RE.findall(text)) if uid in items and uid not in contained]
     return "".join(statement_section(uid, items[uid].description) for uid in found)
+
+
+def system_context(connection, items, uid, text, root=None, library=None, heavy=None):
+    """The system prompt of a session on `connection` anchored at `uid`: the head its library delivery calls for over the seed context -- the
+    `heavy` files held back -- and the statements `text` names."""
+    library = read_library(library)
+    head = native_prompt(library) if getattr(connection, "library_delivery", "text") == "native" else default_prompt(library)
+    return seed_context(items, uid, root=root, head=head, heavy=heavy) + referenced(items, text, syngatelib.walk(items, uid, descendants=True))
+
+
+def read_text(root, rel):
+    """The text of the project file `rel` under `root`, None when it is no readable file."""
+    try:
+        return (Path(root or syngatelib.ROOT) / rel).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def file_digest(root, rel):
+    """The digest of the project file `rel` under `root`, None when it is no readable file."""
+    try:
+        return hashlib.sha1((Path(root or syngatelib.ROOT) / rel).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def selection_files(items, selection):
+    """The files the items of a selection name, key sources and linked designs, each once in order."""
+    return list(dict.fromkeys(rel for selected in selection for rel in tiering.item_files(items, selected)))
+
+
+def measure_seed(items, uid, message, root=None, budget=FILE_BUDGET, embed=None, rerank=None, activity=None, weights=None):
+    """The `tiering.measurement` of the seed context of `uid` for `message`: the files of its selection taken into the token `budget` in the order
+    of their items' importance, which the signals of the message -- dense with an `embed`, reranked with a `rerank`, lexical, and the chat's
+    `activity` -- fused under `weights` rank."""
+    selection = syngatelib.walk(items, uid, descendants=True)
+    rankings = tiering.signals(items, selection, message, embed=embed, rerank=rerank, activity=activity)
+    contents = {rel: read_text(root, rel) for rel in selection_files(items, selection)}
+    return tiering.measure(items, selection, message, uid, rankings, contents, budget, weights)
+
+
+def new_keep(context, items, uid, measured, root=None):
+    """What a session keeps of its start: the composed system prompt, the statements it holds, the heavy files by reference and the digest of every
+    file its items name."""
+    selection = list(measured.statements)
+    return {"context": context, "statements": dict(measured.statements), "heavy": dict(measured.heavy),
+            "hashes": {rel: file_digest(root, rel) for rel in selection_files(items, selection)}}
+
+
+def refresh_keep(keep, root=None, paths=None):
+    """Take the files as they are now for the session's own: the `paths` among those the session holds, else all of them."""
+    hashes = keep.get("hashes")
+    if isinstance(hashes, dict):
+        for rel in list(hashes) if paths is None else [os.path.normpath(path) for path in paths if os.path.normpath(path) in hashes]:
+            hashes[rel] = file_digest(root, rel)
+
+
+def absorb(keep, items, uids):
+    """Take the statements of the items `uids` as they are now for the session's own, so its own edits are no news to it: one the tree no longer
+    holds is dropped."""
+    held = keep.get("statements")
+    if isinstance(held, dict):
+        for uid in uids:
+            if isinstance(uid, str):
+                if uid in items:
+                    held[uid] = items[uid].description
+                else:
+                    held.pop(uid, None)
+
+
+def context_update(keep, items, uid, text, measured, root=None, told=()):
+    """(update, kept) of a session since it started: the update heading its next prompt -- an item added, a statement edited, a heavy or new file
+    the message `measured` now brings in whole, the files held back, a file changed by someone other than the session named and not resent, the
+    statements `text` names -- \"\" when nothing changed; and the state kept, the system prompt in it untouched and no file taken back.
+    A file the measurement now takes whole is brought in; an edit of an item in `told` is told elsewhere and left out."""
+    selection = syngatelib.walk(items, uid, descendants=True)
+    held, heavy, hashes = keep.get("statements") or {}, dict(keep.get("heavy") or {}), keep.get("hashes") or {}
+    parts = []
+    for selected in selection:
+        description = items[selected].description
+        if selected not in held:
+            parts.append("\nItem added:" + statement_section(selected, description))
+        elif held[selected] != description and selected not in told:
+            parts.append("\nStatement edited, it now reads:" + statement_section(selected, description))
+    files = selection_files(items, selection)
+    digests = {rel: file_digest(root, rel) for rel in files}
+    contents = {rel: read_text(root, rel) for rel in files if rel in heavy or rel not in hashes}
+    whole = [rel for rel in measured.whole if contents.get(rel) is not None]
+    still = [rel for rel in measured.heavy if contents.get(rel) is not None and rel not in heavy]
+    sources = {rel for selected in selection for rel in items[selected].sources}
+    for rel in whole:
+        parts.append("\nFile brought in whole:" + (source_section(rel, root) if rel in sources else design_section(rel, root)))
+    parts += ["\n" + HELD_BACK.format(reference=tiering.reference(rel, contents[rel])) for rel in still if rel not in heavy]
+    parts += [f"\nFile changed by someone else, not resent -- read it with the files tool: {rel}\n"
+              for rel in files if rel in hashes and rel not in heavy and hashes[rel] != digests[rel]]
+    if named := referenced(items, text, selection):
+        parts.append("\nItems you were pointed to:" + named)
+    kept = {**keep, "statements": {selected: items[selected].description for selected in selection},
+            "heavy": {**{rel: ref for rel, ref in heavy.items() if rel in files and rel not in whole},
+                      **{rel: tiering.reference(rel, contents[rel]) for rel in still}}, "hashes": digests}
+    return (CONTEXT_UPDATE + "".join(parts) if parts else ""), kept
 
 
 def transcript(history, text):
@@ -297,6 +507,48 @@ def is_patch(call):
 
 def is_shell(call):
     return call["tool"] in SHELLS
+
+
+def is_file(call):
+    return call["tool"] in FILES
+
+
+def is_log(call):
+    return call["tool"] in LOGS
+
+
+def is_setup(call):
+    return call["tool"] in SETUPS
+
+
+class setup_error(ValueError):
+    """A setup call naming a connection, a model or an effort the models listing does not hold."""
+
+
+def models_listing(connectors, current=None):
+    """The models a chat may run on, one entry per model of every (name, connector) of `connectors` that tells its settings: its `connection`
+    and `model`, the `family`, `tier` and `strengths` its settings give it, its `efforts`, and `current` on the model of the chat's own
+    setup, `current` being its (connection, model)."""
+    return [{"connection": name, "model": model["id"], **{field: model[field] for field in ("family", "tier", "strengths") if field in model},
+             "efforts": list(model.get("efforts") or ()), **({"current": True} if current == (name, model["id"]) else {})}
+            for name, connector in connectors if hasattr(connector, "settings") for model in connector.settings().get("models") or ()]
+
+
+def models_report(listing):
+    """The listing as the AI reads it back: one JSON line per model under a heading line."""
+    return "\n".join(["- models:", *(json.dumps(entry, ensure_ascii=False) for entry in listing)]) if listing else "- models: none"
+
+
+def recommend_setup(listing, call):
+    """The line reporting the recommendation a setup call makes: the connection and model it names must be an entry of `listing`, and the
+    effort it names, when it names one, one that entry lists; anything else raises `setup_error`."""
+    chosen = next((entry for entry in listing if (entry["connection"], entry["model"]) == (call["connection"], call["model"])), None)
+    if chosen is None:
+        raise setup_error(f"{call['model']} of {call['connection']} is not in the models listing — call models and name one of its entries")
+    effort = call.get("effort") or None
+    if effort is not None and effort not in chosen["efforts"]:
+        raise setup_error(f"{call['model']} of {call['connection']} lists no effort '{effort}' — its efforts: {', '.join(chosen['efforts']) or 'none'}")
+    return f"- setup {call['connection']} {call['model']}{f' at {effort}' if effort else ''}: {' '.join(str(call['reason']).split())}"
 
 
 def offered_library(git, library=None):
@@ -381,9 +633,11 @@ def split_reply(reply):
 def parse_reply(reply, known=CALLS):
     """("chat", text) for a plain answer, ("calls", [call, ...]) for the tree calls of an answer, the text said beside them split off by
     `split_reply` (`query` hands it to the chat as a message). Every call is checked against `known`, the calls the answer may carry with
-    their required fields, those of the tool library by default."""
+    their required fields, those of the tool library by default; a plain answer carrying no text is refused."""
     text, calls = split_reply(reply)
     if calls is None:
+        if not str(text).strip():
+            raise protocol_error(EMPTY_ANSWER)
         return "chat", text
     if not isinstance(calls, list) or not calls or not all(isinstance(call, dict) for call in calls):
         raise protocol_error("tree calls must be a non-empty JSON list of objects")
@@ -394,27 +648,34 @@ def parse_reply(reply, known=CALLS):
         missing = [name for name in known[tool] if not (isinstance(call.get(name), str) and call[name].strip())]
         if missing:
             raise protocol_error(f"{tool}: missing {', '.join(missing)}")
+        if tool == "agent" and not any(isinstance(call.get(field), str) and call[field].strip() for field in ("uid", "name")):
+            raise protocol_error("agent: missing uid or name")
         if "background" in call and not isinstance(call["background"], bool):
             raise protocol_error(f"{tool}: background must be true or false")
         if tool == "context" and "label" in call and not (isinstance(call["label"], str) and call["label"].strip()):
             raise protocol_error("context: label must be a line of text")
+        if tool == "context" and "for" in call and not (isinstance(call["for"], str) and call["for"].strip()):
+            raise protocol_error("context: for must be a line of text")
         if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip())
                                    or any(isinstance(call.get(field), list) for field in ("sources", "tests"))):
             raise protocol_error(f"edit: missing {' or '.join(EDITABLE)}")
     return "calls", calls
 
 
-def apply_call(items, anchor, call, syngate_dir=None):
+def apply_call(items, anchor, call, syngate_dir=None, measure=None):
     """Perform one parsed Syngate API call against the loaded tree, `@` standing for the
     anchored item. -> the line reporting what it did, or what a query read; a refusal raises
     `syngatelib.tree_error`.
 
     No call passes `clear`: a stamp an AI answer moves is deliberately left
     standing over the changed content, so the user meets a violated review
-    rather than a silently unreviewed item."""
+    rather than a silently unreviewed item.
+
+    A `context` call is measured when `measure` -- (uid, purpose) -> the heavy files by path and reference -- is given, `purpose` being the
+    call's `for` text or None; without it every file enters whole."""
     at = lambda value: anchor if value == "@" else value
     tool, uid = call["tool"], at(call.get("uid"))
-    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in SURFS or tool in PATCHES or tool in SHELLS:
+    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in SURFS or tool in PATCHES or tool in SHELLS or tool in FILES or tool in LOGS or tool in SETUPS:
         raise syngatelib.tree_error(f"{tool} runs through the page's harness, not against the tree")
     if tool == "skill":
         skill = skills_of(load_prompts()).get(call["name"])
@@ -424,7 +685,8 @@ def apply_call(items, anchor, call, syngate_dir=None):
     if tool == "query":
         return f"- {uid}: {json.dumps(item_view(items, uid), ensure_ascii=False)}"
     if tool == "context":
-        return f"- context of {uid}:\n{seed_context(items, uid, root=Path(syngate_dir).parent if syngate_dir else None, label=call.get('label'))}"
+        heavy = measure(uid, call.get("for")) if measure and uid in items else None
+        return f"- context of {uid}:\n{seed_context(items, uid, root=Path(syngate_dir).parent if syngate_dir else None, label=call.get('label'), heavy=heavy)}"
     if tool == "add":
         parent = at(call.get("parent") or "@")
         family = syngatelib.sorted_children(items, syngatelib.children_map(items), parent) if parent in items else []
@@ -453,15 +715,24 @@ def apply_call(items, anchor, call, syngate_dir=None):
     return f"- moved {uid} under {target}"
 
 
+def squeezed(text):
+    """The text with every run of whitespace turned into one space, the ends stripped: how two reports of one message are compared."""
+    return " ".join(str(text).split())
+
+
 def query(connectors, items, uid, text, connector, model, effort, modes=(), session=None, history=(), root=None, on_step=None, stopped=None,
-          library=None, images=()):
-    """(reply text, session id) of one exchange anchored at `uid`, sent through the named connection with the exact model, effort and call modes,
+          library=None, images=(), agent=None, context=None):
+    """(reply text, session id) of one exchange anchored at `uid` -- or, for an off-context `agent`, started from its chat above the agent's
+    prompt alone, without seed context, the agent handed to the dispatch -- sent through the named connection with the exact model, effort and call modes,
     every step of the turn reaching `on_step` as it happens; `stopped` tells the connection whether the turn was stopped meanwhile.
     The `images` -- each `{media_type, data}`, the data in base64 -- go with the text, handed to the dispatch only when there are any.
     The seed context -- its key sources read from `root` -- grows by the statements the text references; without a session to resume,
     the kept `history` heads the text. The prompt `library` (the shipped one by default) heads the seed context as the default prompt, or,
     for a connection with native library delivery, only by its default skills; it is handed to the dispatch of every connection that
-    declares its library delivery. A model listing no efforts goes with the effort None."""
+    declares its library delivery. The text said beside the calls of the answer becomes a message step only when the connection has not
+    streamed it already -- as a message of its own or within one, whitespace aside -- so a text is one block however it was reported.
+    A model listing no efforts goes with the effort None. A `context` given -- the system prompt a session
+    composed once -- is sent as it stands in place of one composed now."""
     connection = connectors.get(connector)
     if uid not in items:
         raise query_error(f"unknown UID '{uid}'")
@@ -474,20 +745,49 @@ def query(connectors, items, uid, text, connector, model, effort, modes=(), sess
     if not text.strip():
         raise query_error("empty input")
     library = read_library(library)
-    native = getattr(connection, "library_delivery", "text") == "native"
-    head = native_prompt(library) if native else default_prompt(library)
-    context = seed_context(items, uid, root=root, head=head) + referenced(items, text, syngatelib.walk(items, uid, descendants=True))
+    if agent is not None:
+        context = agent_prompt(agent, library, getattr(connection, "library_delivery", "text"))
+    elif context is None:
+        context = system_context(connection, items, uid, text, root, library)
+    streamed = []
+
+    def hear(step):
+        if step.get("kind") == "message":
+            streamed.append(squeezed(step.get("text")))
+        if on_step:
+            on_step(step)
+
     answer, session = connection.dispatch(context, text if session else transcript(history, text), model=model, effort=effort, modes=modes,
-                                          session=session, on_step=on_step, **({"stopped": stopped} if stopped else {}),
+                                          session=session, on_step=hear if on_step else None, **({"stopped": stopped} if stopped else {}),
                                           **({"library": library} if hasattr(connection, "library_delivery") else {}),
-                                          **({"images": list(images)} if images else {}))
+                                          **({"images": list(images)} if images else {}), **({"agent": agent} if agent is not None else {}))
     try:
         beside, calls = split_reply(answer)
     except protocol_error:
         beside, calls = "", None  # the turn refuses the malformed calls itself
-    if on_step and calls is not None and beside.strip():
+    said = squeezed(beside)
+    if on_step and calls is not None and said and not any(said in earlier for earlier in streamed):
         on_step({"kind": "message", "text": beside})
     return answer, session
+
+
+def verdict(connectors, agent, data, connector, model, effort=None, library=None):
+    """The JSON answer of a verdict `agent` judging `data`, which goes in fenced as the message of one fresh turn above the agent's prompt
+    alone, its schema the answer schema; an answer that is no JSON object raises `protocol_error`, since the harness reads it."""
+    connection = connectors.get(connector)
+    if connection is None:
+        raise query_error(f"unknown connector '{connector}'")
+    library = read_library(library)
+    answer, _ = connection.dispatch(agent_prompt(agent, library), f"{SOURCE_FENCE}\n{data}\n{SOURCE_FENCE}", model=model, effort=effort, agent=agent,
+                                    **({"library": library} if hasattr(connection, "library_delivery") else {}))
+    if isinstance(answer, str):
+        try:
+            answer = json.loads(answer)
+        except ValueError:
+            raise protocol_error(f"the {agent.name} agent answered no JSON") from None
+    if not isinstance(answer, dict):
+        raise protocol_error(f"the {agent.name} agent answered no JSON object")
+    return answer
 
 
 def result_text(content):
@@ -530,13 +830,16 @@ class turn_steps:
     """The steps of one `claude` turn folded from its stream-json events as they come. A step is announced through `on_step` when it
     starts and again, as the same top-level object, whenever it or a step nested in it changes; `at` counts seconds since the start.
     The events of a subagent nest in its agent step; those inside a workflow stay out, a workflow being one opaque step. An assistant's
-    text is a `message` step, but for a subagent's closing one, which is its report; the turn's answer is the structured output."""
+    text is a `message` step, but for a subagent's closing one, which is its report; the turn's answer is the structured output.
+    A text of the turn's own is held back until what follows tells which it is: a message once a tool call of the CLI's own or a calls
+    answer follows, the reply -- no step, kept as `text` -- on a text answer or at the result. `text` is what the model wrote ahead of
+    its last answer, "" where a call made it a message; None while no answer tool was called and nothing was written ahead of the result."""
 
     def __init__(self, on_step=None):
         self.on_step = on_step or (lambda step: None)
         self.started, self.wall = time.monotonic(), time.time()
-        self.steps, self.result, self.noise = [], None, []
-        self.open, self.agents, self.top, self.seen = {}, {}, {}, set()
+        self.steps, self.result, self.noise, self.text = [], None, [], None
+        self.open, self.agents, self.top, self.seen, self.held = {}, {}, {}, set(), []
 
     def now(self):
         return round(time.monotonic() - self.started, 2)
@@ -559,6 +862,9 @@ class turn_steps:
         parent = event.get("parent_tool_use_id")
         if event.get("type") == "result":
             self.result = event
+            written = self.release(False)
+            if self.text is None:  # no answer tool was called: the text ahead of the stream's end is the reply
+                self.text = written or None
         elif parent is None or parent in self.agents:
             self.fold(event, self.agents.get(parent), self.now())
 
@@ -572,11 +878,19 @@ class turn_steps:
     def block(self, block, parent, at):
         kind, key = block.get("type"), block.get("id")
         if kind == "thinking" and block.get("thinking"):
-            self.add(("reasoning", id(parent), block["thinking"]), {"kind": "reasoning", "text": block["thinking"]}, parent, at)
+            self.say(("reasoning", id(parent), block["thinking"]), {"kind": "reasoning", "text": block["thinking"]}, parent, at)
         elif kind == "text" and block.get("text"):
-            self.add(("message", id(parent), block["text"]), {"kind": "message", "text": block["text"]}, parent, at)
-        elif kind == "tool_use" and block.get("name") != ANSWER_TOOL and key not in self.seen:
+            self.say(("message", id(parent), block["text"]), {"kind": "message", "text": block["text"]}, parent, at)
+        elif kind == "tool_use" and key not in self.seen:
             name, given = block.get("name"), block.get("input") if isinstance(block.get("input"), dict) else {}
+            if parent is None:
+                written = self.release(name != ANSWER_TOOL or bool(given.get("calls")))
+                if name == ANSWER_TOOL:
+                    self.text = written  # whatever text the tool was given is not read: the answer's text is what was written
+            if name == ANSWER_TOOL:
+                if key is not None:
+                    self.seen.add(key)
+                return
             if name in AGENT_TOOLS:
                 prompt = str(given.get("prompt") or "")
                 step = self.agents[key] = {"kind": "agent", "uid": anchor_of(prompt), "prompt": prompt, "report": None, "steps": []}
@@ -592,6 +906,26 @@ class turn_steps:
             if step["kind"] == "tool":
                 step["seconds"] = round(max(at - step["at"], 0), 2)
             self.settle(step)
+
+    def say(self, key, step, parent, at):
+        """Take what the model said as a step: a text of the turn's own is held back until what follows tells a message from the reply,
+        the reasoning written behind a held text waiting with it for its place."""
+        if parent is None and (step["kind"] == "message" or self.held):
+            self.held.append((key, step, at))
+        else:
+            self.add(key, step, parent, at)
+
+    def release(self, said):
+        """Settle what was held back: its texts are messages when a call followed them -- `said` -- else the reply, no step; the
+        reasoning held behind them is a step either way, each at the time it was written. -> the texts of the reply, joined; "" when none."""
+        held, self.held = self.held, []
+        written = []
+        for key, step, at in held:
+            if said or step["kind"] != "message":
+                self.add(key, step, None, at)
+            else:
+                written.append(step["text"])
+        return "\n\n".join(written)
 
     def settle(self, step):
         """Announce the step once more, a subagent's closing message dropped when it is the report the step already holds."""
@@ -728,13 +1062,20 @@ class claude_code_connector:
     models = CLAUDE_MODELS
     efforts = CLAUDE_EFFORTS
     model_efforts = CLAUDE_MODEL_EFFORTS
-    always_allowed = ("Agent",)
     library_delivery = "native"
     default_model = "sonnet"
     default_effort = "high"
     # The tree files are closed to the turn in every mode, to read as to write: the tree is read and changed only through tree calls. The
-    # connector's own edit tools are off in every mode too: project files change only through the patch call of the harness.
-    denied = ("Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)", "Edit", "MultiEdit", "Write", "NotebookEdit")
+    # connector's own edit tools are off in every mode too: project files change only through the patch call of the harness. So are its own
+    # subagent tools: every subagent starts through the agent call of the harness.
+    denied = ("Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)", "Edit", "MultiEdit", "Write", "NotebookEdit", *AGENT_TOOLS)
+    # The built-in tools a turn has whatever its modes. The CLI is named its whole tool set -- these, the tools of the modes that are on and
+    # `Skill` while a skill on request is delivered -- so a tool the connector does not name is not in the model's context, whatever the CLI ships.
+    own = ("Read",)
+    # What keeps the machine's Claude Code configuration out of every call: no setting source -- user, project, local, with their CLAUDE.md
+    # files, skills, hooks and permission rules -- and, by the environment, neither auto memory nor bundled skills.
+    isolation = ("--setting-sources", "")
+    environment = {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CODE_DISABLE_BUNDLED_SKILLS": "1"}
     # Call modes: what a turn may do without prompting, as (label, hint, on by default, advanced, permission mode, allowed tools);
     # an advanced mode is kept out of the page's switch row, in its drop-down list.
     modes = {
@@ -753,6 +1094,7 @@ class claude_code_connector:
         self.cwd = cwd
         self.transcripts_dir = transcripts_dir
         self.live = {}
+        self.forks = {}  # session -> the entry the next call resumes it at, forked: a rollback of its pruning
 
     def interrupt(self, ident):
         """End the turn the thread `ident` is running: its `claude` process is asked to interrupt -- the model stops and the session records
@@ -779,9 +1121,11 @@ class claude_code_connector:
                 "modes": [{"id": mode, "label": label, "hint": hint, "default": default, "advanced": advanced}
                           for mode, (label, hint, default, advanced, _, _) in self.modes.items()]}
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None, images=()):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None, images=(),
+                 agent=None):
         """(answer, session id) of one non-interactive `claude -p` turn, the answer being the structured output shaped by
-        the `answer_schema` of the prompt `library` (the shipped one by default), else the reply text; the seed context is the
+        the `answer_schema` of the prompt `library` (the shipped one by default) less its text field -- the text the model wrote ahead
+        of a text answer put back into it, the result's own text where the stream told none -- else the reply text; the seed context is the
         appended system prompt and `session` continues an earlier one. The library's skills on request go to the CLI as the
         skills of a plugin folder, its tools as the calls of the answer schema; neither is in the seed context. The text goes in on stdin as the user message of a stream-json input, which
         keeps the stdin open for an `interrupt`; with `images` the message is the text block followed by their base64 image blocks. The turn lasts until the process exits: a subagent or workflow launched in
@@ -790,32 +1134,42 @@ class claude_code_connector:
         session's transcript, the project files it changed, from snapshots taken before and after, follow as a diff step and the
         wall time, cost and token counts the result event reports close it as a usage step.
         The effort, which is what asks the model for its reasoning, goes only with a model that has effort levels.
+        The turn of an off-context `agent` is a fresh call of the CLI -- no session resumed but the agent's own -- whose system prompt is
+        the `context`, the agent's prompt, in place of the CLI's own, every tool of the CLI's own denied, no plugin handed and the
+        `agent_schema` as the answer schema.
+        Every call names the CLI its whole built-in tool set and is started without the machine's Claude Code configuration.
         A turn `stopped` before its process is spawned spawns none."""
         root = Path(self.cwd or os.getcwd())
         if stopped():
             raise connection_error("turn stopped")
         before, steps = project_snapshot(root), turn_steps(on_step)
         permission = next((self.modes[mode][4] for mode in modes if self.modes[mode][4]), None)
-        tools = list(dict.fromkeys([*self.always_allowed, *(tool for mode in modes for tool in self.modes[mode][5])]))
+        tools = list(dict.fromkeys(tool for mode in modes for tool in self.modes[mode][5]))
         effort = effort if effort in self.model_efforts.get(model, self.efforts) else None
         library = read_library(library)
+        if agent is not None:
+            permission, tools = None, []
         with (tempfile.NamedTemporaryFile("w", suffix=".md", encoding="utf-8") as seed, tempfile.TemporaryFile("w+", encoding="utf-8") as errors,
               tempfile.TemporaryDirectory() as plugin):
             seed.write(context)
             seed.flush()
             argv = [*self.cli, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--forward-subagent-text",
-                    "--json-schema", json.dumps(answer_schema(library)),
-                    "--append-system-prompt-file", seed.name, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']
-            if write_skill_plugin(plugin, library):
+                    "--json-schema", json.dumps(answer_schema(library, text=False) if agent is None else agent_schema(agent, library, text=False)),
+                    "--append-system-prompt-file" if agent is None else "--system-prompt-file", seed.name,
+                    "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', *self.isolation]
+            if agent is None and write_skill_plugin(plugin, library):
                 argv += ["--plugin-dir", plugin]
                 tools.append("Skill")
+            argv += ["--tools", ",".join((*self.own, *tools) if agent is None else ())]
             for flag, value in (("--model", model), ("--effort", effort), ("--resume", session), ("--permission-mode", permission),
                                 ("--allowedTools", ",".join(tools)), ("--disallowedTools", ",".join(self.denied))):
                 if value:
                     argv += [flag, value]
+            if session and (fork := self.forks.pop(session, None)):
+                argv += ["--resume-session-at", fork, "--fork-session"]
             ident = threading.get_ident()
             with subprocess.Popen(argv, cwd=self.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors, text=True,
-                                  start_new_session=True) as done:
+                                  start_new_session=True, env={**os.environ, **self.environment}) as done:
                 self.live[ident] = done
                 try:
                     send(done, {"type": "user", "message": {"role": "user", "content": message_content(text, images)}})
@@ -842,8 +1196,59 @@ class claude_code_connector:
             raise connection_error((stderr or "\n".join(steps.noise)).strip() or f"claude exited with {done.returncode}")
         if done.returncode or reply.get("is_error"):
             raise connection_error(str(reply.get("result") or stderr.strip() or f"claude exited with {done.returncode}"))
-        answer = reply.get("structured_output")
-        return (reply.get("result") if answer is None else answer), reply.get("session_id")
+        answer, written = reply.get("structured_output"), reply.get("result") if steps.text is None else steps.text
+        if answer is None:
+            return written, reply.get("session_id")
+        if isinstance(answer, dict) and not answer.get("calls") and (agent is None or not is_verdict(agent)):
+            answer = {**answer, "text": written if isinstance(written, str) else ""}  # what the model wrote, never a field of the answer tool
+        return answer, reply.get("session_id")
+
+    def transcript_path(self, session):
+        """The file the CLI keeps the transcript of `session` in."""
+        return Path(self.transcripts_dir or claude_transcripts_dir(Path(self.cwd or os.getcwd()))) / f"{session}.jsonl"
+
+    def turn_span(self, session, rounds):
+        """{session, first, last, tokens}: the span the turn that ended `session` after `rounds` rounds left in its transcript; None where the
+        transcript does not show it."""
+        found = cc_transcript.span(cc_transcript.read(self.transcript_path(session)), rounds)
+        return {"session": session, **found} if found else None
+
+    def replay_session(self, session, turns, block, now=None):
+        """Bring the pruning settled for `turns` -- {turn, span, steps, reply, verdicts} each, from the earliest changed turn on, in order --
+        into the session before its next call, where that is worth it. A transcript the replay knows is written anew, the old one kept: what
+        stands ahead of the first turn copied as it is, every turn rebuilt from the transcript its span names -> ("replayed", new session). Any
+        other is rolled back: the next call resumes `session` forked at the answer ahead of the first turn, the `block` heading its message
+        -> ("forked", None). None where neither is worth it or can be done: the change waits."""
+        rows, now = cc_transcript.read(self.transcript_path(session)), cc_transcript.now() if now is None else now
+        first = turns[0]["span"].get("first") if turns else None
+        at = next((index for index, row in enumerate(rows) if first and row.get("uuid") == first), None)
+        if at is None:
+            return None
+        held, last = cc_transcript.tokens(rows[at:]), cc_transcript.last_at(rows)
+        if cc_transcript.replayable(rows):
+            sources, rebuilt = {session: rows}, []
+            for record in turns:
+                source = record["span"].get("session")
+                if source not in sources:
+                    sources[source] = cc_transcript.read(self.transcript_path(source))
+                part = cc_transcript.turn_rows(sources[source], record["span"])
+                if part is None:
+                    rebuilt = None
+                    break
+                rebuilt.append(cc_transcript.prune_rows(part, record["turn"], record["steps"], record["verdicts"], record.get("reply") or ""))
+            if rebuilt is not None:
+                sent = cc_transcript.tokens([row for part, _ in rebuilt for row in part])
+                if not cc_transcript.worth(held - sent, sent, last, now):
+                    return None
+                replayed = str(uuid.uuid4())
+                cc_transcript.write(self.transcript_path(replayed), cc_transcript.assemble(rows[:at], rebuilt, replayed))
+                return "replayed", replayed
+        resume = cc_transcript.anchor(rows, first)
+        sent = len(block) // 4
+        if resume is None or not cc_transcript.worth(held - sent, sent, last, now):
+            return None
+        self.forks[session] = resume
+        return "forked", None
 
     @staticmethod
     def usage_step(result, elapsed):

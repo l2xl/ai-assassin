@@ -1,0 +1,7 @@
+---
+parents: [LOCAL-MODELS-PRESET]
+order: 40
+test: ~
+---
+Probe command
+asks every model for one real answer of the kind it serves and fails naming those that gave none.

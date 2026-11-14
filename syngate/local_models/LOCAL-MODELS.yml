@@ -1,0 +1,9 @@
+---
+parents: [AI-ASSASSIN]
+order: 90
+sources: [src/ai_scratcher/local_models.py]
+---
+Local models
+are the models AI Assassin is served by machines of its user, set up from model presets by the `assassin-models` command.
+
+[design/local_models/local_models.md](design/local_models/local_models.md)

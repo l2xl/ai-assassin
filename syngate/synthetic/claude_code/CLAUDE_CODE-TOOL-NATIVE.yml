@@ -1,6 +1,6 @@
 ---
-parents: [CLAUDE_CODE]
-order: 160
+parents: [CLAUDE_CODE, SYNTHETIC-TOOLS]
+order: 480
 test: 338dcd04e687fe16f12bc55b43558a2357f8036fc6f502cbea481988f67596d4
 review: 9ffdff1f7a569d8fd6d89332b064ee8a8ef5389dc445fe5fe4066cc7a5be71d3
 ---

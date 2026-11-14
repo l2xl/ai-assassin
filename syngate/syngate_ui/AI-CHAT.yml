@@ -7,4 +7,4 @@ review: 2c785ebcbddc593bc8e0bc5acabfcc41dc91665658cedefa87bed01a81cf6fdb
 AI chat
 is part of every item's block in the content panel, the item's statement being the first message of the exchange and shown once as the content itself.
 
-[AI_CHAT.md](AI_CHAT.md)
+[design/chat/ai_chat.md](design/chat/ai_chat.md)

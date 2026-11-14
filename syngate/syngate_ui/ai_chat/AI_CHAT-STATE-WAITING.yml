@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-STATE]
+test: ~
+---
+Waiting chat
+waits for the user's message and is marked ○, shown or hidden alike.

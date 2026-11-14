@@ -1,0 +1,24 @@
+# Model preset mi50-strata: the Strata inference engine on the two 32 GB AMD Instinct MI50 cards of the user's server, generic -- it defines no model of its own.
+# An independent docker compose project; a service merges x-strata and adds its port and API_KEY. No ready-made gfx906 image exists, so the image
+# is built from the `strata` subproject of mixa3607/ML-gfx906 (design/local_models/mi50_strata.md) and named by STRATA_IMAGE.
+name: assassin-mi50-strata
+
+x-assassin:
+  description: Strata on the two 32 GB AMD Instinct MI50 cards of the user's server, no model defined
+  host: ssh://alexey@213.158.1.168:49999
+
+x-strata: &strata
+  image: ${STRATA_IMAGE:-localhost/strata-gfx906:0.2.3}
+  restart: unless-stopped
+  volumes: ["${MI50_MODELS:-/home/alexey/models}:/models:ro", "strata-data:/data"]
+  devices: ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"]
+  group_add: ["44", "990"]  # video and render of that host
+  environment: {MODEL_PATH: /models}
+  shm_size: 2g
+  ulimits: {memlock: {soft: -1, hard: -1}}
+  stop_grace_period: 2m  # a big model needs time to unload; no memory limit either, Strata plans from the whole RAM
+
+volumes:
+  strata-data: {}
+
+services: {}

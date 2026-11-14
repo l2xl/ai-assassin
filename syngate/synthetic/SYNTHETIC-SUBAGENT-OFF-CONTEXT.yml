@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-SUBAGENT]
+order: 20
+test: ~
+---
+Off-context subagent
+is a turn above an agent of the prompt library alone, without seed context, run only with the whole of the agent's lists covered by the chat it is started from, never cut to what that chat has.

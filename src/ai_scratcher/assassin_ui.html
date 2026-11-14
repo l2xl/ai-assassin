@@ -8,7 +8,7 @@
   label, chat state and first line of an item) + the whole tree as one document
   of statement blocks edited in place, each holding its AI chat and the files it
   links to + the status popup from every label's icon + run console. Every visual definition lives in
-  the one stylesheet below (see ASSASSIN_UI.md); the markup carries classes only.
+  the one stylesheet below (see design/ui/assassin_ui.md); the markup carries classes only.
   Vanilla JS, no build step, no external assets; talks JSON to /api/*.
 -->
 <html lang="en">
@@ -117,8 +117,12 @@ main { flex: 1; display: flex; min-height: 0; }
 .dupmark { color: var(--dim); font-size: 0.72rem; font-style: italic; }
 /* The chat state mark after the label: present only while the item has a chat, its glyph and colour the phase. */
 .chat-state { flex: none; min-width: 1em; padding: 0 0.2em; border: none; background: none; color: var(--dim); font-size: 0.75rem; line-height: 1.2; }
-.chat-state.unread { color: var(--accent); }
-.chat-state.failed { color: var(--red); }
+.chat-state.unread, .state-mark.unread { color: var(--accent); }
+.chat-state.failed, .state-mark.failed { color: var(--red); }
+.chat-state.blocked, .state-mark.blocked { color: var(--yellow-text); }
+.state-mark { display: inline-block; min-width: 1em; margin-right: 0.15em; text-align: center; }
+/* The hollow spinner of a chat that ended its own turn while subagents it started still run: a dotted ring, turning slowly. */
+.spinner.hollow { border-style: dotted; border-color: currentColor; animation-duration: 2.4s; }
 /* The one family of icon tools -- row tools, message marks, a file view's close -- hidden at rest and revealed with the element they belong to. */
 .tools { display: inline-flex; flex: none; visibility: hidden; }
 .row:hover .tools, .row.selected .tools, .row:focus-within .tools, .chat-msg:hover .tools, .chat-msg:focus-within .tools, .sub:hover > .tools, .sub:focus-within > .tools { visibility: visible; }
@@ -284,6 +288,17 @@ textarea.block-text:focus { outline: none; }
 .chatting .block-chat { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px dashed var(--line); }
 .pill { position: relative; font: 0.72rem/1.55 ui-monospace, Menlo, Consolas, monospace; padding: 0 0.65em 0 0.5em; border-radius: 999px; border: 1px solid color-mix(in oklab, currentColor 40%, transparent); background: linear-gradient(var(--tint), var(--tint)), var(--panel); white-space: nowrap; cursor: pointer; }
 .pill .ball { display: inline-block; width: 0.62em; height: 0.62em; border-radius: 50%; margin-right: 0.4em; }
+.chat-msg.recommendation .rec-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6em; }
+.pill.rec-accept { color: var(--accent); --tint: var(--accent-soft); border-color: currentColor; }
+button.rec-deny, button.rec-deny:hover:not(:disabled) { appearance: none; display: inline-flex; padding: 0; border: 0; background: none; color: var(--red); cursor: pointer; }
+.rec-deny svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.rec-reason { color: var(--dim); }
+/* The context review: every external result the scan found in, shifted under its head, its findings marked in place and listed under it. */
+.chat-msg.context-review .review-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; margin: 0.3rem 0; padding: 0.3rem 0 0 0.8em; border-top: 1px dashed var(--line); color: var(--text); }
+mark.finding-span { background: var(--red-soft); color: var(--red); border-radius: 2px; padding: 0 0.15em; }
+.chat-msg.context-review .finding { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6em; padding-left: 0.8em; }
+.finding-category { color: var(--red); }
+.finding[data-settled="accept"] .finding-drop, .finding[data-settled="drop"] .finding-accept { opacity: 0.35; }
 .pill .rev { margin-left: 0.6em; padding-left: 0.6em; border-left: 1px solid color-mix(in oklab, var(--dim) 45%, transparent); color: var(--dim); }
 .note { color: var(--dim); font-size: 0.78rem; }
 #tests-pop, #status-menu, #help-pop, #mention-hint { position: fixed; inset: auto; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 8px 28px #0004; }
@@ -703,23 +718,32 @@ function decorateLabel(el, it) {
   setHtml(mark, review && review !== "not_reviewed" ? '<span class="eyes">👀</span>' + (review === "review_violated" ? '<span class="seal">❗</span>' : "") : "");
 }
 
-// The chat state mark of a row: none without a chat or with an idle chat shown, else the phase of the item's chat as this tab knows it.
-const CHAT_PHASE = { running: ['<span class="spinner"></span>', "the AI is answering"], failed: ["⚠", "the last turn failed"], unread: ["●", "a reply waits"], idle: ["▾", "the chat is hidden"] };
-function chatPhase(uid) {
+// The chat state of an item as this tab shows it -- the server's state of its chat, the same on every page, except that a `waiting` chat holding a
+// reply this tab has not shown is `unread` -- null without a chat. One mark per state, the same on the row, a hidden chat's ▾ and a subagent's indicator.
+const STATE_MARKS = { blocked: ["⏸", "blocked"], working: ['<span class="spinner"></span>', "working — the AI is answering"],
+  agents: ['<span class="spinner hollow"></span>', "agents — subagents it started still run"], failed: ["⚠", "failed — the last turn ended on an error"],
+  stopped: ["■", "stopped — the last turn was stopped"], unread: ["●", "unread — a reply this tab has not shown"], waiting: ["○", "waiting — for your message"] };
+const chatShown = (uid) => [...state.views.values()].some((view) => view.uid === uid);
+function chatState(uid) {
   const chat = state.chats.get(uid);
   if (!chat || !(chat.log.length || chat.turn)) return null;
-  if (chat.turn) return "running";
-  if (chat.log.at(-1).role === "error") return "failed";
-  return chatShown(uid) ? null : chat.log.length > (state.seen.get(uid) ?? 0) ? "unread" : "idle";
+  const named = chat.state || (chat.turn ? "working" : "waiting");
+  return named === "waiting" && !chatShown(uid) && chat.log.length > (state.seen.get(uid) ?? 0) ? "unread" : named;
 }
-const chatShown = (uid) => [...state.views.values()].some((view) => view.uid === uid);
+// The title of a state mark names the state and, for blocked, what is asked.
+const stateTitle = (name, chat) => (name === "blocked" && chat?.asked ? `blocked — ${chat.asked}` : STATE_MARKS[name][1]);
+// The mark of the chat of `uid` away from its row -- on a hidden chat's ▾ or a subagent's indicator; the chat of a subagent not yet known is working.
+function stateMarkHtml(uid) {
+  const name = chatState(uid) || "working";
+  return `<span class="state-mark ${name}" title="${esc(stateTitle(name, state.chats.get(uid)))}">${STATE_MARKS[name][0]}</span>`;
+}
 function decorateChatMark(el, row) {
-  const mark = el.querySelector(".chat-state"), phase = row && !row.adding && chatPhase(row.uid);
+  const mark = el.querySelector(".chat-state"), name = row && !row.adding && chatState(row.uid);
   if (!mark) return;
-  mark.className = "chat-state" + (phase ? " " + phase : "");
-  mark.hidden = !phase;
-  mark.title = phase ? CHAT_PHASE[phase][1] : "";
-  setHtml(mark, phase ? CHAT_PHASE[phase][0] : "");
+  mark.className = "chat-state" + (name ? " " + name : "");
+  mark.hidden = !name;
+  mark.title = name ? stateTitle(name, state.chats.get(row.uid)) : "";
+  setHtml(mark, name ? STATE_MARKS[name][0] : "");
 }
 function renderChatMarks() { $("tree").querySelectorAll(".row").forEach((el, i) => decorateChatMark(el, state.rows[i])); }
 function persistSeen() { sessionStorage.setItem("assassin-chat-seen", JSON.stringify([...state.seen])); }
@@ -1261,10 +1285,11 @@ const startsAnew = (uid) => { const kept = state.chats.get(uid); return Boolean(
 const busy = (chat) => Boolean(chat.turn);
 const chatInput = (path) => $("doc").querySelector(`.block[data-path="${CSS.escape(path)}"] .chat-input`);
 
-function takeChats({ version, chats }) {
+function takeChats({ version, chats, setup }) {
   if (version < state.chatsVersion) return;  // overtaken by a later read
   state.chatsVersion = version;
   state.chats = new Map(Object.entries(chats));
+  state.setup = setup || null;  // the step of the first setup under way, every reply line's hint while it runs
   settleStops();
   watchChats();
 }
@@ -1320,6 +1345,7 @@ const MARK = {
   fold: '<svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M3.5 5.25h9L8 10.75z"/></svg>', expand: '<svg viewBox="0 0 16 16" aria-hidden="true"><path class="fill" d="M5.25 3.5v9L10.75 8z"/></svg>',
   child: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 3.5v6.5h7M9 7.5l2.5 2.5L9 12.5"/></svg>', sibling: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"/></svg>',
   retry: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 8.5a4.5 4.5 0 1 1-1.32-3.18M11.3 2.6v3h-3"/></svg>', remove: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+  deny: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5"/></svg>',
 };
 function partsHtml(m, busy) {
   const exchange = m.role !== "error" && m.role !== "stopped", render = m.role === "ai" ? (text) => md(text, "") : (text) => jumps(esc(text));
@@ -1408,6 +1434,7 @@ function stepHtml(step, key) {
     case "file": return foldHtml(key, kind(FILE_STATUS[step.file.status] || step.file.status) + esc(step.file.path), () => `<pre>${esc(step.file.hunks)}</pre>`);
     case "agent": return foldHtml(key, `<span class="step-kind">agent${step.uid ? " " + uidLink(step.uid) : ""}</span>` + esc(firstLine(step.prompt)) + pending(step.report),
       () => partHtml("prompt", step.prompt) + partHtml("report", step.report) + (step.steps?.length ? `<div class="turn-steps">${stepsHtml(step.steps, key)}</div>` : ""));
+    case "context": return foldHtml(key, kind("context") + esc(firstLine(step.text)), () => `<div class="step-text">${esc(step.text)}</div>`);
     case "workflow": return foldHtml(key, kind("workflow") + esc(brief(step.input)) + pending(step.result), () => partHtml("input", step.input) + partHtml("result", step.result));
     default: return foldHtml(key, kind(step.kind), () => partHtml(step.kind, step));
   }
@@ -1442,12 +1469,14 @@ function runningAgents(chat) {
 }
 function agentRunsHtml(chat) {
   const uids = runningAgents(chat);
-  return uids.length ? '<div class="agent-runs">' + uids.map((uid) => `<a class="jump agent-run" data-uid="${esc(uid)}" title="a subagent runs on ${esc(uid)} — jump there"><span class="spinner"></span> @${esc(uid)}</a>`).join("") + "</div>" : "";
+  return uids.length ? '<div class="agent-runs">' + uids.map((uid) => `<a class="jump agent-run" data-uid="${esc(uid)}" title="a subagent runs on ${esc(uid)} — jump there">${stateMarkHtml(uid)} @${esc(uid)}</a>`).join("") + "</div>" : "";
 }
 // The end of the log while something runs: the running turn's blocks so far and its growing activity line, or, the turn over and background
 // subagents going on, a line of theirs; the run indicators close either.
 function liveHtml(chat, running) {
   const key = `${chat.uid}:${chat.log.length}`, background = chat.agents?.length || 0;
+  if (running && chat.held?.recommendation) return recommendationHtml(chat) + queueHtml(chat);
+  if (running && chat.held?.review) return reviewHtml(chat) + queueHtml(chat);
   if (running) return (chat.steps?.length ? turnHtml(chat.steps, key, null, chat.log.length) + activityHtml(chat.steps, key, true, agentRunsHtml(chat))
     : '<div class="chat-msg note"><span class="spinner"></span> waiting for the reply…</div>') + queueHtml(chat);
   return queueHtml(chat) + (background ? `<div class="turn-activity"><span class="turn-head bare"><span class="spinner"></span> ${esc(plural(background, "background subagent"))} running</span>${agentRunsHtml(chat)}</div>` : "");
@@ -1456,6 +1485,59 @@ function liveHtml(chat, running) {
 const queueHtml = (chat) => (chat.queue || []).map((m, i) => `<div class="chat-msg user queued" data-queued="${i}"><div class="msg-body">`
   + `<div class="msg-from">queued — goes to the AI at its next step</div>${jumps(esc(m.text))}</div><span class="msg-tools right">`
   + `<button type="button" class="msg-drop" title="withdraw the message — it goes back into the reply line">${MARK.remove}</button></span></div>`).join("");
+
+// A turn held on an asked recommendation stands in the log as its recommendation message: the recommended model or permission as a pill
+// styled as the setup and permission pills -- a click accepts it --, the deny mark keeping the setup, and the drop-down choosing the chat's behaviour.
+const BEHAVIOURS = [["ask", "Ask every recommendation"], ["auto_lower", "Apply a lower model, ask the rest"], ["auto", "Apply every recommendation"]];
+function recommendationHtml(chat) {
+  const rec = chat.held.recommendation, behaviour = chat.recommendations || rec.behaviour, reason = esc(rec.reason || "");
+  let pill;
+  if (rec.kind === "permission") {
+    const label = state.model.connectors[chat.connector]?.modes.find((m) => m.id === rec.permission)?.label ?? rec.permission;
+    pill = `<button type="button" class="pill chat-mode rec-accept" title="accept — switch ${esc(label)} on in this chat: ${reason}"><span class="ball"></span>${esc(label)}</button>`;
+  } else {
+    const connector = state.model.connectors[rec.connection];
+    const named = [Object.keys(state.model.connectors).length > 1 && connector?.label, connector?.models.find((m) => m.id === rec.model)?.name ?? rec.model, rec.effort];
+    pill = `<button type="button" class="pill rec-accept" title="accept — the turn goes on on this model: ${reason}">${named.filter(Boolean).map(esc).join(" · ")}</button>`;
+  }
+  return `<div class="chat-msg note recommendation" data-turn="${esc(chat.held.turn)}"><div class="msg-body"><div class="msg-from">recommendation — the turn waits for your answer</div>`
+    + `<div class="rec-line">${pill}<button type="button" class="rec-deny" aria-label="deny" title="deny — the setup stays">${MARK.deny}</button>`
+    + '<select class="rec-behaviour" aria-label="recommendation behaviour" title="how this chat settles recommendations from now on">'
+    + BEHAVIOURS.map(([id, label]) => `<option value="${id}"${id === behaviour ? " selected" : ""}>${label}</option>`).join("") + "</select></div>"
+    + `<div class="rec-reason">${jumps(reason)}</div></div></div>`;
+}
+
+// A turn held on the security scan's findings stands in the log as its context review: every external result holding a finding, the findings
+// marked in its text -- a hidden character by its code point -- and listed under it with category and reason, each settled by its accept pill or
+// its drop mark. The page keeps the answers by turn and releases the turn once every finding has one.
+const findingAnswers = new Map();
+const HIDDEN_CHAR = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
+const shownSpan = (span) => span.replace(HIDDEN_CHAR, (c) => `U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")} `).trim();
+function reviewTextHtml(text, findings) {
+  const marks = [];
+  for (const finding of findings) {
+    const length = finding.span.length;
+    let found = finding.span ? text.indexOf(finding.span) : -1;
+    while (found >= 0 && marks.some(([start, end]) => found < end && start < found + length)) found = text.indexOf(finding.span, found + 1);
+    if (found >= 0) marks.push([found, found + length, finding]);
+  }
+  marks.sort((a, b) => a[0] - b[0]);
+  let at = 0, html = "";
+  for (const [start, end, finding] of marks) {
+    html += esc(text.slice(at, start)) + `<mark class="finding-span" data-finding="${finding.number}" title="${esc(finding.category)}: ${esc(finding.reason)}">${esc(shownSpan(finding.span))}</mark>`;
+    at = end;
+  }
+  return html + esc(text.slice(at));
+}
+function reviewHtml(chat) {
+  const held = chat.held, answers = findingAnswers.get(held.turn) || [];
+  const finding = (f) => `<div class="finding" data-finding="${f.number}"${answers[f.number] ? ` data-settled="${answers[f.number]}"` : ""}>`
+    + `<span class="finding-category">${esc(f.category)}</span><span class="finding-reason">${esc(f.reason)}</span>`
+    + '<button type="button" class="pill finding-accept" title="accept — this exact wording is no finding again, in any chat">accept</button>'
+    + `<button type="button" class="rec-deny finding-drop" aria-label="drop" title="drop — the result leaves the session and the held call is refused">${MARK.deny}</button></div>`;
+  return `<div class="chat-msg note context-review" data-turn="${esc(held.turn)}"><div class="msg-body"><div class="msg-from">${esc(held.asked)} — the turn waits until every finding is settled</div>`
+    + held.review.map((entry) => `<div class="review-text">${reviewTextHtml(entry.text, entry.findings)}</div>` + entry.findings.map(finding).join("")).join("") + "</div></div>";
+}
 
 function toggleFold(key) {
   if (!state.unfolded.delete(key)) state.unfolded.add(key);
@@ -1475,13 +1557,13 @@ function decorateChat(el, row) {
   if (!box.firstChild) box.innerHTML = '<div class="chat-log" role="log" aria-live="polite"></div><span class="reply-wait"><span class="spinner"></span></span>'
     + `<button type="button" class="reply-clear" title="clear the message">${MARK.remove}</button><textarea class="block-text chat-input" spellcheck="true"></textarea>`;
   if (chat && state.replies.has(row.uid)) { if (!box.lastChild.value) box.lastChild.value = state.replies.get(row.uid); state.replies.delete(row.uid); }
-  box.lastChild.placeholder = kept?.turn ? "Waiting AI response" : chat ? "Type message · Ctrl/⌘+Enter sends" : "Type a message to start new chat";
+  box.lastChild.placeholder = state.setup ? state.setup : kept?.turn ? "Waiting AI response" : chat ? "Type message · Ctrl/⌘+Enter sends" : "Type a message to start new chat";
   box.lastChild.tabIndex = chat || editing ? 0 : -1;
   if (!chat) {
     setHtml(box.firstChild, "");
     const filed = kept?.archive?.length || 0, live = Boolean(kept && (kept.log.length || kept.turn));
     const count = filed + (live ? 1 : 0);
-    setHtml(tools, count ? `<button type="button" class="pill chat-show" title="pick a conversation of the item — every one is kept">${kept.turn ? '<span class="spinner"></span>' : "▾"}${count > 1 ? ` ${count}` : ""}</button>` : "");
+    setHtml(tools, count ? `<button type="button" class="pill chat-show" title="pick a conversation of the item — every one is kept">${live ? stateMarkHtml(row.uid) : ""}▾${count > 1 ? ` ${count}` : ""}</button>` : "");
     return;
   }
   const connector = state.model.connectors[chat.connector], advanced = advancedModes(chat.connector), running = busy(chat), several = Object.keys(state.model.connectors).length > 1;
@@ -1505,13 +1587,21 @@ function decorateChat(el, row) {
       return `<button type="button" class="pill chat-mode${on ? " on" : ""}" role="switch" aria-checked="${on}" data-chat-mode="${esc(m.id)}" `
         + `title="${esc(m.label)}: ${esc(m.hint)} — ${on ? "allowed" : "not allowed"} in this chat, click to switch"><span class="ball"></span>${esc(m.label)}</button>`; }).join("")
     + (advanced.length ? `<button type="button" class="pill chat-advanced${advanced.some((m) => chat.modes.includes(m.id)) ? " on" : ""}" `
-      + `title="advanced permissions — ${advanced.map((m) => `${esc(m.label)}: ${chat.modes.includes(m.id) ? "allowed" : "not allowed"}`).join(", ")}; click to switch">advanced ▾</button>` : ""));
+      + `title="advanced permissions — ${advanced.map((m) => `${esc(m.label)}: ${chat.modes.includes(m.id) ? "allowed" : "not allowed"}`).join(", ")}; click to switch">advanced ▾</button>` : "")
+    + `<button type="button" class="pill chat-behaviour" aria-haspopup="menu" title="recommendations: ${esc(BEHAVIOURS.find(([id]) => id === behaviourOf(chat))?.[1] ?? behaviourOf(chat))} — click to change">${esc(behaviourOf(chat))} ▾</button>`);
   if (editing) decorateSaveMark(tools.querySelector(".save-mark"));
 }
 
 // The switches a connector marks advanced are not pills of the strip but the entries of one drop-down list, each switching its mode.
 function advancedModes(connector) {
   return state.model.connectors[connector].modes.filter((m) => m.advanced);
+}
+// The chat's recommendation behaviour: its own choice, else the default of the settings; the pill opens a menu of the three.
+const behaviourOf = (chat) => chat.recommendations || state.model.recommendations || "auto_lower";
+function openBehaviourMenu(chat, anchor) {
+  const own = behaviourOf(chat);
+  openMenu('<div class="menu-label">recommendations</div>' + BEHAVIOURS.map(([id, label]) => `<button role="menuitemradio" aria-checked="${id === own}" data-chat-behaviour="${id}" `
+    + `title="${esc(label)}">${id === own ? "● " : "○ "}${id} — ${esc(label.toLowerCase())}</button>`).join(""), anchor, { chat });
 }
 function openAdvancedMenu(chat, anchor) {
   openMenu('<div class="menu-label">advanced permissions</div>'
@@ -1690,6 +1780,26 @@ function backToLine(uid, texts) {
 }
 
 // One press stops the turn; the pill reads as stopping until the outcome lands. The messages queued meanwhile are withdrawn into the line.
+// A finding of the context review settled from the page; the last one releases the held turn with the answers in the order of the findings.
+function settleFinding(chat, number, answer) {
+  const held = chat?.held;
+  if (!held?.review) return;
+  const answers = findingAnswers.get(held.turn) || [], count = held.review.reduce((n, entry) => n + entry.findings.length, 0);
+  answers[number] = answer;
+  findingAnswers.set(held.turn, answers);
+  renderDoc();
+  if (Array.from({ length: count }, (_, i) => answers[i]).some((given) => !given)) return;
+  api(`/api/turn/${held.turn}/release`, { answer: Array.from({ length: count }, (_, i) => answers[i]) })
+    .then(() => { findingAnswers.delete(held.turn); watchChats(); }, (err) => toast(err.message));
+}
+// The answer to a recommendation releases its held turn, accepted or denied, with the behaviour the chat chose on the drop-down, if any.
+function answerRecommendation(chat, accept) {
+  const held = chat.held;
+  if (!held?.recommendation) return;
+  api(`/api/turn/${held.turn}/release`, { answer: { accept, ...(chat.recommendations ? { recommendations: chat.recommendations } : {}) } })
+    .then(() => watchChats(), (err) => toast(err.message));
+}
+
 function stopTurn(chat) {
   if (!chat?.turn || state.stopping.has(chat.turn)) return;
   state.stopping.add(chat.turn);
@@ -2388,10 +2498,13 @@ doc.addEventListener("click", (event) => {
     else if (target.closest(".reply-clear")) clearReply(row);
     else if (target.closest(".chat-show")) showHidden(row, target.closest(".chat-show"));
     else if (target.closest(".chat-hide")) closeChat(row);
+    else if (target.closest(".finding-accept, .finding-drop")) settleFinding(chat, Number(target.closest(".finding").dataset.finding), target.closest(".finding-accept") ? "accept" : "drop");
+    else if (target.closest(".rec-accept, .rec-deny")) answerRecommendation(chat, Boolean(target.closest(".rec-accept")));
     else if (target.closest(".chat-stop")) stopTurn(chat);
     else if (target.closest(".chat-send")) state.editing === path ? sendEdited(row) : sendChat(row, null, false, null, "now");
     else if (target.closest(".chat-setup")) openChatMenu(chat, target.closest(".chat-setup"));
     else if (target.closest(".chat-advanced")) openAdvancedMenu(chat, target.closest(".chat-advanced"));
+    else if (target.closest(".chat-behaviour")) openBehaviourMenu(chat, target.closest(".chat-behaviour"));
     else if (target.closest(".chat-mode")) toggleChatMode(chat, target.closest(".chat-mode").dataset.chatMode);
     else if (target.closest(".save-mark")) { const draft = drafts.get(draftKey(uid, "description")); if (draft) flush(draft); }
     else if (tool) messageTool(chat, row, tool.closest(".chat-msg"), tool);
@@ -2409,6 +2522,11 @@ doc.addEventListener("click", (event) => {
 doc.addEventListener("focusin", (event) => {
   if (!state.rebuilding && event.target.classList.contains("chat-input")) enterReply(event.target.closest(".block"));
 });
+// The drop-down of a recommendation message is the chat's behaviour from then on, stored at once.
+doc.addEventListener("change", (event) => {
+  const pick = event.target.closest(".rec-behaviour");
+  if (pick) updateChat(pick.closest(".block").dataset.uid, { recommendations: pick.value });
+});
 const statusMenu = $("status-menu");
 // The focus goes back to the anchor, or to its row or block when the anchor is a revealed-on-hover tool.
 const closeMenu = () => {
@@ -2418,7 +2536,7 @@ const closeMenu = () => {
   if (anchor && document.activeElement !== anchor) anchor.closest(".row, .block")?.focus({ preventScroll: true });
 };
 statusMenu.addEventListener("click", (event) => {
-  const { chatModel, chatEffort, chatConnector, chatReset, chatMode, chatResume, rowAct } = event.target.dataset, chat = statusMenu.chat, row = statusMenu.row;
+  const { chatModel, chatEffort, chatConnector, chatReset, chatMode, chatResume, chatBehaviour, rowAct } = event.target.dataset, chat = statusMenu.chat, row = statusMenu.row;
   if (!event.target.closest("[role^=menuitem]")) return;
   const draft = statusMenu.draft;
   if (chat && chatConnector) return stepChatMenu(draftSetup(chat, chatConnector), "model");
@@ -2427,6 +2545,7 @@ statusMenu.addEventListener("click", (event) => {
   if (chat && chatReset) resetChat(chat, chatReset);
   else if (row && chatResume !== undefined) chatResume === "live" ? openChat(row, true) : resumeConversation(row, Number(chatResume));
   else if (chat && chatMode) toggleChatMode(chat, chatMode);
+  else if (chat && chatBehaviour) updateChat(chat.uid, { recommendations: chatBehaviour });
   else if (row && rowAct === "add") startAdding(row);
   else if (row && rowAct === "add-parent") startLinking(row);
   else if (row && rowAct === "unlink") unlink(row);

@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-PRUNE, AI-CHAT]
+order: 320
+test: {unit: ~, page: ~}
+---
+Pruned message
+stays in the log in full under a pruned mark, a state apart from the user's fold.

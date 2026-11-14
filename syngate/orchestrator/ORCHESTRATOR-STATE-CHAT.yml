@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR]
+order: 280
+test: ~
+---
+Conversation state
+of the Orchestrator — the stored system prompt, the scan mark, the prune verdicts and switches, the recommendation behaviour and the denied recommendations — is kept with the chat log and ends with its reset.

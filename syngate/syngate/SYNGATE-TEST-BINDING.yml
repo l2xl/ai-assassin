@@ -7,3 +7,5 @@ review: a754a8943af46f1e1cf5168f73654c5da2fddc9ab7d888d3cdc4952b0cdcd093
 Leaf-to-test binding
 
 Every test-bearing leaf item shall be bound to its covering test routines by structural tags alone, the routine's location discovered at check time and never declared in the item.
+
+[design/syngate/test_binding.md](design/syngate/test_binding.md)

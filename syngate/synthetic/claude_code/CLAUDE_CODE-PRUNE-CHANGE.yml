@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
+order: 20
+test: ~
+---
+Pruning change
+of a Claude Code session is a step or reply its next session would hold otherwise than the running one holds it — a verdict that waited, a switch set by hand either way — and the earliest turn with one is where the replay starts.

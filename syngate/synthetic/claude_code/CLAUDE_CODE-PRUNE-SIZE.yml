@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
+order: 15
+test: ~
+---
+Claude Code session size
+is the input tokens of the transcript's last request, cache reads and writes included, never the sum the CLI reports over the requests of a whole call, which counts a session once for every request it made.

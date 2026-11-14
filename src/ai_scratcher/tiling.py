@@ -4,7 +4,7 @@
 
 """Compositor tiling of a new surf window where the browser cannot position its windows: the tiling method read from the desktop the
 harness runs on, and under KDE Plasma on Wayland the KWin script, loaded over D-Bus, that sets the surf window and its session's
-Assassin window side by side. The design is in BROWSER_EXTENSION.md; stdlib only, like the server that calls it."""
+Assassin window side by side. The design is in design/extension/surf_tab.md; stdlib only, like the server that calls it."""
 
 import json
 import os

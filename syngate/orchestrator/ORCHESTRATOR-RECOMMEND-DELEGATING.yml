@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 247
+test: ~
+---
+Delegating recommendation
+is a setup an agent call names that differs from the delegating chat's own: it is a recommendation of that chat and passes its behaviour before the subagent starts.

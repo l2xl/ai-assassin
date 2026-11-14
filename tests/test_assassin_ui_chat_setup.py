@@ -3,7 +3,7 @@
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
 """AI Assassin UI: the setup and permissions of a new chat and of a running one, the notices and the refusals a turn tells the AI --
-[AI_CHAT-DEFAULTS] [AI_CHAT-PERMISSION-ADVANCED-OFF] [AI_CHAT-PERMISSION-UNSUPPORTED] [AI_CHAT-PERMISSION-RESET] [AI_CHAT-INTERRUPT] [AI_CHAT-ANSWER-REFUSED]"""
+[AI_CHAT-DEFAULTS] [AI_CHAT-PERMISSION-ADVANCED-OFF] [AI_CHAT-PERMISSION-UNSUPPORTED] [AI_CHAT-PERMISSION-RESET] [AI_CHAT-INTERRUPT] [AI_CHAT-ANSWER-REFUSED] [AI_CHAT-SESSION-HANDOVER]"""
 
 import json
 
@@ -112,3 +112,19 @@ def test_a_malformed_answer_is_refused_to_the_ai_as_its_next_prompt_and_answered
     refusal = "answer refused: unknown tree call 'bogus'"
     assert scripted.heard[1]["text"] == synthetic.ANSWER_REFUSED.format(error="unknown tree call 'bogus'")
     assert outcome["reply"] == "Fixed" and outcome["applied"] == [f"- {refusal}"]
+
+
+@pytest.mark.syngate("AI_CHAT-SESSION-HANDOVER")
+def test_a_turn_on_another_connector_drops_the_session_of_the_old_one_and_carries_the_kept_messages(server):
+    base, app = server
+    app.connectors = {"echo": (first := Scripted({"kind": "text", "text": "One"})), "other": (second := Other({"kind": "text", "text": "Two"}, {"kind": "text", "text": "Three"}))}
+    turn(base, app, "LEAF-001", "First", connector="echo")
+    chat = app.chats["LEAF-001"]
+    assert chat.session == "session-1" and chat.session_connector == "echo"
+    outcome = turn(base, app, "LEAF-001", "Second", connector="other")  # the chat was paused on one provider and goes on with another
+    assert outcome["reply"] == "Two" and second.heard[0]["session"] is None  # the token of the old connector is never presented to the new one
+    assert "user: First" in second.heard[0]["text"] and "assistant: One" in second.heard[0]["text"] and second.heard[0]["text"].endswith("Second")
+    assert chat.session == "session-1" and chat.session_connector == "other"  # the session now belongs to the new connector
+    turn(base, app, "LEAF-001", "Third", connector="other")
+    assert second.heard[1]["session"] == "session-1" and second.heard[1]["text"].endswith("Third") and "user: First" not in second.heard[1]["text"]  # and is resumed by it as usual
+    assert first.heard[0]["session"] is None and len(first.heard) == 1

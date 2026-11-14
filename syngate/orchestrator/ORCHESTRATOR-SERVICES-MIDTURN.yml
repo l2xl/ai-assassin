@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+test: ~
+---
+Service failure in turn
+— a role failing in the middle of a turn — holds the turn on the blocking alert.

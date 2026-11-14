@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-SKILL-ASSESS]
+test: ~
+---
+Contradiction notice
+is what the assessment skill tells a turn to give before it changes anything: where the message contradicts a statement of its context.

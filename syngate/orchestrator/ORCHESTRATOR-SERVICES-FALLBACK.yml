@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+order: 410
+test: ~
+---
+Locator fallback
+serves a role given a list of model locators by the first of them that answers, a failed call moving the role on to the next answering one; the role fails only while none answers.

@@ -1,10 +1,10 @@
 ---
-parents: [CLAUDE_CODE]
-order: 60
+parents: [CLAUDE_CODE, SYNTHETIC-ANSWER]
+order: 490
 test: 78d550cc079b38996e65359cdee5134189f569915d58e25d7acf52198f964e78
 review: 8aa1679be8c19771f2318460efa11dc72d9181fe3a3b8b37d5a80a0c99a71108
 ---
 Answer schema
-of the Claude Code connector hands the calls of the tool library to the turn as the JSON schema of its structured answer, that structured output returned in place of the reply text.
+of the Claude Code connector hands the calls of the tool library to the turn as the JSON schema of its structured answer, which carries the kind of the answer and its calls and has no field for text.
 
 The schema is built from the library's tool definitions, see the tool delivery.

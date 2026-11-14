@@ -6,3 +6,5 @@ review: 90dfcb5bcad47e6ef36912bb8bffc748a801019ca698908f4443716b6c28fa3a
 ---
 Setup selector
 of the chat picks the AI connector, its model and effort, offering only the efforts the chosen model supports.
+
+[design/chat/setup.md](design/chat/setup.md)

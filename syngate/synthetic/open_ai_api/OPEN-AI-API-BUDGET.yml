@@ -1,0 +1,6 @@
+---
+parents: [OPEN-AI-API-MODELS]
+test: ~
+---
+Reasoning budget
+sends, beside the chosen effort, the token count the model's reasoning budgets give that effort as `reasoning_budget_tokens`, and none for an effort they do not name.

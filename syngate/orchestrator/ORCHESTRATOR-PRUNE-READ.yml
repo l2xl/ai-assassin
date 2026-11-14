@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+order: 185
+test: ~
+---
+First file read
+of a session is never pruned.

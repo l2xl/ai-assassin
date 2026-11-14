@@ -1,0 +1,41 @@
+# Model preset cuda-4gb: the embedding and the rerank model of the orchestrator on a 4 GB NVIDIA card.
+# An independent docker compose project -- `assassin-models up cuda-4gb`, or `docker compose up -d --wait` in this folder.
+# Measured on a GTX 1650: 1.6 GB of card memory for both, about 34 short texts embedded and 32 pairs reranked a second.
+name: assassin-cuda-4gb
+
+x-assassin:
+  description: Embedding and rerank models for a 4 GB NVIDIA card
+
+x-server: &server
+  image: ghcr.io/ggml-org/llama.cpp:server-cuda
+  restart: unless-stopped
+  volumes: ["models:/root/.cache/llama.cpp"]
+  # A first start downloads the model: failures do not count until the start period is over.
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    interval: 10s
+    timeout: 3s
+    retries: 3
+    start_period: 900s
+    start_interval: 3s
+  deploy:
+    resources:
+      reservations:
+        devices: [{driver: nvidia, count: all, capabilities: [gpu]}]
+
+services:
+  embed:
+    <<: *server
+    command: ["-hf", "gpustack/bge-m3-GGUF:Q8_0", "--alias", "bge-m3", "--embedding", "-ngl", "99",
+              "--host", "0.0.0.0", "--port", "8080", "-c", "8192", "-b", "8192", "-ub", "8192"]
+    ports: ["127.0.0.1:18081:8080"]
+    labels: {ai-assassin.serve: embedding, ai-assassin.model: bge-m3, ai-assassin.memory-mb: "800"}
+  rerank:
+    <<: *server
+    command: ["-hf", "gpustack/bge-reranker-v2-m3-GGUF:Q8_0", "--alias", "bge-reranker-v2-m3", "--reranking", "-ngl", "99",
+              "--host", "0.0.0.0", "--port", "8080", "-c", "8192", "-b", "8192", "-ub", "8192"]
+    ports: ["127.0.0.1:18082:8080"]
+    labels: {ai-assassin.serve: reranking, ai-assassin.model: bge-reranker-v2-m3, ai-assassin.memory-mb: "800"}
+
+volumes:
+  models: {}

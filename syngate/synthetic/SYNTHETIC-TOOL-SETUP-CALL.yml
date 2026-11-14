@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-SETUP]
+test: ~
+---
+Setup call
+names a connection and a model of the models listing with its reason and, optionally, an effort that model lists, any other being refused.

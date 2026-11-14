@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER]
+test: ~
+---
+Activity signal
+ranks the items by what the chat read, edited and named.

@@ -78,3 +78,19 @@ def test_calls_written_as_native_tool_markup_without_a_call_block_are_refused_ba
     assert outcome["applied"][0].startswith("- answer refused: ") and outcome["reply"] == "Read it."
     assert scripted.heard[1]["text"].startswith("Your last answer was refused") and "syngate" in scripted.heard[1]["text"]
     assert len(scripted.heard) == 3  # the refusal, then the call block's query, then the text answer
+
+
+@pytest.mark.syngate("SYNTHETIC-ANSWER-EMPTY")
+def test_a_text_answer_carrying_no_text_is_refused_back_to_the_model_within_the_turn(server):
+    base, app = server
+    for empty in ("", " \n", {"kind": "text"}, {"kind": "text", "text": ""}, {"kind": "text", "text": " \n"}, {"kind": "text", "text": None}):
+        with pytest.raises(synthetic.protocol_error, match="carries no text"):
+            synthetic.parse_reply(empty)
+    assert synthetic.parse_reply({"kind": "text", "text": "Talk."}) == ("chat", "Talk.")
+    assert synthetic.parse_reply({"kind": "calls", "calls": [{"tool": "query", "uid": "@"}]})[0] == "calls"  # calls need no text beside them
+    app.connectors = {"echo": (scripted := Scripted({"kind": "text", "text": ""}, "", {"kind": "text", "text": "Read it."}))}
+    outcome = turn(base, app, "ROOT", "Show the status.")
+    assert len(outcome["applied"]) == 1 and outcome["applied"][0].startswith("- answer refused: ") and outcome["applied"][0].endswith("(×2)")
+    assert "carries no text" in outcome["applied"][0] and outcome["reply"] == "Read it."  # the turn did not end on the empty reply
+    assert all(heard["text"].startswith("Your last answer was refused") and "carries no text" in heard["text"] for heard in scripted.heard[1:])
+    assert len(scripted.heard) == 3  # the two refusals, then the text answer

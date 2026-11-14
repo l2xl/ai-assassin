@@ -9,3 +9,5 @@ review: 0422fbc1eda9dbfd2051854f335584aedf470c846813f770f9d5ac3c4a191aa6
 ---
 Page events
 of the surf tab are sent to the harness as `page` frames carrying the page info, whoever caused them.
+
+[design/extension/page_events.md](design/extension/page_events.md)

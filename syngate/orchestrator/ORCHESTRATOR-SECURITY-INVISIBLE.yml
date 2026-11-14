@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+test: ~
+---
+Hidden characters
+— invisible and bidirectional ones — in external text are a finding by rule, without a model.

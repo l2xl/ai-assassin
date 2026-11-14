@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-STATE, ORCHESTRATOR-HELD]
+order: 10
+test: ~
+---
+Blocked chat
+has a held turn, a blocked subagent or a blocking alert of the model services, and is marked ⏸.

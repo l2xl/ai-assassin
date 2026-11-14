@@ -885,12 +885,12 @@ def test_the_reply_line_waits_under_every_item_outside_the_tab_order_with_its_hi
     hint = f"getComputedStyle({LEAF_BLOCK}.querySelector('.chat-input'), '::placeholder').color"
     assert page.eval(hint) == "rgba(0, 0, 0, 0)"  # the hint is there for the hover, invisible at rest
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
-    assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, OPEN_HINT, 0, 7]]  # send with setup, four permissions, the advanced list, hide
+    assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, OPEN_HINT, 0, 8]]  # send with setup, four permissions, the advanced list, the behaviour, hide
     page.wait(f"{hint} === {json.dumps(css_color(page, '--dim'))}")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-hide').click()")
     assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, REST_HINT, -1, 0]]
     edit_leaf(page, "It shall leaf, edited.")
-    assert page.eval(rest)[1] == [True, OPEN_HINT, 0, 8]  # the save mark joins the strip while editing
+    assert page.eval(rest)[1] == [True, OPEN_HINT, 0, 9]  # the save mark joins the strip while editing
 
 
 @pytest.mark.syngate("AI_CHAT-REPLY-HINT")
@@ -2396,34 +2396,34 @@ CHAT_MARK = "(() => { const el = document.querySelector('#tree [data-uid=\"LEAF-
 
 
 @pytest.mark.syngate("ASSASSIN-UI-TREE-CHAT-MARK")
-def test_the_tree_row_marks_a_running_turn_an_unread_reply_a_hidden_chat_and_a_failed_turn(server, chrome):
+def test_the_tree_row_marks_the_state_of_the_item_chat_and_a_click_on_it_shows_the_chat(server, chrome):
     base, app = server
     gated = GatedConnector()
     page = open_chat(server, chrome, echo=gated)
     assert page.eval(CHAT_MARK)[:2] == [True, "chat-state"]  # no chat yet: no mark
     send(page, "LEAF-001", "Slow one")
-    page.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.running .spinner')")
-    assert page.eval(CHAT_MARK)[:3] == [False, "chat-state running", "the AI is answering"] and page.eval(f"{LEAF_BLOCK}.getAttribute('aria-busy')") == "true"
+    page.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.working .spinner')")
+    assert page.eval(CHAT_MARK)[:3] == [False, "chat-state working", "working — the AI is answering"] and page.eval(f"{LEAF_BLOCK}.getAttribute('aria-busy')") == "true"
     other = Page(chrome, f"{base}/?token={app.token}")
-    other.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.running')")  # every tab sees the running turn
+    other.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.working')")  # every tab sees the running turn
     gated.release.set()
-    page.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state').hidden")
-    assert page.eval(CHAT_MARK)[:2] == [True, "chat-state"] and page.eval(f"{LEAF_BLOCK}.getAttribute('aria-busy')") is None  # shown here: nothing waits, no mark
+    page.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.waiting')")
+    assert page.eval(CHAT_MARK)[1:4] == ["chat-state waiting", "waiting — for your message", "○"] and page.eval(f"{LEAF_BLOCK}.getAttribute('aria-busy')") is None  # shown here: waiting, not unread
     other.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.unread')")
-    assert other.eval(CHAT_MARK)[1:4] == ["chat-state unread", "a reply waits", "●"] and other.eval(CHAT_MARK)[5] == css_color(other, "--accent")
+    assert other.eval(CHAT_MARK)[1:4] == ["chat-state unread", "unread — a reply this tab has not shown", "●"] and other.eval(CHAT_MARK)[5] == css_color(other, "--accent")
     other.eval("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state').click()")
     shown = "[state.selected, state.panel, document.querySelector('#doc .block[data-uid=\"LEAF-001\"]').classList.contains('chatting'), document.activeElement.classList.contains('chat-input')]"
-    assert other.eval(shown) == ["LEAF-001", True, True, True] and other.eval(CHAT_MARK)[:2] == [True, "chat-state"]  # the click activates the block and shows the chat: the mark goes
+    assert other.eval(shown) == ["LEAF-001", True, True, True] and other.eval(CHAT_MARK)[1:4] == ["chat-state waiting", "waiting — for your message", "○"]  # the click activates the block and shows the chat: the mark reads waiting
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-hide').click()")
-    assert page.eval(CHAT_MARK)[1:4] == ["chat-state idle", "the chat is hidden", "▾"] and page.eval(CHAT_MARK)[5] == css_color(page, "--dim")
+    assert page.eval(CHAT_MARK)[1:4] == ["chat-state waiting", "waiting — for your message", "○"] and page.eval(CHAT_MARK)[5] == css_color(page, "--dim")
     app.connectors = {"echo": FlakyConnector("claude exited with 1")}
     send(other, "LEAF-001", "Doomed")
     other.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.failed')")
-    assert other.eval(CHAT_MARK)[1:4] == ["chat-state failed", "the last turn failed", "⚠"] and other.eval(CHAT_MARK)[5] == css_color(other, "--red")
+    assert other.eval(CHAT_MARK)[1:4] == ["chat-state failed", "failed — the last turn ended on an error", "⚠"] and other.eval(CHAT_MARK)[5] == css_color(other, "--red")
     page.activate()
     page.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.failed')")  # the other tab too, its chat hidden
     other.eval("document.querySelector('#doc .block[data-uid=\"LEAF-001\"] .chat-msg.error .msg-drop').click()")
-    other.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state').hidden")  # the failure dropped, the chat shown: no mark
+    other.wait("document.querySelector('#tree [data-uid=\"LEAF-001\"] .chat-state.waiting')")  # the failure dropped, the chat shown: waiting
 
 
 HELD = [sys.executable, "-c", "import sys, time; print('held', *sys.argv[1:]); sys.stdout.flush(); time.sleep(30)"]

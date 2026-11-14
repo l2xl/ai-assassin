@@ -1,0 +1,7 @@
+---
+parents: [LOCAL-MODELS-PRESET]
+order: 15
+test: ~
+---
+Preset host
+is the docker host a preset names, on which its project is served in place of this machine.

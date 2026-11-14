@@ -1,6 +1,6 @@
 ---
-parents: [CLAUDE_CODE]
-order: 140
+parents: [CLAUDE_CODE, SYNTHETIC-SKILLS]
+order: 310
 test: cafd0c24177e75bed5de7c6ed105aa0f8389fc531a115191e9c90acfb517f373
 review: 2fe5a4447e9f301996d913a31cca8047caebcd6b7648a3485704b8c70ea14d57
 ---

@@ -1,0 +1,8 @@
+---
+parents: [LOCAL-MODELS]
+order: 30
+---
+mi50 presets
+are the presets of the two 32 GB AMD Instinct MI50 cards of the user's server, one per inference engine — `mi50-llamacpp` and `mi50-strata`: neither defines a model of its own, and `up` refuses each until a service is added.
+
+[design/local_models/mi50.md](design/local_models/mi50.md)

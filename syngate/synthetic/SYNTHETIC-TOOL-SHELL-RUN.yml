@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-SHELL]
+test: ~
+---
+Shell run
+has no stdin and a time limit, and its output is cut past a size limit.

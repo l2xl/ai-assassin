@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 260
+test: ~
+---
+Denied recommendation
+is not shown again in the conversation while the recommendation stays the same.

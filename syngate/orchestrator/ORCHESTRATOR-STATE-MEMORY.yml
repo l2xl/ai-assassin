@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR]
+order: 282
+test: ~
+---
+Run state
+— the scan verdicts and the miss records — is kept in the server's memory alone and rebuilt by every run.

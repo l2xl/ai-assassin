@@ -227,26 +227,154 @@ def test_the_model_id_goes_unchanged_and_the_effort_only_with_a_model_listing_it
         synthetic.query({"gpt": connector}, items, "ROOT", "Hi.", "gpt", "gpt-5.5", "low")
 
 
+@pytest.mark.syngate("OPEN-AI-API-BUDGET")
+def test_the_budget_the_table_gives_the_chosen_effort_goes_as_reasoning_budget_tokens_beside_it_and_none_for_an_effort_it_does_not_name(connection):
+    fake, connector, entry = connection
+    efforts = ["low", "medium", "high", "xhigh", "max"]
+    entry["models"] = [{"id": "thinker", "efforts": efforts}, {"id": "plain", "efforts": []}, "bare"]
+
+    def sent(model, effort):
+        connector.dispatch("seed", "Hi.", model=model, effort=effort)
+        return fake.chats()[-1]["body"]
+    assert "reasoning_budget_tokens" not in sent("thinker", "high")
+    reported = connector.settings()
+    entry["reasoning_budgets"] = {"low": 1024, "medium": 2048, "high": 4096}
+    assert connector.settings() == reported
+    body = sent("thinker", "high")
+    assert body["reasoning_effort"] == "high" and body["reasoning_budget_tokens"] == 4096
+    assert sent("thinker", "low")["reasoning_budget_tokens"] == 1024 and sent("bare", "medium")["reasoning_budget_tokens"] == 2048
+    body = sent("thinker", "xhigh")
+    assert body["reasoning_effort"] == "xhigh" and "reasoning_budget_tokens" not in body
+    body = sent("thinker", None)
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+    body = sent("plain", "high")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+    entry["reasoning_budgets"] = {"low": 0, "medium": -5, "high": "4096", "xhigh": True, "max": 1.5}
+    for effort in efforts:
+        body = sent("thinker", effort)
+        assert body["reasoning_effort"] == effort and "reasoning_budget_tokens" not in body
+    entry["reasoning_budgets"] = {"low": 512, "medium": 0}
+    assert sent("thinker", "low")["reasoning_budget_tokens"] == 512 and "reasoning_budget_tokens" not in sent("thinker", "medium")
+    entry["reasoning_budgets"] = [1024, 2048]
+    assert "reasoning_budget_tokens" not in sent("thinker", "low")
+    entry.update(models="query", reasoning_budgets={"high": 4096})
+    fake.listing = {"data": [{"id": "Qwen-A"}]}
+    body = sent("Qwen-A", "high")
+    assert body["reasoning_effort"] == "high" and body["reasoning_budget_tokens"] == 4096
+    body = sent("Qwen-A", "low")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+
+
+@pytest.mark.syngate("OPEN-AI-API-BUDGET-QUERY")
+def test_a_queried_model_of_a_llama_cpp_server_is_offered_low_medium_and_high_with_their_default_budgets_and_one_of_any_other_server_only_the_efforts_the_table_names(connection):
+    fake, connector, entry = connection
+    router = [{"id": "Qwen-A", "object": "model", "owned_by": "llamacpp", "status": {"value": "loaded"}},
+              {"id": "Qwen-B", "object": "model", "status": {"value": "unloaded"}}]
+    default = ["low", "medium", "high"]
+
+    def serve(listing, table=None):
+        fake.listing = {"data": listing}
+        connector.forget_listing()
+        entry.pop("reasoning_budgets", None)
+        entry.update(models="query", **({"reasoning_budgets": table} if table is not None else {}))
+
+    def offered():
+        return {model["id"]: model["efforts"] for model in connector.settings()["models"]}
+
+    def sent(model, effort):
+        connector.dispatch("seed", "Hi.", model=model, effort=effort)
+        return fake.chats()[-1]["body"]
+    serve(router)
+    assert offered() == {"Qwen-A": default, "Qwen-B": default} and connector.settings()["efforts"] == default
+    assert connector.settings()["default"] == {"model": "Qwen-A", "effort": "medium"}
+    for effort, tokens in (("low", 1024), ("medium", 2048), ("high", 4096)):
+        body = sent("Qwen-B", effort)
+        assert body["reasoning_effort"] == effort and body["reasoning_budget_tokens"] == tokens
+    body = sent("Qwen-A", "max")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+    serve([{"id": "qwen", "object": "model", "owned_by": "llamacpp"}])
+    assert offered() == {"qwen": default} and "state" not in connector.settings()["models"][0]
+    assert sent("qwen", "high")["reasoning_budget_tokens"] == 4096
+    serve(router, {"high": 8192, "max": 16384, "low": 0})
+    assert offered() == {"Qwen-A": ["high", "max"], "Qwen-B": ["high", "max"]}
+    body = sent("Qwen-A", "high")
+    assert body["reasoning_effort"] == "high" and body["reasoning_budget_tokens"] == 8192
+    assert sent("Qwen-B", "max")["reasoning_budget_tokens"] == 16384
+    body = sent("Qwen-A", "low")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+    entry["reasoning_budgets"] = {}
+    assert offered() == {"Qwen-A": [], "Qwen-B": []}
+    body = sent("Qwen-A", "high")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+    entry["reasoning_budgets"] = [1024, 2048]
+    assert offered() == {"Qwen-A": default, "Qwen-B": default}
+    serve([{"id": "gpt-5.5", "object": "model", "owned_by": "openai"}])
+    assert offered() == {"gpt-5.5": []}
+    body = sent("gpt-5.5", "high")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+    entry["reasoning_budgets"] = {"high": 4096, "low": 1024, "medium": 0}
+    assert offered() == {"gpt-5.5": ["high", "low"]} and connector.settings()["efforts"] == ["high", "low"]
+    body = sent("gpt-5.5", "high")
+    assert body["reasoning_effort"] == "high" and body["reasoning_budget_tokens"] == 4096
+    assert sent("gpt-5.5", "low")["reasoning_budget_tokens"] == 1024
+    body = sent("gpt-5.5", "medium")
+    assert "reasoning_effort" not in body and "reasoning_budget_tokens" not in body
+
+
 @pytest.mark.syngate("OPEN-AI-API-QUERY")
-def test_the_query_setting_offers_the_servers_model_listing_without_efforts_and_with_its_load_states(connection):
+def test_the_query_setting_offers_the_servers_model_listing_with_its_load_states_and_a_routers_models_their_default_efforts(connection):
     fake, connector, entry = connection
     entry.update(models="query", efforts=["high"])
     fake.listing = {"object": "list", "data": [{"id": "Qwen-A", "object": "model", "status": {"value": "loaded"}},
                                                {"id": "Qwen-B", "object": "model", "status": {"value": "unloaded", "args": []}}]}
     settings = connector.settings()
-    assert settings["models"] == [{"id": "Qwen-A", "name": "Qwen-A", "efforts": [], "state": "loaded"},
-                                  {"id": "Qwen-B", "name": "Qwen-B", "efforts": [], "state": "unloaded"}]
-    assert settings["default"] == {"model": "Qwen-A", "effort": None} and connector.available()
+    assert settings["models"] == [{"id": "Qwen-A", "name": "Qwen-A", "efforts": ["low", "medium", "high"], "state": "loaded"},
+                                  {"id": "Qwen-B", "name": "Qwen-B", "efforts": ["low", "medium", "high"], "state": "unloaded"}]
+    assert settings["default"] == {"model": "Qwen-A", "effort": "medium"} and connector.available()
     listed = [request for request in fake.requests if request["method"] == "GET"]
     assert listed[-1]["path"] == "/v1/models" and listed[-1]["authorization"] == "Bearer sk-test"
     connector.dispatch("seed", "Hi.", model="Qwen-B", effort="high")
-    assert fake.chats()[-1]["body"]["model"] == "Qwen-B" and "reasoning_effort" not in fake.chats()[-1]["body"]
+    assert fake.chats()[-1]["body"]["model"] == "Qwen-B" and fake.chats()[-1]["body"]["reasoning_effort"] == "high"
     gone = api_connection.api_connection("gone", config=lambda: {"base_url": fake.url, "models": "query"})
     fake.listing = None
     assert gone.settings()["models"] == [] and not gone.available()
     fake.listing = {"data": [{"id": "gpt-5.5", "object": "model", "owned_by": "openai"}]}
     plain = api_connection.api_connection("plain", config=lambda: {"base_url": fake.url, "models": "query"})
     assert plain.settings()["models"] == [{"id": "gpt-5.5", "name": "gpt-5.5", "efforts": []}]
+
+
+@pytest.mark.syngate("AI_CONNECTION-MODEL-STRENGTHS")
+def test_the_settings_report_the_strengths_line_of_each_model_configured_with_one(connection):
+    fake, connector, entry = connection
+    entry["models"] = ["gpt-5.5", {"id": "deep", "name": "Deep", "strengths": "  hard design,\n long refactors  "}, {"id": "blank", "strengths": " "},
+                       {"id": "odd", "strengths": 7}]
+    models = {model["id"]: model for model in connector.settings()["models"]}
+    assert models["deep"] == {"id": "deep", "name": "Deep", "efforts": ["low", "medium", "high"], "strengths": "hard design, long refactors"}
+    assert all("strengths" not in models[model] for model in ("gpt-5.5", "blank", "odd"))
+    fake.listing = {"data": [{"id": "Qwen-A"}]}
+    entry["models"] = "query"
+    queried = connector.settings()["models"]
+    assert queried and all("strengths" not in model for model in queried)
+
+
+@pytest.mark.syngate("ORCHESTRATOR-SERVICES-LOADED", "router")
+def test_a_router_reports_the_first_model_its_listing_tells_loaded_read_anew_at_every_call(connection):
+    from ai_scratcher import services
+    fake, connector, entry = connection
+    entry["models"] = "query"
+    fake.listing = {"data": [{"id": "Qwen-A", "status": {"value": "unloaded"}}, {"id": "Qwen-B", "status": {"value": "loaded"}},
+                             {"id": "Qwen-C", "status": {"value": "loaded"}}]}
+    assert connector.loaded_model() == "Qwen-B"
+    locator = {"connection": "gpu", "model": services.LOADED}
+    services.prober(lambda: {"gpu": connector})("agents.default", locator)
+    fake.listing = {"data": [{"id": "Qwen-A", "status": {"value": "loaded"}}, {"id": "Qwen-B", "status": {"value": "unloaded"}}]}
+    assert services.resolve_locator({"gpu": connector}, locator) == {"connection": "gpu", "model": "Qwen-A"}  # no listing kept in between
+    fake.listing = {"data": [{"id": "Qwen-A", "status": {"value": "loading"}}, {"id": "Qwen-B", "status": {"value": "unloaded"}}]}
+    with pytest.raises(services.service_error, match="no model loaded"):
+        services.prober(lambda: {"gpu": connector})("agents.default", locator)
+    fake.listing = {"data": [{"id": "gpt-5.5", "owned_by": "openai"}]}  # no load states told
+    with pytest.raises(services.service_error, match="no model loaded"):
+        services.resolve_locator({"gpu": connector}, locator)
 
 
 @pytest.mark.syngate("OPEN-AI-API-LOAD")
@@ -545,6 +673,23 @@ def test_a_model_listed_with_its_own_key_goes_with_that_key_and_the_page_never_s
     assert fake.requests[-1]["authorization"] == "Bearer sk-test"
     connector.dispatch("seed", "Hi.", model="fallback")
     assert fake.requests[-1]["authorization"] == "Bearer sk-test"
+
+
+@pytest.mark.syngate("AI_CONNECTION-MODEL-FAMILY")
+def test_the_settings_report_the_family_and_tier_a_configured_model_declares_and_none_for_a_model_declaring_no_family(connection):
+    fake, connector, entry = connection
+    entry["models"] = [{"id": "big", "family": "deepseek", "tier": 3}, {"id": "small", "name": "Small", "family": " deepseek ", "tier": 1.5},
+                       {"id": "alone", "family": "gpt"}, {"id": "flag", "family": "gpt", "tier": True}, {"id": "orphan", "tier": 2},
+                       {"id": "bad", "family": 7, "tier": "high"}, {"id": "plain"}, "bare"]
+    models = {model["id"]: model for model in connector.settings()["models"]}
+    assert models["big"] == {"id": "big", "name": "big", "efforts": ["low", "medium", "high"], "family": "deepseek", "tier": 3}
+    assert (models["small"]["family"], models["small"]["tier"]) == ("deepseek", 1.5) and models["big"]["tier"] > models["small"]["tier"]
+    assert models["alone"]["family"] == "gpt" and "tier" not in models["alone"] and "tier" not in models["flag"]  # a tier is a number, not a flag
+    for none in ("orphan", "bad", "plain", "bare"):
+        assert "family" not in models[none] and "tier" not in models[none]  # a tier is placed within a family, so none without one
+    entry.update(models="query")
+    fake.listing = {"data": [{"id": "Qwen-A", "object": "model"}]}
+    assert connector.settings()["models"] == [{"id": "Qwen-A", "name": "Qwen-A", "efforts": []}]
 
 
 @pytest.mark.syngate("OPEN-AI-API-PREAMBLE")

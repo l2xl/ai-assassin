@@ -339,23 +339,23 @@ def test_a_failed_answer_comes_back_as_the_refusal_of_its_call_with_the_page_the
 @pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-ROUNDS")
 def test_a_turn_that_has_surfed_runs_up_to_the_surf_round_budget_and_is_told_the_rounds_left_as_they_run_low(server):
     base, app = server
-    assert websurf.ROUNDS == 40 and synthetic.QUERY_ROUNDS < websurf.ROUNDS
+    assert websurf.ROUNDS == 40
     notice = synthetic.ROUNDS_LEFT.partition("{left}")[0].strip()
     last = lambda scripted, index: scripted.heard[index]["text"].rpartition("\n")[2]
-    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("open", url="ftp://example.com/"))] * websurf.ROUNDS))}
-    outcome = turn(base, app, "LEAF-001", "Keep trying.", modes=ON)  # refused by the guard before any browser: nothing surfed, the read loop's bound holds
-    assert outcome["error"].endswith("answer refused: the exchange kept querying") and len(scripted.heard) == synthetic.QUERY_ROUNDS
+    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("open", url=f"ftp://example.com/{index}")) for index in range(synthetic.QUERY_ROUNDS + 1)]))}  # a new address every round: no stall
+    outcome = turn(base, app, "LEAF-001", "Keep trying.", modes=ON)  # refused by the guard before any browser: nothing surfed, the round fuse holds
+    assert outcome["error"].endswith("answer refused: the exchange kept querying") and len(scripted.heard) == synthetic.QUERY_ROUNDS + 1  # the fuse's rounds and the closing prompt, answered with calls
     assert last(scripted, synthetic.QUERY_ROUNDS - 1) == synthetic.ROUNDS_LEFT.format(left=1).strip()
     browser = attached(base, app)
-    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("status"))] * websurf.ROUNDS))}
+    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("query", origin=ORIGIN, selector=f"#row{index}")) for index in range(websurf.ROUNDS + 1)]))}  # a new target every round: no stall
     outcome = turn(base, app, "LEAF-001", "Keep looking.", modes=ON)
-    assert outcome["error"].endswith(synthetic.ROUNDS_OUT.format(rounds=websurf.ROUNDS)) and len(browser.heard) == len(scripted.heard) == websurf.ROUNDS
+    assert outcome["error"].endswith(synthetic.ROUNDS_OUT.format(rounds=websurf.ROUNDS)) and len(scripted.heard) == websurf.ROUNDS + 1 and len(browser.heard) == websurf.ROUNDS  # the calls of the closing answer are not run
     assert not any(notice in scripted.heard[index]["text"] for index in range(websurf.ROUNDS - synthetic.ROUNDS_WARNING))
     assert [last(scripted, index) for index in range(websurf.ROUNDS - synthetic.ROUNDS_WARNING, websurf.ROUNDS)] == [synthetic.ROUNDS_LEFT.format(left=left).strip() for left in (3, 2, 1)]
     settings(app, websurf={"rounds": 2})
-    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("status"))] * 3))}
+    app.connectors = {"echo": (scripted := Scripted(*[calls(surf("query", origin=ORIGIN, selector=f"#row{index}")) for index in range(3)]))}
     outcome = turn(base, app, "LEAF-001", "Look twice.", modes=ON)
-    assert outcome["error"].endswith(synthetic.ROUNDS_OUT.format(rounds=2)) and len(scripted.heard) == 2 and last(scripted, 1) == synthetic.ROUNDS_LEFT.format(left=1).strip()
+    assert outcome["error"].endswith(synthetic.ROUNDS_OUT.format(rounds=2)) and len(scripted.heard) == 3 and last(scripted, 1) == synthetic.ROUNDS_LEFT.format(left=1).strip()
     browser.close()
 
 
@@ -787,6 +787,8 @@ def test_the_interactive_websurf_switch_is_the_harness_own_offered_while_a_brows
 def test_fill_and_mouse_are_refused_while_the_switch_is_off_and_a_child_cannot_switch_it_on(server):
     base, app = server
     browser = attached(base, app)
+    from test_recommend_turn import answering
+    answering(app, "LEAF-001", "deny")  # the held call is denied by the user, and not asked again in the conversation
     for call in (surf("fill", origin=ORIGIN, selector="#q", value="x"), surf("mouse", origin=ORIGIN, steps=[{"type": "click", "x": 5, "y": 5}])):
         app.connectors = {"echo": Scripted(calls(call), text("Off."))}
         reply = turn(base, app, "LEAF-001", "Act.", modes=["tree", "edit"])["reply"]

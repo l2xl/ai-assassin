@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+order: 5
+test: ~
+---
+First scan
+runs before the first altering call of a session over the external text it holds, a session holding none passing without a call to a model.

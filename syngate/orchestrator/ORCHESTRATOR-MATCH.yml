@@ -1,0 +1,9 @@
+---
+parents: [ORCHESTRATOR]
+order: 25
+test: ~
+---
+Agent match
+hands a message to an off-context agent when the match gate selects it alone or the match agent confirms it among others, every other message being answered from the DAG.
+
+[design/orchestrator/agent_match.md](design/orchestrator/agent_match.md)

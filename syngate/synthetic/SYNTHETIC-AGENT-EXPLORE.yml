@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
+order: 30
+sources: [src/ai_scratcher/prompts/explore.md]
+test: ~
+---
+Explore agent
+is an agent with the reading tools alone, told to report the places of the project that answer its start message.

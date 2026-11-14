@@ -7,3 +7,5 @@ review: 980c30e649bdfd56bf20f013555dc760d8c4e335b83fb792c1edafee099ec515
 ---
 Item chat
 is one per item, the same at every occurrence of the item and in every browser tab, one turn per item at a time while any number of items chat in parallel.
+
+[design/chat/item_chat.md](design/chat/item_chat.md)

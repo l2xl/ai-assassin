@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+order: 180
+test: ~
+---
+Pruned tail
+is the ended turn alone: the messages of earlier turns stay as they were sent for as long as the session lives.

@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC]
+order: 55
+---
+Answer
+is what a model hands the harness to close a round of a turn — text, which ends the turn as its reply, or tool calls — the same whichever way an AI connection carries it.
+
+[design/synthetic/answer.md](design/synthetic/answer.md)

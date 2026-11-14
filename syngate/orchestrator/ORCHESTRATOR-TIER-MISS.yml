@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-TIER]
+order: 150
+test: ~
+---
+Miss record
+is kept in the server's memory alone for every heavy file the session then reads, with the message it was measured for.

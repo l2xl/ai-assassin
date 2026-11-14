@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER-LARGE]
+test: ~
+---
+Segment overlap
+carries the last whole units of a segment into the next one, so that any run of whole units up to the overlap's length — an instruction among them — stands unsplit in at least one segment.

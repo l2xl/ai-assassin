@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 234
+test: ~
+---
+One change per message
+is the limit on a chat's model: a further setup call under the same message is refused.

@@ -6,3 +6,5 @@ review: 2d61d5f2bea6db20a3ac834fd147ddb10f5e9a3f5bfc53031c0ab4b8047a2ba8
 ---
 Library delivery option
 of an AI connection declares whether it takes the prompt library as text merged into the seed context or natively through its provider's own skill and tool configuration.
+
+[design/connections/library_delivery.md](design/connections/library_delivery.md)

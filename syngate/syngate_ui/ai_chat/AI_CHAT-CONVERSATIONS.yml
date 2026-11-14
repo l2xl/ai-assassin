@@ -6,3 +6,5 @@ review: 2074dab6169682048bdb208a15ea90ea4d52d5cc64954c0d34cdb475cac1e94e
 ---
 Conversation list
 of an item keeps every earlier conversation filed behind the live one, never erased, each resumable as the live chat.
+
+[design/chat/history.md](design/chat/history.md)

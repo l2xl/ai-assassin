@@ -6,3 +6,5 @@ review: a33639e1c2e2199c3d5972af4126e1fb9e1f870c4d4cfe5839ad4252ba3553de
 ---
 Immediate interruption
 ends a dispatch the instant the stop is received as a connection error, the session left as it was.
+
+[design/connections/api_stop.md](design/connections/api_stop.md)

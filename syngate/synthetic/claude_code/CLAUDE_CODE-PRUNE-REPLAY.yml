@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
+order: 30
+test: {unit: ~, page: ~}
+---
+Turn replay
+writes a new transcript, the old one kept: every entry ahead of the earliest changed turn copied as it stands, so the cached prefix holds, then that turn and each after it rebuilt from the transcript it was first sent in under the pruning now settled; the next message resumes it and carries the stubs, the turns staying true turns of user prompts and the model's own answers.

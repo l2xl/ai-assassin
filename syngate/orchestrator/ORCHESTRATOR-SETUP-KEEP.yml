@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SETUP]
+test: ~
+---
+Kept settings
+are never overwritten by first setup, which reports the roles it could not route.

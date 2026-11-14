@@ -7,4 +7,4 @@ review: a2e3fcd9f24a82cc76bdf1e80832cdfa8f3e8bf0406780cf9d0f1a161fcb2735
 OpenAI-compatible API connections
 are the AI connections answering through any server speaking the OpenAI chat completions API, as many side by side as the server settings configure.
 
-[OPEN_AI_API.md](OPEN_AI_API.md)
+[design/connections/open_ai_api.md](design/connections/open_ai_api.md)

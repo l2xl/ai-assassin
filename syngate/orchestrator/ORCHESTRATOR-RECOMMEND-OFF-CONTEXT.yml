@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 249
+test: ~
+---
+Off-context agent setup
+depends purely on the exact agent prompt file. The caller's permissions, tools, skills are not derived..

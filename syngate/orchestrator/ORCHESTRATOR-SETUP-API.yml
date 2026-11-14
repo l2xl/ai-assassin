@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SETUP]
+test: ~
+---
+API agent routes
+are what first setup writes without the claude CLI: the agents go to the first connection of the settings offering a chat model, on its first model.

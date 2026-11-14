@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-MATCH]
+test: ~
+---
+Matched exchange
+— the matched message and the agent's report — is messages of the chat's log and of its session.

@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+order: 190
+test: {unit: ~, page: ~}
+---
+Stub
+is the one line a pruned step leaves in the session, naming its turn, its step and what it was, carried in the harness's next message.

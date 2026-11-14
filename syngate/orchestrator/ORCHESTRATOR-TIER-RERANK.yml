@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER]
+test: ~
+---
+Rerank signal
+ranks the shortlist of the dense signal by the reranker's score of the message against each statement.

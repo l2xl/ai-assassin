@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 232
+test: ~
+---
+Model recommendation
+is the setup call of the chat's own model naming another model for the task of a message.

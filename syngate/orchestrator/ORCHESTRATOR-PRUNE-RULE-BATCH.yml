@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+test: ~
+---
+Applied batch
+is pruned by rule to one line for each of its calls.

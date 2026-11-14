@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE, SYNTHETIC-TOOL-AGENT]
+order: 35
+test: ~
+---
+Own subagents off
+calls the Claude Code connector with its Agent and Task tools denied in every mode, so every subagent starts through the agent call.

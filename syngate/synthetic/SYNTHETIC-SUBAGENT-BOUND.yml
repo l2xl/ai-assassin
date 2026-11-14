@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-SUBAGENT]
+order: 10
+test: ~
+---
+DAG-bound subagent
+is a turn of an item's chat above that item's seed context, its start message holding only what the tree does not.

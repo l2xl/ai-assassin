@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 233
+test: ~
+---
+Recommendation at any time
+is accepted: a setup call may come at any answer of a session, as the sole call of that answer.

@@ -1,0 +1,10 @@
+---
+parents: [ORCHESTRATOR]
+order: 20
+sources: [src/ai_scratcher/services.py]
+test: ~
+---
+Model services
+are the roles the orchestrator needs a model for — embedding, rerank and every off-context agent — each given by the server settings a model locator, a model of any configured AI connection, or a list of them.
+
+[design/orchestrator/model_services.md](design/orchestrator/model_services.md)

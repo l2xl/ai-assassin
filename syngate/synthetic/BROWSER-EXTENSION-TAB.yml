@@ -8,3 +8,5 @@ review: 987fb14400b3f6d31099f2a78ce4c03fbaeff4df88cf350b8dc96baa5e901cf0
 ---
 Surf tab
 of a session is the one tab the extension drives for it, each answer but that of `close` carrying its page info and every request but `open` refused while none is open.
+
+[design/extension/surf_tab.md](design/extension/surf_tab.md)

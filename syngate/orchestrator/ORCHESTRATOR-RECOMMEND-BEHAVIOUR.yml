@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 250
+test: ~
+---
+Recommendation behaviour
+decides, above the recommendation and apart from how it was made, whether it is applied at once or asked of the user.

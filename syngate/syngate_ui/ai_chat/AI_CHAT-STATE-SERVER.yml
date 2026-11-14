@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-STATE]
+test: ~
+---
+Chat state
+is the server's and the same on every page, unread alone being the tab's.

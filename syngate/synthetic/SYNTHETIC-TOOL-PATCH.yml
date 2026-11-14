@@ -1,8 +1,9 @@
 ---
-parents: [SYNTHETIC-TOOLS]
-order: 45
+parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
+order: 410
 sources: [src/ai_scratcher/patchlib.py]
-review: 8ffcbd09722b2f4bbccc7622550d3ccd1f5522ea9d5ad022167eaec86fd30304
 ---
 Patch tool
-Changes project files of an answer by a unified diff applied with git, the switch Edit files gating it; syngate items are never in its reach.
+changes project files of an answer by a unified diff applied with git, the switch Edit files gating it; syngate items are never in its reach.
+
+[design/tools/patch.md](design/tools/patch.md)

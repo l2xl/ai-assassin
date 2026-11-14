@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+order: 6
+test: ~
+---
+External result
+is the result of a web fetch, a web search or a WebSurf call of any action, and the report of a subagent whose session took such text.

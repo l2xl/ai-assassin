@@ -1,0 +1,6 @@
+---
+parents: [CLAUDE_CODE]
+test: ~
+---
+Agent call of CLI
+runs an off-context agent as a fresh call of the CLI with the agent's prompt as its system prompt and every tool of the CLI's own denied.

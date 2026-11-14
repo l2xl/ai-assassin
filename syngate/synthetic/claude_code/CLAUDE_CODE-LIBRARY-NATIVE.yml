@@ -1,5 +1,5 @@
 ---
-parents: [CLAUDE_CODE]
+parents: [CLAUDE_CODE, AI_CONNECTION-LIBRARY]
 order: 130
 test: 5179e140ff8acc029c382124b2de0a1bc03b5d74c0db0027fde112a1c0d3f430
 review: 0b9ec9b69fb0791961a57e8cb72fbc7a16ee506f634fbee49fb4dbca90528716

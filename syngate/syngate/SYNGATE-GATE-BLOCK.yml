@@ -7,3 +7,5 @@ review: 4b126c94ede795d2a3b3bef6865823c5b4e08a645f92b5b1aedfae586aac9356
 Unapproved changes block the gate
 
 The gate shall fail when a reviewed item's content or frozen test routine changed without a user-approved re-review.
+
+[design/syngate/process.md](design/syngate/process.md)

@@ -1,0 +1,9 @@
+---
+parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
+order: 450
+sources: [src/ai_scratcher/prompts/shell.md]
+---
+Shell tool
+runs the command line of a shell call in the project root and returns its exit status and output as the next prompt.
+
+[design/tools/shell.md](design/tools/shell.md)

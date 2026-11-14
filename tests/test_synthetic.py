@@ -158,7 +158,7 @@ def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_requ
     assert synthetic.default_prompt({"rules": library["rules"]}) == "# Rules\nFollow them.\n\n# Skills on request\nLoad one with the `skill` tool:\nnone\n"
     shipped = synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
     assert shipped == synthetic.default_prompt(synthetic.LIBRARY) and not list(synthetic.PROMPTS_DIR.glob("CLAUDE.md"))
-    assert all(entry.text in shipped for entry in synthetic.LIBRARY.values() if entry.kind == "tool" or entry.default)
+    assert all(entry.text in shipped for entry in synthetic.LIBRARY.values() if entry.kind == "tool" or (entry.default and entry.delivery != "native"))
     assert all(f'"tool": "{tool}"' in shipped for tool in synthetic.CALLS)
 
 
@@ -166,9 +166,10 @@ def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_requ
 def test_the_tool_call_skill_is_a_default_skill_stating_the_answer_format_and_the_result_round_trip():
     skill = synthetic.SKILLS["call_tool"]
     assert skill.default and skill.text.startswith("# Tool calls\n")
-    for phrase in ('{"kind": "text", "text": "…"}', '{"kind": "calls", "calls": [...]', "```syngate", "text said beside tool calls",
+    for phrase in ('{"kind": "text", "text": "…"}', '{"kind": "calls", "calls": [...]', "text said beside tool calls", "ends the turn and is your reply",
                    "applied in order", "first refused one stops the batch", "next prompt"):
         assert phrase in skill.text
+    assert skill.delivery is None and "```syngate" not in skill.text and "plain" not in skill.text  # what one carrier alone needs is a skill of its delivery
 
 
 @pytest.mark.syngate("SYNTHETIC-SKILL-SYNGATE")
@@ -371,23 +372,22 @@ def test_claude_code_has_no_edit_mode_of_its_own_and_never_accepts_edits(tmp_pat
 @pytest.mark.syngate("CLAUDE_CODE-030")
 def test_internet_mode_allows_the_web_tools(tmp_path):
     argv = _mode_argv(tmp_path, ["internet"])
-    assert argv[argv.index("--allowedTools") + 1] == "Agent,WebSearch,WebFetch" and "--permission-mode" not in argv
-    bare = _mode_argv(tmp_path, [])
-    assert bare[bare.index("--allowedTools") + 1] == "Agent"
+    assert argv[argv.index("--allowedTools") + 1] == "WebSearch,WebFetch" and "--permission-mode" not in argv
+    assert "--allowedTools" not in _mode_argv(tmp_path, [])
 
 
 @pytest.mark.syngate("CLAUDE_CODE-040")
 def test_workflows_mode_allows_the_workflow_tool(tmp_path):
     argv = _mode_argv(tmp_path, ["workflows"])
-    assert argv[argv.index("--allowedTools") + 1] == "Agent,Workflow"
+    assert argv[argv.index("--allowedTools") + 1] == "Workflow"
     combined = _mode_argv(tmp_path, ["internet", "workflows"])
-    assert combined[combined.index("--allowedTools") + 1] == "Agent,WebSearch,WebFetch,Workflow"
+    assert combined[combined.index("--allowedTools") + 1] == "WebSearch,WebFetch,Workflow"
 
 
 @pytest.mark.syngate("CLAUDE_CODE-BASH-MODE")
 def test_raw_command_mode_allows_the_shell_tool(tmp_path):
     argv = _mode_argv(tmp_path, ["bash"])
-    assert argv[argv.index("--allowedTools") + 1] == "Agent,Bash" and "--permission-mode" not in argv
+    assert argv[argv.index("--allowedTools") + 1] == "Bash" and "--permission-mode" not in argv
     assert argv[argv.index("--disallowedTools") + 1] == ",".join(synthetic.claude_code_connector.denied)  # the tree stays closed to the shell too
     bare = _mode_argv(tmp_path, ["internet", "workflows"])
     assert "Bash" not in bare[bare.index("--allowedTools") + 1]
@@ -413,6 +413,46 @@ def test_tree_files_are_denied_to_read_and_edit_in_every_mode(tmp_path):
         assert {"Read(syngate/**)", "Edit(syngate/**)", "Write(syngate/**)"} <= set(argv[argv.index("--disallowedTools") + 1].split(","))
 
 
+@pytest.mark.syngate("CLAUDE_CODE-NO-AGENT")
+def test_own_agent_and_task_tools_are_denied_and_never_allowed_in_every_mode(tmp_path):
+    for modes in ([], ["internet"], list(synthetic.claude_code_connector.modes)):
+        argv = _mode_argv(tmp_path, modes)
+        allowed = argv[argv.index("--allowedTools") + 1].split(",") if "--allowedTools" in argv else []
+        assert {"Agent", "Task"} <= set(argv[argv.index("--disallowedTools") + 1].split(",")) and not {"Agent", "Task"} & set(allowed)
+
+
+@pytest.mark.syngate("CLAUDE_CODE-TOOL-SET", "argv")
+def test_the_cli_is_named_its_whole_built_in_tool_set_read_the_tools_of_the_modes_and_the_skill_tool(tmp_path):
+    named = lambda argv: argv[argv.index("--tools") + 1].split(",")
+    assert named(_mode_argv(tmp_path, [])) == ["Read"]
+    assert named(_mode_argv(tmp_path, ["internet"])) == ["Read", "WebSearch", "WebFetch"]
+    assert named(_mode_argv(tmp_path, ["internet", "bash", "workflows"])) == ["Read", "WebSearch", "WebFetch", "Bash", "Workflow"]
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(tmp_path / "claude_stub.py")), cwd=tmp_path)
+    skilled = {"zeta": synthetic.prompt("zeta", "skill", "Use when asked for zeta", False, "Zeta.\n")}
+    assert named(json.loads(connector.dispatch("", "Go.", modes=["internet"], library=skilled)[0])["argv"]) == ["Read", "WebSearch", "WebFetch", "Skill"]
+
+
+# Stub `claude` echoing its arguments and the environment it was started in.
+STUB_ENVIRONMENT = """
+import json, os, sys
+sys.stdin.readline()
+print(json.dumps({"type": "result", "result": json.dumps({"argv": sys.argv[1:], "env": dict(os.environ)}), "session_id": "s", "is_error": False}))
+"""
+
+
+@pytest.mark.syngate("CLAUDE_CODE-ISOLATION", "argv")
+def test_every_cli_call_leaves_out_the_setting_sources_the_mcp_servers_the_auto_memory_and_the_bundled_skills(tmp_path):
+    stub = tmp_path / "environment_stub.py"
+    stub.write_text(STUB_ENVIRONMENT)
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
+    for kwargs in ({}, {"modes": list(synthetic.claude_code_connector.modes)}, {"agent": synthetic.load_agents()["explore"]}):
+        echoed = json.loads(connector.dispatch("", "Go.", **kwargs)[0])
+        argv, env = echoed["argv"], echoed["env"]
+        assert argv[argv.index("--setting-sources") + 1] == "" and "--strict-mcp-config" in argv
+        assert json.loads(argv[argv.index("--mcp-config") + 1]) == {"mcpServers": {}}
+        assert env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1" and env["CLAUDE_CODE_DISABLE_BUNDLED_SKILLS"] == "1"
+
+
 # Stub `claude` answering through structured output, the reply text being something else entirely.
 STUB_STRUCTURED = """
 import json
@@ -422,14 +462,24 @@ print(json.dumps({"type": "result", "result": "the text the model also printed",
 
 
 @pytest.mark.syngate("CLAUDE_CODE-060")
-def test_the_answer_schema_carries_every_tool_call_and_the_structured_output_is_the_answer(tmp_path):
-    stub = tmp_path / "claude_stub.py"
-    stub.write_text(STUB_CLAUDE)
-    argv = json.loads(synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path).dispatch("", "Go.")[0])["argv"]
-    schema = json.loads(argv[argv.index("--json-schema") + 1])
-    assert schema == synthetic.ANSWER_SCHEMA and schema["properties"]["kind"]["enum"] == ["text", "calls"]
+def test_the_answer_schema_carries_the_kind_and_every_tool_call_and_no_text_and_the_structured_output_is_the_answer(tmp_path):
+    stub = tmp_path / "environment_stub.py"
+    stub.write_text(STUB_ENVIRONMENT)
+    connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
+
+    def handed(**kwargs):
+        """The schema a dispatch hands the CLI."""
+        argv = json.loads(connector.dispatch("", "Go.", **kwargs)[0])["argv"]
+        return json.loads(argv[argv.index("--json-schema") + 1])
+
+    schema, explore = handed(), synthetic.load_agents()["explore"]
+    assert set(schema["properties"]) == {"kind", "calls"} and schema["additionalProperties"] is False  # no field for text, and none admitted
+    assert schema == synthetic.answer_schema(synthetic.LIBRARY, text=False) and schema["properties"]["kind"]["enum"] == ["text", "calls"]
+    assert {**schema, "properties": {**schema["properties"], "text": synthetic.STRING}} == synthetic.ANSWER_SCHEMA  # the library's answer, less its text
     shapes = {shape["properties"]["tool"]["const"]: shape["required"] for shape in schema["properties"]["calls"]["items"]["anyOf"]}
     assert shapes == {tool: ["tool", *fields] for tool, fields in synthetic.CALLS.items()}
+    agent = handed(agent=explore)  # the turn of an off-context agent alike
+    assert set(agent["properties"]) == {"kind", "calls"} and agent == synthetic.agent_schema(explore, text=False) and agent != schema
     structured = tmp_path / "structured_stub.py"
     structured.write_text(STUB_STRUCTURED)
     answer, session = synthetic.claude_code_connector(cli=(sys.executable, str(structured)), cwd=tmp_path).dispatch("", "Go.")
@@ -477,10 +527,10 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     assert result["session"] == "session-5" and result["calls"] == [query, add, query, agent]
     assert (result["applied"], result["reply"]) == (["- added LEAF-002 under ROOT", "- agent LEAF-002: Checked."], "Done.")  # what was read stays out of the reply
 
-    app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}
+    app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}  # the same read every round: the stall breaker closes it after three, and the closing prompt is answered with calls again
     with pytest.raises(assassin_ui.ApiError, match="kept querying") as refused:
         ask(looping)
-    assert len(looping.prompts) == synthetic.QUERY_ROUNDS and refused.value.extra["session"] == f"session-{synthetic.QUERY_ROUNDS}"
+    assert len(looping.prompts) == 4 and refused.value.extra["session"] == "session-4"
 
     app.connectors = {"scripted": (unknown := ScriptedConnection(calls(query, {"tool": "query", "uid": "LEAF-009"}), {"kind": "text", "text": "No such leaf."}))}
     result = ask(unknown)
@@ -829,7 +879,7 @@ for event in json.load(open(os.path.join(here, "events.json"))):
     else:
         print(json.dumps(event), flush=True)
 print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "Done.",
-                  "structured_output": {"kind": "text", "text": "Done."}, "session_id": "session-s"}), flush=True)
+                  "structured_output": {"kind": "text"}, "session_id": "session-s"}), flush=True)
 """
 
 
@@ -881,9 +931,10 @@ def test_a_turn_streams_its_messages_tool_calls_results_and_subagents_as_steps_w
               _said(_use("t2", "Grep", pattern="x"), parent="a1"), _result("t2", [{"type": "text", "text": "found"}], parent="a1"),
               _said({"type": "text", "text": "Found it."}, parent="a1"), _said({"type": "text", "text": "leaf checked"}, parent="a1"),
               _result("a1", [{"type": "text", "text": "leaf checked"}]),
-              _said(_use("w1", "Workflow", script="run()")), _said(_use("t3", "Bash", command="ls"), parent="w1"), _result("t3", "inside", parent="w1"),
+              _said({"type": "text", "text": "Running it."}, _use("w1", "Workflow", script="run()")),
+              _said(_use("t3", "Bash", command="ls"), parent="w1"), _result("t3", "inside", parent="w1"),
               _result("w1", "workflow done"),
-              _said({"type": "text", "text": "Answering."}, _use("s1", "StructuredOutput", kind="text", text="Done.")), "not json"]
+              _said({"type": "text", "text": "Done."}), _said(_use("s1", "StructuredOutput", kind="text")), "not json"]
     answer, steps, announced = _announced(_streaming(tmp_path, events), "Go.", go=tmp_path / "go")
     assert answer == {"kind": "text", "text": "Done."}
     assert announced[0] == {"kind": "reasoning", "text": "Let me look.", "at": announced[0]["at"]}
@@ -892,8 +943,8 @@ def test_a_turn_streams_its_messages_tool_calls_results_and_subagents_as_steps_w
         {"kind": "tool", "name": "Read", "input": {"file_path": "README.md"}, "result": "readme text"},
         {"kind": "agent", "uid": "LEAF-001", "prompt": "@LEAF-001 check it\nthoroughly", "report": "leaf checked",
          "steps": [{"kind": "tool", "name": "Grep", "input": {"pattern": "x"}, "result": "found"}, {"kind": "message", "text": "Found it."}]},
-        {"kind": "workflow", "input": {"script": "run()"}, "result": "workflow done"},
-        {"kind": "message", "text": "Answering."}]
+        {"kind": "message", "text": "Running it."},
+        {"kind": "workflow", "input": {"script": "run()"}, "result": "workflow done"}]
     assert all(isinstance(step["seconds"], float) and step["seconds"] >= 0 for step in (steps[1], steps[2]["steps"][0]))
     ats = [step["at"] for step in steps]
     assert ats == sorted(ats) and all(isinstance(at, float) for at in ats)
@@ -905,6 +956,47 @@ def test_a_turn_streams_its_messages_tool_calls_results_and_subagents_as_steps_w
     _, steps, _ = _announced(_streaming(tmp_path, [_said(_use("a2", "Task", prompt="No anchor here\n@LATE-001 below"))]), "Go.")
     assert _without_at(steps) == [{"kind": "agent", "uid": None, "prompt": "No anchor here\n@LATE-001 below", "report": None, "steps": []}]
 
+
+
+@pytest.mark.syngate("CLAUDE_CODE-ANSWER-TEXT")
+def test_the_text_written_ahead_of_a_text_answer_or_of_the_streams_end_is_the_reply_and_the_text_ahead_of_a_call_is_a_message(tmp_path):
+    said = lambda text: _said({"type": "text", "text": text})
+    answer = lambda **given: _said(_use("s1", "StructuredOutput", **given))
+    note, reply, thought = said("Reading the guide."), said("All done."), _said({"type": "thinking", "thinking": "Now the tool."})
+    read, read_back = _said(_use("t1", "Read", file_path="README.md")), _result("t1", "readme text")
+    closing = {"type": "result", "subtype": "success", "is_error": False, "result": "The last words of the CLI."}
+    message, reasoning = {"kind": "message", "text": "Reading the guide."}, {"kind": "reasoning", "text": "Now the tool."}
+    tool = {"kind": "tool", "name": "Read", "input": {"file_path": "README.md"}, "result": "readme text"}
+    query = [{"tool": "query", "uid": "@"}]
+
+    def fed(*events):
+        """(the steps of a turn fed the events, the number of announcements heard after each of them, the text it wrote as its answer's)."""
+        heard, counts = [], []
+        turn = synthetic.turn_steps(heard.append)
+        for event in events:
+            turn.feed(json.dumps(event))
+            counts.append(len(heard))
+        return _without_at(turn.steps), counts, turn.text
+
+    assert fed(reply, answer(kind="text"), closing) == ([], [0, 0, 0], "All done.")  # the text ahead of a text answer is the reply, no step
+    assert fed(_said({"type": "text", "text": "All done."}, _use("s1", "StructuredOutput", kind="text")), closing) == ([], [0, 0], "All done.")
+    assert fed(reply, closing) == ([], [0, 0], "All done.")  # no answer tool called: the text ahead of the stream's end
+    assert fed(said("First."), said("Second."), answer(kind="text"), closing)[2] == "First.\n\nSecond."
+    assert fed(reply, answer(kind="text", text="In the tool."), closing)[2] == "All done."  # never a field of the answer tool
+    assert fed(answer(kind="text", text="In the tool."), closing)[2] == ""  # nothing written ahead of a text answer: it carries no text
+    assert fed(reply, answer(kind="text"), said("Bye."), closing) == ([], [0, 0, 0, 0], "All done.")  # nor is what was written past the answer
+    # a text is held back until what follows tells which it is: a message once a call follows
+    assert fed(note, read, read_back, reply, answer(kind="text"), closing) == ([message, tool], [0, 2, 3, 3, 3, 3], "All done.")
+    assert fed(note, read, read_back, answer(kind="text"), closing)[2] == ""  # what a call made a message is no reply
+    assert fed(note, answer(kind="calls", calls=query), closing) == ([message], [0, 1, 1], "")
+    assert fed(reply, thought, answer(kind="text"), closing) == ([reasoning], [0, 0, 1, 1], "All done.")  # the reasoning behind a reply stays a step
+    assert fed(note, thought, read) == ([message, reasoning, {**tool, "result": None}], [0, 0, 3], None)  # and keeps its place behind a message
+    dispatched = lambda *events: _announced(_streaming(tmp_path, list(events)), "Go.")
+    answered, steps, _ = dispatched(note, read, read_back, reply, answer(kind="text"))
+    assert answered == {"kind": "text", "text": "All done."} and _without_at(steps) == [message, tool]  # the text put back into the answer
+    assert dispatched(reply, answer(kind="text", text="In the tool."))[0] == {"kind": "text", "text": "All done."}
+    assert dispatched(note, read, read_back, answer(kind="text"))[0] == {"kind": "text", "text": ""}  # the harness refuses it as empty
+    assert dispatched(reply)[0] == {"kind": "text", "text": "All done."}
 
 
 @pytest.mark.syngate("CLAUDE_CODE-100")
@@ -919,8 +1011,9 @@ def test_reasoning_is_requested_through_the_effort_of_a_model_that_has_one_and_r
     assert "--effort" not in argv() and argv()[argv().index("--model") + 1] == "haiku"
     connector.dispatch("", "Go.", effort="low")
     assert argv()[argv().index("--effort") + 1] == "low"
-    _, steps, _ = _announced(_streaming(tmp_path, [_said({"type": "text", "text": "No thinking."})]), "Go.", model="sonnet", effort="max")
-    assert [step["kind"] for step in steps] == ["message"] and argv()[argv().index("--effort") + 1] == "max"
+    events = [_said({"type": "text", "text": "No thinking."}, _use("t1", "Read", file_path="README.md"))]
+    _, steps, _ = _announced(_streaming(tmp_path, events), "Go.", model="sonnet", effort="max")
+    assert [step["kind"] for step in steps] == ["message", "tool"] and argv()[argv().index("--effort") + 1] == "max"
 
 
 def _jsonl(path, *entries):
@@ -1057,3 +1150,24 @@ def test_the_answer_format_skill_is_a_default_skill_asking_long_or_secondary_lis
                    "the same file edited several times", "Lead with what the user needs", "more than about five entries", "the tests run",
                    "<details>\n<summary>14 tests passed</summary>\n\n- test_one", "</details>", "<details open>", "never collapse the whole answer"):
         assert phrase in skill.text
+
+
+@pytest.mark.syngate("SYNTHETIC-SKILL-ASSESS")
+def test_the_assessment_skill_is_a_default_skill_weighing_the_task_against_the_model_along_its_family_and_across_families_and_recommending_through_the_setup_call():
+    skill = synthetic.SKILLS["assess"]
+    assert skill.default and skill.text.startswith("# Model assessment\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    assert skill.text in synthetic.native_prompt(synthetic.read_library())  # a native connection carries the default skills too
+    for phrase in ("against the model your chat runs on", "first when the session opens", "lighter or heavier", '`{"tool": "models"}`',
+                   '`{"tool": "setup", "connection"', "Along the family", "Across families", "tiers of different families are not compared",
+                   "sole call of its answer", "at most once", "costs nothing but that answer", "costs the session its cache"):
+        assert phrase in skill.text
+
+
+@pytest.mark.syngate("SYNTHETIC-SKILL-ASSESS-CONTRADICTION")
+def test_the_assessment_skill_tells_a_turn_to_give_a_contradiction_notice_before_it_changes_anything():
+    skill = synthetic.SKILLS["assess"]
+    assert skill.default and "## Contradiction notice\n" in skill.text
+    notice = skill.text.split("## Contradiction notice\n", 1)[1]
+    for phrase in ("Before you change anything", "give a contradiction notice", "contradicts a statement of your context", "a design file",
+                   "before the first call that changes the tree or the project", "Where the message contradicts none, give none"):
+        assert phrase in notice

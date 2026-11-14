@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+test: ~
+---
+Tree read
+has its result pruned by rule.

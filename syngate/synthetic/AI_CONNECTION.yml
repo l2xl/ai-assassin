@@ -4,3 +4,5 @@ order: 30
 review: 186cc6c3a59c7589eb9c15913576121e2f920bc2db0501d6300811bd1ccb9759
 ---
 AI connection: provider-neutral connectors carrying a prompt to an AI provider and its reply back
+
+[design/connections/ai_connection.md](design/connections/ai_connection.md)

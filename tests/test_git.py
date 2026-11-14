@@ -233,3 +233,40 @@ def test_a_git_command_the_tool_does_not_run_but_erasing_nothing_is_refused_with
     outcome = turn(base, app, "ROOT", "Reset it.", modes=[])
     assert "refused" in outcome["applied"][0] and assassin_ui.GIT_SHELL_HINT not in outcome["applied"][0]  # never for a command that erases
     assert "submodule" in synthetic.LIBRARY["git"].text and "shell" in synthetic.LIBRARY["git"].text
+
+
+@pytest.mark.syngate("SYNTHETIC-TOOL-GIT-PATH")
+def test_a_git_call_with_a_path_runs_in_the_submodule_it_names_and_refuses_any_path_that_is_no_work_tree_root_of_the_project(repo_server, tmp_path_factory):
+    base, app = repo_server
+    origin = tmp_path_factory.mktemp("origin")
+    for args in (("init", "-q", "-b", "main"), ("config", "user.email", "tester@example.com"), ("config", "user.name", "Tester"),
+                 ("config", "commit.gpgsign", "false")):
+        git(origin, *args)
+    (origin / "f.txt").write_text("one\n")
+    git(origin, "add", "-A")
+    git(origin, "commit", "-q", "-m", "One")
+    git(app.root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(origin), "libs/foo")
+    git(app.root, "commit", "-q", "-m", "Add the submodule")
+    sub = app.root / "libs" / "foo"
+    for args in (("config", "user.email", "tester@example.com"), ("config", "user.name", "Tester"), ("config", "commit.gpgsign", "false")):
+        git(sub, *args)
+    (sub / "f.txt").write_text("two\n")
+    where = {"tool": "git", "path": "libs/foo"}
+    app.connectors = {"echo": (scripted := Scripted(calls({"tool": "git", "command": "status --short"}, {**where, "command": "status --short"}),
+                                                    calls({**where, "command": "add f.txt"}, {**where, "command": "commit -m 'Change inside'"}),
+                                                    {"kind": "text", "text": "Done."}))}
+    outcome = turn(base, app, "ROOT", "Change the submodule.", modes=[])
+    assert scripted.heard[1]["text"] == synthetic.RESULTS_PREAMBLE + "- git status --short:\nexit 0\n m libs/foo\n- git -C libs/foo status --short:\nexit 0\n M f.txt"
+    assert "\n".join(outcome["applied"]).startswith("- git -C libs/foo add f.txt:\nexit 0\n- git -C libs/foo commit -m 'Change inside':\nexit 0\n[main ")
+    assert git(sub, "log", "-1", "--format=%s") == "Change inside\n" and git(app.root, "log", "-1", "--format=%s") == "Add the submodule\n"  # the root's history stayed
+    assert git(app.root, "status", "--short") == " M libs/foo\n"  # its pointer is a change of the project, left to be committed there
+    assert gitlib.workdir(app.root, ".") == app.root.resolve() and gitlib.workdir(app.root, "libs/foo") == sub.resolve()
+    (app.root / "docs").mkdir()
+    (app.root / "linked").symlink_to(origin)
+    for path in ("/etc", "..", "libs/../..", str(origin), "linked", "libs/foo/../../..", ".git", ".git/modules", "libs/foo/.git", "syngate", "syngate/sub", "docs", "libs", "missing", "libs/foo/f.txt", ""):
+        with pytest.raises(gitlib.refused):
+            gitlib.workdir(app.root, path)
+    app.connectors = {"echo": (Scripted(calls({**where, "command": "reset --hard"}), {"kind": "text", "text": "Stopped."},
+                                        calls({"tool": "git", "path": "docs", "command": "status"}), {"kind": "text", "text": "Stopped."}))}
+    assert "- git -C libs/foo reset --hard refused: 'reset' is not a command of the git tool" in turn(base, app, "ROOT", "Reset it.", modes=[])["applied"][0]  # the guard judges the command as ever
+    assert "- git -C docs " in turn(base, app, "ROOT", "Look in docs.", modes=[])["applied"][0] and "`path`" in synthetic.LIBRARY["git"].text

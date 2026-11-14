@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
+order: 40
+test: ~
+---
+Replayed entries
+are a turn's own: a pruned result made its form in the prompt entry that carried it, a pruned AI text's entry left out unless it is its answer's only block, every bookkeeping entry of the CLI left out, the entries re-chained past what was left out and no thinking entry changed, its signature staying valid.

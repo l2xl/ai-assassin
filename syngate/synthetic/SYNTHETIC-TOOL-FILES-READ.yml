@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-FILES]
+test: ~
+---
+File read
+returns the lines of a text file under their numbers, a read past the size limit cut with the line to go on from.

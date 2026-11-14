@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY-DROP]
+test: ~
+---
+Drop session
+is the new session of the conversation, composed without the dropped result, that dropping a finding's result starts.

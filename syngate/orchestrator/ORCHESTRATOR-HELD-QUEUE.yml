@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-HELD]
+test: ~
+---
+Held turn queue
+keeps a message typed while a turn is held behind that turn.

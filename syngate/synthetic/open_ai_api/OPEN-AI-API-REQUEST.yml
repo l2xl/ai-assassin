@@ -6,3 +6,5 @@ review: 724763bc53dec9ecffad4c6fe5b3fd08227b0588ae24e08f5aaee24f7360f734
 ---
 Chat request
 carries the seed context, then the session's earlier messages, then the user's text with its images.
+
+[design/connections/api_turn.md](design/connections/api_turn.md)

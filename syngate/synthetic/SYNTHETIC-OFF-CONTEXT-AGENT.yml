@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-PROMPTS]
+order: 40
+---
+Off-context agent prompt
+is a prompt of the library that stands as the whole system prompt of a turn run above no item's seed context, with the tools and skills its own lists name and no others.
+
+[design/synthetic/agents.md](design/synthetic/agents.md)

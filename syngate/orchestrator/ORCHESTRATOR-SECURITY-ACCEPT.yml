@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+order: 312
+test: ~
+---
+Accepted finding
+is saved by its exact wording for the user, in the `.ai-assassin` folder of the user's home, the same wording being no finding again in any project.

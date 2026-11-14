@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+order: 316
+test: ~
+---
+Malformed scan answer
+— one naming a span absent from the text, or not matching its schema — counts as a finding.

@@ -1,0 +1,26 @@
+# Model preset mi50-llamacpp: llama.cpp on the two 32 GB AMD Instinct MI50 cards of the user's server, generic -- it defines no model of its own.
+# An independent docker compose project; a service merges x-server and adds its command, its port and its labels.
+name: assassin-mi50-llamacpp
+
+x-assassin:
+  description: llama.cpp on the two 32 GB AMD Instinct MI50 cards of the user's server, no model defined
+  host: ssh://alexey@213.158.1.168:49999
+
+# What every service on the cards needs: the gfx906 llama.cpp image, the cards, and the GGUF folder of the server (MI50_MODELS).
+x-server: &server
+  image: mixa3607/llama.cpp-gfx906:v0.8.0-rocm-10.1
+  restart: unless-stopped
+  volumes: ["${MI50_MODELS:-/home/alexey/models}:/models:ro"]
+  devices: ["/dev/kfd:/dev/kfd", "/dev/dri:/dev/dri"]
+  group_add: ["44", "990"]  # video and render of that host
+  ipc: host
+  security_opt: ["seccomp=unconfined"]
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    interval: 10s
+    timeout: 3s
+    retries: 3
+    start_period: 900s
+    start_interval: 3s
+
+services: {}

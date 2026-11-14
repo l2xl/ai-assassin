@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY, AI-CHAT]
+order: 370
+test: ~
+---
+Security alert
+holds the altering call or the permission recommendation under every recommendation behaviour while a finding is unsettled.

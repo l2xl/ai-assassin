@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-STATE]
+test: ~
+---
+State mark
+is the same on the outline row, on a hidden chat's ▾ and on a subagent's indicator.

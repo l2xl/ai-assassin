@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+test: ~
+---
+Quiet session
+— one without a new external result — runs no further scan, however many altering calls follow.

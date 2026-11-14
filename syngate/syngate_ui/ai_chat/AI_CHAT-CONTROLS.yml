@@ -6,3 +6,5 @@ review: c50f642e13d553bb2d414e8cff2803ffcbc3eda60f0ec46808bb2a894aa4b33b
 ---
 Message marks
 are the fold and extraction marks on the block's border lines of every message but the statement, shown while the pointer is over the message and none of its text is selected.
+
+[design/chat/marks.md](design/chat/marks.md)

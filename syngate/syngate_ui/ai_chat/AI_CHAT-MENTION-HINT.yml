@@ -6,3 +6,5 @@ review: 29db9e5060a10d34fdbde62a1ee42c22829cfd2764f725739d89efada629140d
 ---
 Mention hint
 opens while `@` is typed in a description editor or a reply line, offering the matching items and project files to insert, never the item files under `syngate/`.
+
+[design/chat/mention_hint.md](design/chat/mention_hint.md)

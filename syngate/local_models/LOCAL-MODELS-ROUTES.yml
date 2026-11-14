@@ -1,0 +1,7 @@
+---
+parents: [LOCAL-MODELS-PRESET]
+order: 60
+test: ~
+---
+Routes command
+prints the settings that reach a preset: a connection for every model and the orchestrator's route of every service named as one of its roles.

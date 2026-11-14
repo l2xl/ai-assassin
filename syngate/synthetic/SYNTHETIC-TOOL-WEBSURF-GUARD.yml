@@ -1,5 +1,5 @@
 ---
-parents: [SYNTHETIC-TOOL-WEBSURF]
+parents: [SYNTHETIC-TOOL-WEBSURF, AI_CHAT-PERMISSION-WEBSURF]
 test: {scheme: 8e7a8c12b0c1dc8b0e2202a03d609a2e73819d7362592dc8bde6724d7225eef5, allowlist: 40ee2221c7c60e86fed9515bc79647be2fa2a536b24ded6a80716ef9c16612ff,
   blocklist: b246c70b7428ffe8181633d8bf42cbe19e36f462dd9fc6846e7387e7687cf53b, private: 716a0745bafba61aef2400da38e762077139583f8a66048b087ef6da36ea95eb,
   origin: 16931b18fc31c0e91ef2ab228af5d61818fe04b6eafe3c6397d2031c30bc1b43, landed: 31816e58c12006e18fe7a2ec6db15d54ad9a94efaa675954873cff3e86f89265,
@@ -9,3 +9,5 @@ review: a4986bf81a7d689ee1aa0784d510c0b41f04560d0da0007c65878184faced44a
 ---
 WebSurf guard
 of the harness refuses a websurf call before anything reaches the browser unless it is well-formed and the origin it names passes the host lists, and withholds a landed page those lists refuse but for its origin.
+
+[design/tools/websurf_guard.md](design/tools/websurf_guard.md)

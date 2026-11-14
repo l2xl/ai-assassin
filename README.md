@@ -5,17 +5,24 @@ user–AI dialog and synthesis of its content into a **Synergy Context Gate (syn
 statements about the project of chat subject that then constructs the optimal context for the AI model,
 per replica of the dialog.
 
-AI Assassin is the synergy of three parts:
+AI Assassin is the synergy of four parts:
 
 - **Syngate** (`syngatelib`, the `syngate` CLI, `render_syngate_report`, `check_self_approval`,
-  [SYNGATE.md](SYNGATE.md)) — the subsystem managing the project's DAG, its test coverage and
+  [design/syngate/syngate.md](design/syngate/syngate.md)) — the subsystem managing the project's DAG, its test coverage and
   review status as a gate: open while everything passes, closed by anything failed.
-- **Synthetic** (`synthetic`, [SYNTHETIC.md](SYNTHETIC.md)) — the AI harness core: the prompt
+- **Synthetic** (`synthetic`, [design/synthetic/synthetic.md](design/synthetic/synthetic.md)) — the AI harness core: the prompt
   library under `src/ai_scratcher/prompts/` — whose default skill
   [syngate.md](src/ai_scratcher/prompts/syngate.md) is the one statement of the rules the items
-  follow — the seed context, the AI connections and the tool call protocol.
-- **AI Assassin UI** (`assassin_ui`, the `assassin` command, [ASSASSIN_UI.md](ASSASSIN_UI.md),
-  [AI_CHAT.md](AI_CHAT.md)) — the application joining both: the outline and document of the DAG
+  follow — the seed context, the AI connections and the tool call protocol. Its tools are
+  executed by the harness alone, the same for every connection. Every session it runs is a subagent
+  ([design/synthetic/subagents.md](design/synthetic/subagents.md)). Designed on top of it and not yet implemented in full: the orchestrator
+  choosing a turn's agent, context, setup and what stays in the session
+  ([design/orchestrator/orchestrator.md](design/orchestrator/orchestrator.md)).
+- **Local models** (`local_models`, the `assassin-models` command,
+  [design/local_models/local_models.md](design/local_models/local_models.md)) — presets of model servers for the user's own machines,
+  each a docker compose project.
+- **AI Assassin UI** (`assassin_ui`, the `assassin` command, [design/ui/assassin_ui.md](design/ui/assassin_ui.md),
+  [design/chat/ai_chat.md](design/chat/ai_chat.md)) — the application joining both: the outline and document of the DAG
   with the AI chat anchored at every item.
 
 A conversation with AI Assassin starts as an ordinary AI chat. Iteratively, the dialog is
@@ -31,18 +38,18 @@ DAG asserts.
 Both directions of the loop are what the toolkit implements:
 
 - **Dialog → DAG (analysis).** Items are plain text files — a YAML front matter of attributes over
-  a markdown statement — shaped only by `parents` (*Tree Model* in [SYNGATE.md](SYNGATE.md)). The
+  a markdown statement — shaped only by `parents` (*Tree Model* in [design/syngate/model.md](design/syngate/model.md)). The
   AI Assassin UI (`assassin`) shows the DAG as an outline and as one structured document, and the
   AI agent restructures it through *tree calls* — add, remove, move — never by editing files.
 - **DAG → context (synthesis).** The seed context of an item is the chain of its ancestors'
   statements, root first, then its own, then those of all its descendants in depth, so the root's
   is the whole DAG; every item enters once at its first occurrence (`SYNGATE-010`). That selection,
   and only that selection, is what a replica anchored at the item is answered from
-  ([SYNTHETIC.md](SYNTHETIC.md)).
+  ([design/synthetic/seed_context.md](design/synthetic/seed_context.md)).
 - **Gate.** Two optional disciplines turn a DAG into a gate: *review* stamps an item as approved by
   the user, so the DAG cannot drift from what was agreed, and *test* binds an item to executable
   routines, so the DAG cannot drift from what the code does (*Process Rules* in
-  [SYNGATE.md](SYNGATE.md)). Both are switched on the root item and are off by default.
+  [design/syngate/model.md](design/syngate/model.md)). Both are switched on the root item and are off by default.
 
 Product architecture definition through AI dialog analysis and synthesis is one use case of this loop:
 with `test` and `review` on, the DAG of a software project is its architecture and contract tree,
@@ -58,15 +65,15 @@ as the project's history (`gitlib`); without one everything works as before, not
 
 - **The AI reads and records the history through the git tool**, never through raw shell commands:
   it reads anything, stages, commits and branches in every chat, no switch withholding it, and nothing
-  it may call erases or rewrites what git holds; publishing stays the user's act ([SYNTHETIC.md](SYNTHETIC.md)).
+  it may call erases or rewrites what git holds; publishing stays the user's act ([design/tools/git.md](design/tools/git.md)).
 - **Content commits are made with the AI.** The chat that made a change knows it best, so
   `⎇ Commit with AI` of the status popup asks the item's chat to commit the uncommitted changes, the
   AI condensing them into the message.
 - **A review approves committed content and is committed itself.** `syngate review` refuses an item
   whose footprint — what its statement is built from — holds uncommitted changes
-  ([SYNGATE.md](SYNGATE.md)), and the page's review commits the stamps it wrote, alone, right after:
+  ([design/syngate/cli.md](design/syngate/cli.md)), and the page's review commits the stamps it wrote, alone, right after:
   `Review: <subject>` of the one content commit it approves, or a message the AI formulates over
-  several ([ASSASSIN_UI.md](ASSASSIN_UI.md)). The history thus alternates content commits and the
+  several ([design/ui/status_popup.md](design/ui/status_popup.md)). The history thus alternates content commits and the
   review commits approving them, the two-commit re-approval the CI checks.
 
 # Install and run
@@ -86,7 +93,7 @@ Toolkit tests: `pip install -e .` then `pytest`.
 **Managed project root**: `--root PATH` on any command, else the `SYNGATE_ROOT` environment
 variable, else the nearest ancestor of the working directory holding a `syngate/` folder. `assassin`
 falls back to the working directory itself and, on a project without any item file, bootstraps
-`syngate/` with one root item named after the project ([ASSASSIN_UI.md](ASSASSIN_UI.md#the-server)). Test
+`syngate/` with one root item named after the project ([design/ui/server.md](design/ui/server.md)). Test
 discovery scans `scripts/tests/` and `tests/` for pytest bindings and `test/` for Catch2 ones.
 
 # Contributing
@@ -122,7 +129,7 @@ started from a managed project's checkout the same install edits that project's 
 
 Every behaviour change is also a tree change: the item stating it is added or reworded under the
 rules of [syngate.md](src/ai_scratcher/prompts/syngate.md), test-first, and the user's review then
-freezes its bound routine (*Process Rules* in [SYNGATE.md](SYNGATE.md)). Because a frozen routine is
+freezes its bound routine (*Process Rules* in [design/syngate/process.md](design/syngate/process.md)). Because a frozen routine is
 hashed over its raw source, the bound tests import the toolkit modules by their bare names
 (`import syngatelib`, aliased in `tests/conftest.py`), and new tests do the same; test modules name
 the item they cover in their docstring and build fixture trees through the `syngate_tree` fixture.

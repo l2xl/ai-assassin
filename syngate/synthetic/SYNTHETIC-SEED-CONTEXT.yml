@@ -5,3 +5,5 @@ review: 42f9b58fc71c13435d51c0aaf65c775d680c5bd38cd6b50fe396e3007f16ef21
 ---
 Seed context
 of an item is the default prompt of the prompt library offered to the exchange, then the statements of the item's selection, then their key source files, each once.
+
+[design/synthetic/seed_context.md](design/synthetic/seed_context.md)

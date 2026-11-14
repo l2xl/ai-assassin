@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TURN-LIMITS]
+test: ~
+---
+Round fuse
+is `orchestrator.rounds` of the server settings, 100 without it, bounding the rounds of a turn that has not surfed.

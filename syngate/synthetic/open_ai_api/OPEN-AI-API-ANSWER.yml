@@ -1,6 +1,6 @@
 ---
-parents: [OPEN-AI-API]
-order: 60
+parents: [OPEN-AI-API, SYNTHETIC-ANSWER]
+order: 500
 test: {schema: c4309daeb929f29173ec358cd7b95ff6ecdf81161b6cef70216de0955667760d}
 review: 81a4ae0e9790ffb72230bc4c73f0d52d821f3c557cb9590f2e011af03cac8f6c
 ---

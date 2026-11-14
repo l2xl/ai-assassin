@@ -5,4 +5,6 @@ test: 7fe0e4616954e339d138ab0998c445d64594fffd83ea8699ca48778dacde1404
 review: 9edd1716cc0b6997255cb4cfdffc91a3cfd7560230a1561ca93d5d5900578e19
 ---
 Turn steps in order
-are blocks of the log in the order they happened, with no reply chosen above them: the messages the AI said on the way are AI messages of their own, and every other step — each call of a batch and each changed file on its own — is a line of the harness that unfolds to its whole input and result; the reply is the last block, closed by the turn's activity line.
+are blocks of the log in the order they happened, with no reply chosen above them: the messages the AI said on the way are AI messages of their own, each text shown once however many ways the connection reported it, and every other step — each call of a batch and each changed file on its own — is a line of the harness that unfolds to its whole input and result; the reply is the last block, closed by the turn's activity line.
+
+[design/chat/turn_blocks.md](design/chat/turn_blocks.md)

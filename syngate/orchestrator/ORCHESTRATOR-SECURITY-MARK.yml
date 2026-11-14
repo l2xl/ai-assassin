@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+test: ~
+---
+Scan mark
+is set by an external result and holds the next altering call until what came in since the last scan is scanned.

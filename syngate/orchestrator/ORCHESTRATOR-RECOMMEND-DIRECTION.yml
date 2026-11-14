@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 236
+test: ~
+---
+Recommendation direction
+is a lower for a model of the chat's family at a lower tier and a raise at a higher one; a switch for a model of another family, or one without family or tier; a raise for a permission.

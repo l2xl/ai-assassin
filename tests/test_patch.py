@@ -65,6 +65,8 @@ def test_the_edit_files_switch_gates_the_patch_calls_of_a_turn(repo_server):
     base, app = repo_server
     app.connectors = {"echo": (scripted := Scripted(calls({"tool": "patch", "diff": GUIDE}), {"kind": "text", "text": "Could not."},
                                                     calls({"tool": "patch", "diff": GUIDE})))}
+    from test_recommend_turn import answering
+    answering(app, "ROOT", "deny")  # the held call is denied by the user
     outcome = turn(base, app, "ROOT", "Edit the guide.", modes=["tree"])
     assert outcome["applied"][0].startswith("- patch refused: ") and outcome["reply"] == "Could not."
     assert app.root.joinpath("GUIDE.md").read_text() == "# Guide\n"
@@ -116,5 +118,7 @@ def test_a_replace_call_changes_the_one_occurrence_of_an_exact_text_under_the_pa
     assert app.root.joinpath("paper.md").read_text() == text
     assert turn(base, app, "ROOT", "Drop it.", modes=["patch"])["applied"] == ["- replace changed paper.md"]  # no `new` deletes the text
     assert not app.root.joinpath("paper.md").read_text().endswith("Twice.\n")
+    from test_recommend_turn import answering
+    answering(app, "ROOT", "deny")  # the held call is denied by the user
     assert turn(base, app, "ROOT", "Off.", modes=[])["applied"][0].startswith(f"- replace refused: {assassin_ui.PATCH_REFUSAL}")
     assert '"tool": "replace"' in synthetic.LIBRARY["patch"].text

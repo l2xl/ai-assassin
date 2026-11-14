@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+order: 314
+test: ~
+---
+Dropped ground
+refuses a held call back to the model when a finding's result was dropped.

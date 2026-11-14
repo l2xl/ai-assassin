@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-STATE]
+test: ~
+---
+Working chat
+has a turn running and is marked by a spinner.

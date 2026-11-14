@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+test: ~
+---
+AI text
+of the ended turn is pruned when the prune agent finds it states nothing the session lacks.

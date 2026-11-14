@@ -6,3 +6,5 @@ review: a9f5a4e5b0427b0652502d797ce9f1a6bab0e54c9b2381b056164174c7c07d06
 ---
 Message styles
 switch one thing between the roles: the user's messages read as the description, left on the panel background and shown as typed; the AI's replies sit right, highlighted and rendered.
+
+[design/chat/messages.md](design/chat/messages.md)

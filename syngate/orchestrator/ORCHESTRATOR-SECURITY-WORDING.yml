@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+test: ~
+---
+Scan wording
+for a scan without findings is `nothing found`, never `safe`.

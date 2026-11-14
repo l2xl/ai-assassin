@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+test: ~
+---
+Prune input
+is the texts of the ended turn and the stubs of its steps, not the session.

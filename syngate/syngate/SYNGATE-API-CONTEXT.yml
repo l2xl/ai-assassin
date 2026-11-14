@@ -1,9 +1,7 @@
 ---
 parents: [SYNGATE-API]
 order: 70
-test: b28740b94f9e1bc115f0af4d65ba32215fee74033421bec21a04a3ae51ad5bdb
-review: e0dd7140639984c2c01b99dbb7d556f76650daead334fff799b218d5c15296f0
+test: ~
 ---
-Node context
-
-The syngate context call shall return an item's seed AI-context exactly as an AI call anchored at the item is seeded from it, the item marked as the active item or, where the call names a `label`, as that label says.
+Syngate context
+returns an item's AI-context exactly as an AI call anchored at the item is seeded from it, the item marked as the active item or, where the call names a `label`, as that label says.

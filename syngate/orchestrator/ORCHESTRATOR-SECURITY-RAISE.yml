@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+order: 7
+test: ~
+---
+Raise scan
+runs before a permission recommendation is applied or asked.

@@ -1,8 +1,9 @@
 ---
 parents: [SYNTHETIC]
 order: 35
-test: c91d76a7232e38b88d85d08f060aebc22a1d4d652f672b30958c77ad34074b51
-review: 5a94545149629d9f9a6dc9bfb49c6f9407a6a271690f25987fda64f40a4e8a33
+test: ~
 ---
 Prompt library
-The prompt library shall be the markdown files under the package's `prompts/` folder, each a skill or a tool named by its file stem.
+is the markdown files under the package's `prompts/` folder, each a skill, a tool or an agent named by its file stem.
+
+[design/synthetic/prompt_library.md](design/synthetic/prompt_library.md)

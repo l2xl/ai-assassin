@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC]
+order: 25
+---
+Orchestrator
+is the part of Synthetic deciding for every turn which agent answers it, above which context, with which model and permissions, and what of it stays in the session.
+
+[design/orchestrator/orchestrator.md](design/orchestrator/orchestrator.md)

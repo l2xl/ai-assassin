@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-TIER]
+order: 130
+test: ~
+---
+Kept context
+is the system prompt of a session, composed once with its files as measured and sent unchanged for as long as the session lives.

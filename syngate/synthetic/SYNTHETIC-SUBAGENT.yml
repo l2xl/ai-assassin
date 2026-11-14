@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC]
+order: 36
+---
+Subagent
+is every LLM session the harness runs, DAG-bound or off-context, each started through the harness and shown in the chat it was started from.
+
+[design/synthetic/subagents.md](design/synthetic/subagents.md)

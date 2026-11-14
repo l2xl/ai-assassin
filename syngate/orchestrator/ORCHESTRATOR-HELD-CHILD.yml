@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-HELD]
+test: ~
+---
+Held delegated turn
+is held in its own chat, its hold showing as blocked in the chat it was started from.

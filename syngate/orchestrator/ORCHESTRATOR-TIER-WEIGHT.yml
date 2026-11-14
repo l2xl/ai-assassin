@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER]
+test: ~
+---
+Signal weight
+is the weight of the settings a signal enters the fusion under, 1 without it.

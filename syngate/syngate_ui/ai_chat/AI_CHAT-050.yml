@@ -6,3 +6,5 @@ review: 0080f02f1eec3409585e030151a0c051f3f17199ba06d9212d9c1829b4e1014f
 ---
 Item reference
 in a chat message is `@UID`, the way a file is named, the harness bringing the item's statement into the turn.
+
+[design/chat/item_reference.md](design/chat/item_reference.md)

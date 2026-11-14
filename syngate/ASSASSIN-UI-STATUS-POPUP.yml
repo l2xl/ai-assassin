@@ -6,3 +6,5 @@ review: af21166e9e0f29fed8b9acadb9b8373f9d169c44e852dcc5d844e907dc384594
 ---
 Status popup
 opens from the composite status icon of the common label in either pane and details the item's two status axes, nothing else on the page showing the status in detail.
+
+[design/ui/status_popup.md](design/ui/status_popup.md)

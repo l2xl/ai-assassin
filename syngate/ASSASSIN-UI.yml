@@ -6,4 +6,4 @@ review: a8a930689fe714c59cfd324a568048e2d3b30207d1dc081e96783b9a0ce3f476
 AI Assassin UI
 is the local browser application of AI Assassin: the outline of the DAG, the document of its items and the AI chat anchored at each item.
 
-[ASSASSIN_UI.md](ASSASSIN_UI.md)
+[design/ui/assassin_ui.md](design/ui/assassin_ui.md)

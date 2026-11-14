@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 240
+test: ~
+---
+Recommendation pause
+holds the turn on a recommendation that is asked until the user accepts or denies it.

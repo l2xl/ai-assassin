@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER-LARGE]
+test: ~
+---
+Rerank score of segments
+of an item is the greatest score the reranker gives any of the few end segments of the message against the item's statement.

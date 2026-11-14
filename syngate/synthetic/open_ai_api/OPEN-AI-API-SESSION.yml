@@ -6,3 +6,5 @@ review: 3a26456852f1a7a0ecbd0e4083d5d6f4ce727d0f97a7386f2bdd474148834e6c
 ---
 Conversation session
 is kept by the connection itself, resent by a turn resuming it and written only once an answer is in.
+
+[design/connections/api_session.md](design/connections/api_session.md)

@@ -1,0 +1,10 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND-MODEL, SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
+order: 430
+sources: [src/ai_scratcher/prompts/setup.md]
+test: ~
+---
+Setup tool
+lets an answer read the models a chat may run on and recommend one of them with its reason; it names no permission.
+
+[design/tools/setup.md](design/tools/setup.md)

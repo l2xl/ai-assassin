@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-STATE]
+test: ~
+---
+State title
+names the state of its mark and, for blocked, what is asked.

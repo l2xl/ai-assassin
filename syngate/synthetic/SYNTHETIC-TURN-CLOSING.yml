@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TURN-LIMITS]
+order: 20
+test: ~
+---
+Closing report
+is the one text answer asked of a turn the harness closes, at its fuse or stalled: headed by the harness's line telling why it was closed, it is the turn's reply, a delegated turn thus reporting; calls in it are not run and end the turn refused.

@@ -6,3 +6,5 @@ review: a93be166db395ba4231561555c1d772542921eb10016be8b401c5e2ab815abdf
 ---
 Model selection
 sends the chosen model id unchanged, and the chosen effort only when the model lists it.
+
+[design/connections/api_models.md](design/connections/api_models.md)

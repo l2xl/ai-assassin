@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-HELD]
+test: ~
+---
+Held turn stop
+ends a held turn as Stop ends a running one.

@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+test: ~
+---
+Alert retry
+is offered by the blocking alert and checks the failed role again.

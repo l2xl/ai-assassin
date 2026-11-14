@@ -1,5 +1,5 @@
 ---
-parents: [CLAUDE_CODE]
+parents: [CLAUDE_CODE, AI_CHAT-STOP-BUTTON]
 order: 80
 test: {interrupt: 6f24efcc1d9b09539963c2aa9bc8d4f6a847700072d2c84ed96d8d5496477960, gate: 791156cf36e74383d121c7cc813c3f0b0aaffc7d46550679b61bfab996a69c6a}
 review: c05c7dfb5092c639931fbab0e95c2d628ac6ef514d575c78f4df66b5fd66f7cc

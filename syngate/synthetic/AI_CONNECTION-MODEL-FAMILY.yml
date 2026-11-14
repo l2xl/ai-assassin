@@ -1,0 +1,7 @@
+---
+parents: [AI_CONNECTION]
+sources: [src/ai_scratcher/api_connection.py]
+test: ~
+---
+Model family
+is the line of models a configured model is declared to belong to, its tier its place within that line, a larger tier the stronger model; the connection's settings list them with each model that declares a family.

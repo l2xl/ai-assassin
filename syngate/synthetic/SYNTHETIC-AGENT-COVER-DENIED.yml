@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-SUBAGENT-OFF-CONTEXT]
+order: 45
+test: ~
+---
+Cover denial
+forbids the whole run of an agent when the user denies a permission it needs, or denied it before in the conversation, and stops it: no turn of the agent starts.

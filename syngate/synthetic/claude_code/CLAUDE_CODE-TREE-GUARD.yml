@@ -1,5 +1,5 @@
 ---
-parents: [CLAUDE_CODE]
+parents: [CLAUDE_CODE, SYNTHETIC-TOOL-FILES]
 order: 55
 test: 729792adb720dea56cd4d6eab90d4ca2f4582e5db4c05e95baf91d27d35a47b6
 review: b4210c29d520c32d44f179277ff454fdf10af454c14997f632ef08aec0fb6475

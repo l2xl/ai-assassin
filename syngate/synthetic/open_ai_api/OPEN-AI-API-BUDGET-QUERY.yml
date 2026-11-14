@@ -1,0 +1,6 @@
+---
+parents: [OPEN-AI-API-BUDGET]
+test: ~
+---
+Queried model efforts
+offers a queried model of a server that reports load states or the owner `llamacpp` the efforts `low`, `medium` and `high` with the budgets 1024, 2048 and 4096 tokens, and one of any other server only the efforts the connection's `reasoning_budgets` name; a table the connection declares replaces the default one.

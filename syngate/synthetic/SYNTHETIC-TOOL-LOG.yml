@@ -1,0 +1,9 @@
+---
+parents: [ORCHESTRATOR-PRUNE, SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
+order: 440
+test: ~
+---
+Log tool
+returns the steps of a turn of the chat one line each, or one step in full.
+
+[design/tools/log.md](design/tools/log.md)

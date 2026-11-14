@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SERVICES, AI-CHAT]
+order: 400
+test: ~
+---
+Message under a blocking alert
+is kept as the chat's queued message and sent by itself once every role answers.

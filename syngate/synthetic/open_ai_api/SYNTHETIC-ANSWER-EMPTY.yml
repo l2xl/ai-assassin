@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-ANSWER]
+order: 365
+test: ~
+---
+Empty text answer
+A text answer carrying no text shall be refused back to the model within the turn, rather than ending the turn on an empty reply.

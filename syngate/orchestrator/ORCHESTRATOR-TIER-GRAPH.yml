@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-TIER]
+order: 80
+test: ~
+---
+Complete graph
+of a seed context always enters: every item with its whole statement, whatever the message.

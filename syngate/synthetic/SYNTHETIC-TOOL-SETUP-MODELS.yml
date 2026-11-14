@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-SETUP]
+test: ~
+---
+Models call
+returns every model a chat may run on with its connection, family, tier, strengths and efforts, the chat's own setup marked.

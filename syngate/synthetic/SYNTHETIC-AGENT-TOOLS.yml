@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
+order: 8
+---
+Agent tools
+are the tools the agent's `tools` list names, fixed by its prompt: the chat that starts the agent neither adds to them nor takes from them.

@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-AGENT-VERDICT, ORCHESTRATOR-MATCH]
+order: 10
+sources: [src/ai_scratcher/prompts/match.md]
+test: ~
+---
+Match agent
+is a verdict agent whose schema names one of the shortlisted agents or none.

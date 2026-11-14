@@ -1,0 +1,7 @@
+---
+parents: [LOCAL-MODELS-UP]
+order: 20
+test: ~
+---
+Memory check
+refuses, before anything starts, a preset whose models on the card declare more memory together than this machine's card has.

@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-FILES]
+test: ~
+---
+Files guard
+refuses a path outside the project, in .git, in the tree, or naming the server's settings or stored chats.

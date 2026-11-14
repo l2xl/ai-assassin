@@ -5,4 +5,4 @@ test: 858439cc4de8e5f538b72569c6c862e5f338085967fafc6afcb4b2dc6004ed1c
 review: 6a1087b78974eeabc084dc569a7dafe168d35e7af7fb72a6f3d2024f6452d2d0
 ---
 Commit action
-of the status popup, `⎇ Commit with AI`, is offered while the project holds uncommitted changes and sends the commit request as a turn of the item's chat.
+of the status popup, `⎇ Commit with AI`, is offered while the project holds uncommitted changes and starts the commit agent, shown in the item's chat.

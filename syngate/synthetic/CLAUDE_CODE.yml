@@ -6,3 +6,5 @@ review: 29b6311ce43431ee9dcc469a8cf51aae5563ba30d6ef94cd04f4078be8234d2d
 ---
 Claude Code connector
 is the AI connection running the local `claude` CLI non-interactively, one call per turn.
+
+[design/connections/claude_code.md](design/connections/claude_code.md)

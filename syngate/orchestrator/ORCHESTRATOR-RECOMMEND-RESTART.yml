@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 245
+test: ~
+---
+Accepted model
+takes the turn over on the new setup, in a new session holding what the turn has done so far.

@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+test: ~
+---
+Held call
+is an altering call waiting while the scan runs; without a finding it is applied under a step of the log.

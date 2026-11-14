@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-SECURITY, AI-CHAT]
+order: 310
+test: ~
+---
+Context review
+shows the external results the session holds with every finding highlighted under its category and reason, a finding settled by dropping its result from the session or by accepting it.

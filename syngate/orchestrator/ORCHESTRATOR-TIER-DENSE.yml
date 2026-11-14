@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER]
+test: ~
+---
+Dense signal
+ranks the items by the similarity of the message to each statement embedded with the subjects of its ancestors.

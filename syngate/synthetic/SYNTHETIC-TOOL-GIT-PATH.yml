@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-GIT]
+order: 20
+test: ~
+---
+Submodule path
+of the git tool runs the command in the folder its optional `path` names when that folder is the root of a git work tree of its own inside the project, such as a submodule, and refuses any other path: one outside the project, in `.git` or under `syngate/`, or a folder that is no work tree root.

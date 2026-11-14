@@ -1,0 +1,7 @@
+---
+parents: [LOCAL-MODELS-PRESET]
+order: 20
+test: ~
+---
+Up command
+brings the compose project of the named preset up and waits until every one of its services is healthy.

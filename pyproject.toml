@@ -14,12 +14,14 @@ dependencies = ["pyyaml", "jinja2", "pytest"]
 [project.scripts]
 assassin = "ai_scratcher.assassin_ui:main"
 syngate = "ai_scratcher.syngate:main"
+assassin-models = "ai_scratcher.local_models:main"
+assassin-setup = "ai_scratcher.assassin_setup:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ai_scratcher = ["assassin_ui.html", "prompts/*.md"]
+ai_scratcher = ["assassin_ui.html", "prompts/*.md", "model_presets/*/compose.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

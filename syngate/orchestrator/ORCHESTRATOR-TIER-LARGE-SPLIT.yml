@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER-LARGE]
+test: ~
+---
+Message segments
+are cut along the message's own structure — blank lines, then lines, then sentences, then words, and only at last a fixed length — each segment bounded in characters, not in estimated tokens, and a message that fits one segment is that segment unchanged.

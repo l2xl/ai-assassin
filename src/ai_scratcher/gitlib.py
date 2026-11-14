@@ -6,6 +6,7 @@
 files a review refuses and the review commit."""
 
 import os
+import pathlib
 import re
 import shlex
 import shutil
@@ -70,6 +71,33 @@ def _guard_path(word):
     path = os.path.normpath(word)
     if path in (".", TREE) or path.startswith((TREE + os.sep, "..")) or os.path.isabs(path):
         raise refused(f"'{word}': mv and rm take no path under {TREE}/ or holding it — the items change only through the tree calls")
+
+
+def workdir(root, path):
+    """The folder a git call naming `path` runs in: the project `root` for `.`, else the root of a git work tree of its own inside the project --
+    a submodule or a nested repository; any other path raises `refused`."""
+    if not isinstance(path, str) or not path or "\0" in path:
+        raise refused("path is a folder of the project, relative to its root")
+    norm = os.path.normpath(path)
+    if os.path.isabs(norm) or norm == ".." or norm.startswith(".." + os.sep):
+        raise refused(f"'{path}': path lies in the project, relative to its root")
+    base = pathlib.Path(root).resolve()
+    target = (base / norm).resolve()
+    if base != target and base not in target.parents:
+        raise refused(f"'{path}': path resolves outside the project")
+    for relative in (pathlib.PurePath(norm), target.relative_to(base)):
+        if ".git" in relative.parts or relative.parts[:1] == (TREE,):
+            raise refused(f"'{path}': path is in .git or under {TREE}/ — the items change only through the tree calls")
+    if not target.is_dir():
+        raise refused(f"'{path}': path is no folder of the project")
+    if target != base:
+        try:
+            top = git(target, "rev-parse", "--show-toplevel", timeout=10).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            top = ""
+        if not top or pathlib.Path(top).resolve() != target:
+            raise refused(f"'{path}' is no work tree root of its own, a submodule or a nested repository: leave `path` out and name its files in the command")
+    return target
 
 
 def guard(command):

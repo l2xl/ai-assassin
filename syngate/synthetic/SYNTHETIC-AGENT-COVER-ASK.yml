@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-SUBAGENT-OFF-CONTEXT]
+order: 35
+test: ~
+---
+Cover request
+asks the user in the starting chat, as the recommendation to switch the permission on, for every permission the agent's tools need that the chat has off, the run waiting for the answer; a granted permission is on for the chat from then on.

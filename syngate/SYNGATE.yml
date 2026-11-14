@@ -7,4 +7,4 @@ review: ae4e5fee4af76994f06bb3133be9d2f7dbf99543fb83802ba59e2d3e1ce35c57
 Synergy Context Gate (SynGate)
 is the subsystem managing the project's DAG of statements, their test coverage and review status as a gate: open while every status passes, closed by anything failed.
 
-[SYNGATE.md](SYNGATE.md)
+[design/syngate/syngate.md](design/syngate/syngate.md)

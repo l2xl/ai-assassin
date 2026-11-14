@@ -1,0 +1,9 @@
+---
+parents: [ORCHESTRATOR]
+order: 230
+sources: [src/ai_scratcher/recommend.py]
+---
+Setup recommendation
+names a change of the chat's setup the turn at hand needs: another model, or a permission to switch on.
+
+[design/orchestrator/setup_recommendation.md](design/orchestrator/setup_recommendation.md)

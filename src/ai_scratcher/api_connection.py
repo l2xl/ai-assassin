@@ -3,7 +3,7 @@
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
 """The OpenAI-compatible API connections of the server settings' `connections` section -- MixRoute, a self-hosted llama.cpp server,
-as many side by side as configured ([OPEN_AI_API.md](../../OPEN_AI_API.md))."""
+as many side by side as configured (`design/connections/open_ai_api.md`)."""
 
 import http.client
 import json
@@ -33,6 +33,11 @@ LISTING_TTL = 5.0
 LISTING_TIMEOUT = 5
 # The load states of a llama.cpp router in which a model needs no load request.
 RUNNING_STATES = ("loaded", "loading", "sleeping")
+# The owner a llama.cpp server names for its models in its listing.
+LOCAL_OWNER = "llamacpp"
+# The efforts, with their budgets in tokens, a queried model of a llama.cpp server is offered -- its listing reports neither -- until the
+# connection declares a `reasoning_budgets` table of its own, which replaces them.
+DEFAULT_BUDGETS = {"low": 1024, "medium": 2048, "high": 4096}
 # The refusals of a llama.cpp router for a model whose load fell over or that is not loaded: the request goes again after a load request.
 LOAD_REFUSED_RE = re.compile(r"failed to load|not loaded|not running", re.IGNORECASE)
 # The refusals of a server for the response format it was sent -- a schema outside OpenAI's strict subset, or no json_schema support at
@@ -181,6 +186,14 @@ def trailing_answer(content):
     return None
 
 
+def declared_place(entry):
+    """{family, tier} a model entry declares: its `family`, a non-empty string, and beside one its `tier`, a number -- nothing otherwise."""
+    family, tier = entry.get("family"), entry.get("tier")
+    if not (isinstance(family, str) and family.strip()):
+        return {}
+    return {"family": family.strip(), **({"tier": tier} if isinstance(tier, (int, float)) and not isinstance(tier, bool) else {})}
+
+
 def api_message(label, body, status):
     """The message of an API error body -- `error.message`, or the body itself -- naming the connection and the status."""
     try:
@@ -189,6 +202,16 @@ def api_message(label, body, status):
     except (ValueError, AttributeError):
         message = None
     return f"{label} {status}: {message or body.strip() or 'no message'}"
+
+
+def strengths_line(value):
+    """The strengths of a configured model as one line, its whitespace collapsed; None for anything but a string with text in it."""
+    return (" ".join(value.split()) or None) if isinstance(value, str) else None
+
+
+def valid_budget(budget):
+    """Whether a budget of a `reasoning_budgets` table is a positive whole number of tokens."""
+    return type(budget) is int and budget > 0
 
 
 class api_connection:
@@ -208,7 +231,7 @@ class api_connection:
         self.halted = set()
         # model -> the index in FORMATS of the response format its server last took
         self.formats = {}
-        self._listing = (None, 0.0, {})
+        self._listing = (None, 0.0, ({}, False))
         self._lock = threading.Lock()
 
     # -- setup ------------------------------------------------------------
@@ -226,7 +249,8 @@ class api_connection:
         return label if isinstance(label, str) and label.strip() else self.name
 
     def setup(self):
-        """(settings entry, {model id: {name, efforts, key, state}}) as the settings read now give them, a `query` entry's models listed by its server."""
+        """(settings entry, {model id: {name, efforts, key, state, strengths}}) as the settings read now give them, a `query` entry's models listed by
+        its server, each with the `budgets` of its efforts."""
         config = self.read_config()
         efforts = config.get("efforts")
         efforts = tuple(effort for effort in efforts if isinstance(effort, str)) if isinstance(efforts, list) else EFFORTS
@@ -239,20 +263,37 @@ class api_connection:
                 models[entry] = {"name": entry, "efforts": efforts, "key": None, "state": None}
             elif isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]:
                 own = entry.get("efforts")
-                models[entry["id"]] = {"name": str(entry.get("name") or entry["id"]), "key": entry.get("api_key"), "state": None,
-                                       "efforts": tuple(effort for effort in own if isinstance(effort, str)) if isinstance(own, list) else efforts}
+                models[entry["id"]] = {"name": str(entry.get("name") or entry["id"]), "key": entry.get("api_key"), "state": None, "strengths": strengths_line(entry.get("strengths")),
+                                       "efforts": tuple(effort for effort in own if isinstance(effort, str)) if isinstance(own, list) else efforts,
+                                       **declared_place(entry)}
         return config, models
 
     def queried(self, config):
-        """{model id: spec} of the server's `GET <base_url>/models`, each without efforts and with the load state it reports; kept
-        `LISTING_TTL` seconds, a listing that fails offering no model."""
+        """{model id: spec} of the server's `GET <base_url>/models`, each with the load state it reports and the efforts, with their budgets,
+        `queried_budgets` offers it, derived from the settings at every call; a listing that fails offers no model."""
+        states, local = self.listed(config)
+        budgets = self.queried_budgets(config, local)
+        return {model: {"name": model, "efforts": tuple(budgets), "budgets": dict(budgets), "key": None, "state": state} for model, state in states.items()}
+
+    @staticmethod
+    def queried_budgets(config, local):
+        """{effort: tokens} a queried model is offered, in order: the table the connection declares, else `DEFAULT_BUDGETS` for the models of
+        a llama.cpp server (`local`), else none; an entry that is no positive whole number is left out."""
+        table = config.get("reasoning_budgets")
+        if not isinstance(table, dict):
+            table = DEFAULT_BUDGETS if local else {}
+        return {effort: budget for effort, budget in table.items() if isinstance(effort, str) and valid_budget(budget)}
+
+    def listed(self, config):
+        """({model id: load state or None}, whether the server is a llama.cpp one -- it reports a load state or names `llamacpp` the owner of a
+        model) of the server's `GET <base_url>/models`; kept `LISTING_TTL` seconds, a listing that fails being an empty one."""
         key = self.api_key(config)
         stamp = (self.base_url(config), key, json.dumps(config.get("ca")))
         with self._lock:
-            kept, at, models = self._listing
+            kept, at, listing = self._listing
             if kept == stamp and time.monotonic() - at < LISTING_TTL:
-                return models
-        models = {}
+                return listing
+        states, local = {}, False
         if stamp[0]:
             request = urllib.request.Request(stamp[0] + "/models", headers={"Accept": "application/json", **self.auth(key)})
             try:
@@ -262,16 +303,23 @@ class api_connection:
                     if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]:
                         status = entry.get("status")
                         state = status.get("value") if isinstance(status, dict) and isinstance(status.get("value"), str) else None
-                        models[entry["id"]] = {"name": entry["id"], "efforts": (), "key": None, "state": state}
+                        states[entry["id"]] = state
+                        local = local or state is not None or entry.get("owned_by") == LOCAL_OWNER
             except (OSError, ValueError, connection_error):
-                models = {}
+                states, local = {}, False
         with self._lock:
-            self._listing = (stamp, time.monotonic(), models)
-        return models
+            self._listing = (stamp, time.monotonic(), (states, local))
+        return states, local
+
+    def loaded_model(self):
+        """The first model the server's listing, read anew, reports `loaded`; None while it reports none or tells no load states."""
+        self.forget_listing()
+        states, _ = self.listed(self.read_config())
+        return next((model for model, state in states.items() if state == "loaded"), None)
 
     def forget_listing(self):
         with self._lock:
-            self._listing = (None, 0.0, {})
+            self._listing = (None, 0.0, ({}, False))
 
     @property
     def models(self):
@@ -310,6 +358,14 @@ class api_connection:
     def auth(key):
         return {"Authorization": f"Bearer {key}"} if key else {}
 
+    @staticmethod
+    def reasoning_budget(config, effort, spec=None):
+        """The token budget for `effort`, a positive whole number: the one the `budgets` of a queried model `spec` give, else the connection's
+        `reasoning_budgets`; None for an effort the table does not name, an entry that is no such number, or no table."""
+        table = spec["budgets"] if spec and "budgets" in spec else config.get("reasoning_budgets")
+        budget = table.get(effort) if isinstance(table, dict) else None
+        return budget if valid_budget(budget) else None
+
     def available(self):
         """Whether the page offers the connection: it has a base URL, a model to offer and the key it declares."""
         config, models = self.setup()
@@ -321,7 +377,8 @@ class api_connection:
         efforts = models[model]["efforts"] if model else ()
         effort = config.get("default_effort") if config.get("default_effort") in efforts else "medium" if "medium" in efforts else next(iter(efforts), None)
         return {"label": self.label_of(config), "library": self.library_delivery,
-                "models": [{"id": model_id, "name": spec["name"], "efforts": list(spec["efforts"]), **({"state": spec["state"]} if spec["state"] else {})}
+                "models": [{"id": model_id, "name": spec["name"], "efforts": list(spec["efforts"]), **{field: spec[field] for field in ("family", "tier") if field in spec}, **({"state": spec["state"]} if spec["state"] else {}),
+                 **({"strengths": spec["strengths"]} if spec.get("strengths") else {})}
                            for model_id, spec in models.items()],
                 "efforts": list(self.efforts), "default": {"model": model, "effort": effort}, "modes": [dict(mode) for mode in self.modes.values()]}
 
@@ -395,6 +452,11 @@ class api_connection:
         temporary = path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(messages, ensure_ascii=False), encoding="utf-8")
         os.replace(temporary, path)
+
+    def rewrite_session(self, session, rewrite):
+        """Store the messages of `session` as `rewrite` makes them of those it holds: the session is the harness's own, so turn pruning cuts
+        it in place."""
+        self.write_session(session, rewrite(self.read_session(session)))
 
     # -- turn -------------------------------------------------------------
 
@@ -481,7 +543,8 @@ class api_connection:
             on_step(reasoning)
         return "".join(content), finish, usage
 
-    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None, images=()):
+    def dispatch(self, context, text, model=None, effort=None, modes=(), session=None, on_step=None, stopped=lambda: False, library=None, images=(),
+                 agent=None):
         """(answer, session id) of one streamed chat completion: the seed context is the system message, the messages of `session` --
         a fresh one without it -- follow, then the text with its `images`. The answer is the structured answer the content holds when
         `structured` is on, the answer schema of the prompt `library` going as the response format, else the content as text. A
@@ -511,13 +574,22 @@ class api_connection:
                     "stream_options": {"include_usage": True}, "max_tokens": limit if isinstance(limit, int) and limit > 0 else MAX_TOKENS}
             if effort and effort in (models.get(model) or {}).get("efforts", ()):
                 body["reasoning_effort"] = effort
+                budget = self.reasoning_budget(config, effort, models.get(model))
+                if budget:
+                    body["reasoning_budget_tokens"] = budget
             if any(spec["state"] for spec in models.values()):
                 # a llama.cpp router reads a long prompt silently: its progress keeps the request alive and shows on the page
                 body["return_progress"] = True
             schema = None
             if config.get("structured", True) is not False:
-                schema = {name: value for name, value in synthetic.answer_schema(synthetic.read_library(library)).items() if name != "description"}
-                schema["properties"] = {**schema["properties"], "text": {**synthetic.STRING, "description": "The reply, only with kind text; leave it out with kind calls"}}
+                library = synthetic.read_library(library)
+                if agent is not None and synthetic.is_verdict(agent):
+                    schema = agent.schema  # a verdict agent's answer is its own JSON, not the answer format
+                else:
+                    schema = {name: value for name, value in (synthetic.answer_schema(library) if agent is None else synthetic.agent_schema(agent, library)).items()
+                              if name != "description"}
+                if agent is None or not synthetic.is_verdict(agent):
+                    schema["properties"] = {**schema["properties"], "text": {**synthetic.STRING, "description": "The reply, only with kind text; leave it out with kind calls"}}
             timeout = config.get("timeout") if isinstance(config.get("timeout"), (int, float)) and config["timeout"] > 0 else TIMEOUT
             retries = config.get("load_retries") if type(config.get("load_retries")) is int and config["load_retries"] >= 0 else LOAD_RETRIES
             form = self.formats.get(model, 0) if schema else len(FORMATS) - 1

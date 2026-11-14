@@ -1,9 +1,7 @@
 ---
 parents: [SYNGATE-API]
 order: 60
-test: f8a8d5bf4314becf025aee38b50aef756b67c2e4426ac0164866ae5e1188b5ac
-review: ec65f335c26a31a475a72cf27c4a3022834109ef2c60ba56c327b3713b64e673
+test: ~
 ---
-Query node
-
-The syngate query call shall return an item's header, description, parents, children in sibling order, kind and, for a leaf, the names of its test bindings.
+Syngate query 
+returns an item's header, description, parents, children in sibling order, kind and, for a leaf, the names of its test bindings.

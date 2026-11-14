@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-AGENT-VERDICT, ORCHESTRATOR-SECURITY]
+order: 320
+sources: [src/ai_scratcher/prompts/scan.md]
+test: ~
+---
+Scan agent
+is a verdict agent whose schema is a list of findings, each a span, a category and a reason.

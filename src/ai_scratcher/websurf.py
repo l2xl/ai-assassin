@@ -4,7 +4,7 @@
 
 """WebSurf, the harness end of the browser extension: the guard a `websurf` call and its answer pass, the loopback WebSocket bridge
 the extension attaches to -- which carries a surf request to the browser and its answer back and records the page events of the surf
-tab -- and the text the AI reads of it all. The design and the wire protocol are in BROWSER_EXTENSION.md; stdlib only, like the server
+tab -- and the text the AI reads of it all. The design and the wire protocol are in design/extension/; stdlib only, like the server
 that hosts it."""
 
 import base64

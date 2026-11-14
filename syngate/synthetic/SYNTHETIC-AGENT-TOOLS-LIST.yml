@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-AGENT-TOOLS]
+test: ~
+---
+Tool list
+is the agent's `tools` list, in its order and each name once, empty for an agent without the key.

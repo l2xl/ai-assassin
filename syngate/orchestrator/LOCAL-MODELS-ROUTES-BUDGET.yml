@@ -1,0 +1,7 @@
+---
+parents: [LOCAL-MODELS-ROUTES]
+order: 120
+test: ~
+---
+Chat route reasoning budgets
+lists in the connection of every chat model of a preset the efforts `low`, `medium` and `high` as its `efforts` and the reasoning budgets 1024, 2048 and 4096 tokens as its `reasoning_budgets`, and in no connection of an embedding or reranking model.

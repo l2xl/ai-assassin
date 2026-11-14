@@ -31,7 +31,7 @@ does — a page loaded, the one the AI opened included, a URL changed, the tab c
 learns of it. A request acting on the page names the site it is meant for and is refused when the
 tab has moved to another one meanwhile. Which sites may be reached is decided by the
 server's guard, from the host lists in the `websurf` section of `assassin_settings.json` beside the
-project's tree (see [`../BROWSER_EXTENSION.md`](../BROWSER_EXTENSION.md)); every request shows up as a
+project's tree (see [`../design/extension/`](../design/extension/browser_extension.md)); every request shows up as a
 step in the chat.
 
 ## The surf tab
@@ -110,4 +110,4 @@ tab, so close a tab you did not open and check the list behind the toolbar butto
 | `placement.js` | places a new surf tab next to its session's AI Assassin tab |
 | `options.html`, `options.js` | the read-only list of sessions and the site-access grant |
 
-The design and the protocol are in [`../BROWSER_EXTENSION.md`](../BROWSER_EXTENSION.md).
+The design and the protocol are in [`../design/extension/`](../design/extension/browser_extension.md).

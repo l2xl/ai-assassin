@@ -1,0 +1,8 @@
+---
+parents: [ASSASSIN-UI-TREE-CHAT-MARK, AI-CHAT]
+order: 380
+---
+Chat state
+is exactly one of blocked, working, agents, failed, stopped, unread and waiting, the first of them that holds.
+
+[design/chat/chat_states.md](design/chat/chat_states.md)

@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-HELD]
+test: ~
+---
+Held turn reset
+is refused, as is a rename of the chat, while its turn is held.

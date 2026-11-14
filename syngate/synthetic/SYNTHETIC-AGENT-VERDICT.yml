@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
+order: 24
+test: ~
+---
+Verdict agent
+is an agent whose prompt declares an answer `schema` and neither tools nor skills: its answer is the JSON the harness reads, never a reply of the chat.

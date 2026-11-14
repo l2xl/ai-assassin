@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-TIER]
+order: 115
+test: ~
+---
+Rank fusion
+orders the items, and through them their files, by their ranks under each signal, never by a signal's raw score.

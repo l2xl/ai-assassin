@@ -7,3 +7,5 @@ review: 25b1da2a879d8ded8f0529412ef1a212782be57e1b0dcc92ef4a5b4797962c11
 Syngate API
 
 Python based tools/API to work with syngate DAG. The "modifying" calls except test and review has option to clear review to signal the change is intentional. The option is omitted by default.
+
+[design/syngate/cli.md](design/syngate/cli.md)

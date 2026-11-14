@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+order: 210
+test: {unit: ~, page: ~}
+---
+Owned session
+of a connection the harness cannot rewrite is pruned only when a new session starts, the verdicts waiting until then.

@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-TIER-LARGE]
+test: ~
+---
+Dense score of segments
+of an item is the greatest cosine of any segment of the message to it, so a long message ranks an item by its best-matching part.

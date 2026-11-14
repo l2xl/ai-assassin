@@ -7,3 +7,5 @@ review: 8b7397fd5615ba9363a8be106fccaa58eee002d5ed5f3e1d1d6bdea91c7f3428
 ---
 Surf tab hold
 of the harness refuses a websurf `open` or `close` while another running turn holds the surf tab, naming that turn, every turn's page actions passing.
+
+[design/tools/websurf_hold.md](design/tools/websurf_hold.md)

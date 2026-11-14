@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+test: ~
+---
+File re-read
+— the read of a file the system prompt holds whole — is pruned by rule.

@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-AGENT-TOOLS]
+order: 30
+test: ~
+---
+Tool call refusal
+refuses a call of a tool outside the list.

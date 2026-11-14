@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-SECURITY]
+test: ~
+---
+Inherited mark
+is the mark a subagent starts with when started from a marked session.

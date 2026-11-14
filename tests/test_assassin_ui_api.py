@@ -94,6 +94,8 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
 
     child = {"tool": "agent", "uid": "LEAF-001", "prompt": "Add one more", "modes": ["edit", "tree"]}
     denied = f"- add NEW-002 refused: {assassin_ui.TREE_REFUSAL}"
+    from test_recommend_turn import answering
+    answering(app, "LEAF-001", "deny")  # the child's held call is denied by the user, and not asked again in its conversation
     app.connectors = {"echo": (scripted := Scripted(calls(child), calls(dict(add, uid="NEW-002")), {"kind": "text", "text": "Could not."}, {"kind": "text", "text": "Reported."}))}
     outcome = turn(base, app, "ROOT", "Delegate.", modes=["edit"])
     assert outcome["reply"] == "Reported." and outcome["applied"] == [f"- agent LEAF-001: {denied}\nCould not."]

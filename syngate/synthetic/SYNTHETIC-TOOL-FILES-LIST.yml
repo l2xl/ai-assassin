@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-FILES]
+test: ~
+---
+Folder listing
+names the folders and files of a project folder to the depth asked, each file with its size.

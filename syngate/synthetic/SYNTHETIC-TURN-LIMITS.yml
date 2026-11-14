@@ -1,0 +1,9 @@
+---
+parents: [SYNTHETIC-ANSWER]
+order: 480
+sources: [src/ai_scratcher/assassin_ui.py]
+---
+Turn limits
+end a turn by what the harness observes of it — no progress, or a fuse far above normal work — never by a small count of rounds, and a turn so ended still reports.
+
+[design/tools/turn_limits.md](design/tools/turn_limits.md)

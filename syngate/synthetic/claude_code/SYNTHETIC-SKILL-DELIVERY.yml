@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-SKILLS]
+order: -10
+test: ~
+---
+Skill delivery
+A skill whose front matter names a `delivery` — `text` or `native` — shall enter a system prompt, as a default skill or by an agent's white list, only on a connection of that library delivery.

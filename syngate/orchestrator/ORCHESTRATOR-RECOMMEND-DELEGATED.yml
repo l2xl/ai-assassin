@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 246
+test: ~
+---
+Delegated setup
+is the setup and behaviour of the delegating turn, which a delegated turn starts on.

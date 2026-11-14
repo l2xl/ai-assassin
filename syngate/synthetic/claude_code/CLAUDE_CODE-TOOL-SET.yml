@@ -1,0 +1,7 @@
+---
+parents: [CLAUDE_CODE]
+order: 45
+test: {argv: ~, live: ~}
+---
+Closed tool set
+of the Claude Code connector names the CLI its whole built-in tool set — `Read`, the tools of the call modes that are on and `Skill` while a skill on request is delivered — so a tool the connector does not name never reaches the model.

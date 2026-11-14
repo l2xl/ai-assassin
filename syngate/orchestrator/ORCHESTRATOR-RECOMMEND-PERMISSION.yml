@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND]
+order: 234
+test: ~
+---
+Permission recommendation
+is made by the harness for a call that only a switched-off permission refuses, the call held until the recommendation is settled.

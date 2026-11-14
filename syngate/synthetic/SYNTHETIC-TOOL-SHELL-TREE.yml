@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-TOOL-SHELL]
+test: ~
+---
+Shell tree guard
+refuses a command naming syngate in every mode.

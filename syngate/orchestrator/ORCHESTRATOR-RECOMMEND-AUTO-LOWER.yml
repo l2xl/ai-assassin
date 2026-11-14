@@ -1,0 +1,6 @@
+---
+parents: [ORCHESTRATOR-RECOMMEND-BEHAVIOUR]
+test: ~
+---
+Auto lower behaviour
+applies a lower at once and asks the user to confirm a raise or a switch.

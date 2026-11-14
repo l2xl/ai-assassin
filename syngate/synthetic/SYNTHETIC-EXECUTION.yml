@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC]
+order: 75
+---
+Tool execution
+is the harness's one way to run a tool: every call an answer carries is executed by one implementation in the harness, the same whichever AI connection carried the answer.
+
+[design/tools/tool_execution.md](design/tools/tool_execution.md)

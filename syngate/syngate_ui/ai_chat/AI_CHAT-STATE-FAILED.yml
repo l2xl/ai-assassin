@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-STATE]
+test: ~
+---
+Failed chat
+ended its last turn on an error and is marked ⚠.

@@ -1,5 +1,6 @@
 ---
-parents: [SYNTHETIC-TOOLS]
+parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
+order: 370
 sources: [src/ai_scratcher/prompts/skill.md]
 test: 1467a7f919636fd50af54f87b182157cb583299bebd5931cfe7c46b2d5e54e11
 review: c85d5c0a0532271b637dba6dd08e1a2d15fb67178f7c77e317e2f0869a723550

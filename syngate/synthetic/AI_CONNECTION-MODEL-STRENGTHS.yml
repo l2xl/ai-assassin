@@ -1,0 +1,7 @@
+---
+parents: [AI_CONNECTION]
+sources: [src/ai_scratcher/api_connection.py]
+test: ~
+---
+Model strengths
+is the line of a configured model telling what it is the right choice for, which the connection's settings report in that model's entry, a model configured without one being reported without it.

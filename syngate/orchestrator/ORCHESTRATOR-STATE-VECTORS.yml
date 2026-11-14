@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR]
+order: 281
+test: ~
+---
+Vector cache
+is kept in the server's memory alone, the embedding vectors computed anew at every start and for every changed text.

@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-PRUNE, AI-CHAT]
 order: 350
-test: {unit: ~, page: ~}
+test: {unit: 05ef1ddffe9dcc2ec7974f08aebffed63a8e165c945ede5362c35f1a3d5366b1, page: 7a15b8afd41c53156d8a2657d1e0108b8f1106d574a9c08269deea2cf5de8f38}
+review: 817895d90c5754b4532957cd38016d171b1066ec7e8287e57b3dab16cb4dc729
 ---
 Prune switch
 of a message returns a pruned one to the session or cuts a kept one, taking effect with the conversation's next session without ending the running one.

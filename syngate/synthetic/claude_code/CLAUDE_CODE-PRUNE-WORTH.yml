@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 50
-test: ~
+test: 8dfbd80a69d8c4e19d534ff45927936fe8aaf7be5dfee5992d75539a96476e5a
+review: 07253c3a810efe02714c5f9dd110b69bc2cf62db924039afd3f81bdd2ecc846f
 ---
 Replay worth
 is what decides a replay: the cache expired — the session's last request five minutes ago or more — or the tokens the change cuts at least those it sends again uncached; otherwise the change waits, and the renewal bound still starts a fresh session.

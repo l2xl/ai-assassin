@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 sources: [src/ai_scratcher/segmenting.py]
-test: ~
+test: e50daf8ec570fea91188768d1fea7ab16500bf912c8ad31e1ce867c652fa7783
+review: 00b1d636bffa3ced358f6cb39326c4dd818940fb6df256a84ca695cfec2644c1
 ---
 Large external text
 is scanned in large windows that overlap by a quarter, along the same structure of units, each window judged by the scan agent and the findings of all of them joined once each; a payload split across distant windows is not guaranteed found, which the scan being a tripwire already says.

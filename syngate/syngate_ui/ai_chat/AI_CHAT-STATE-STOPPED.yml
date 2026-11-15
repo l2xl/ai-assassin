@@ -1,6 +1,7 @@
 ---
 parents: [AI_CHAT-STATE]
-test: ~
+test: e3b87f009ed166b62937fae7752b4be35fd1507790e86b78480c103fda0bf3a1
+review: d33006c681209ed08bf63abbec9d8b8ffd9a638c10c622a3dea570442bb1cbff
 ---
 Stopped chat
 had its last turn stopped and is marked ■.

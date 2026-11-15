@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SETUP]
-test: ~
+test: aab417b0e74a2b11bf261df34f6b39bff52587b5269703f818685f22808d9835
+review: ed359dd1c48114e63ea70cba674b87d9b034209f82c940ebb0bd27b284e9c541
 ---
 Claude Code agent routes
 are what first setup writes while the claude CLI is installed: the agents, the scan among them, go to the Claude Code connection's haiku model.

@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 order: 312
-test: ~
+test: 6bb5e1f2fb08bf6260e91232bee84b51ac070c66e0f67bd97d229e1626175571
+review: 7da9c76b99969c7b33d31c69f5f5e0f7802dad9885b756dfb99fd2416ee3850a
 ---
 Accepted finding
 is saved by its exact wording for the user, in the `.ai-assassin` folder of the user's home, the same wording being no finding again in any project.

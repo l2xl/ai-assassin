@@ -2,6 +2,7 @@
 parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
 order: 450
 sources: [src/ai_scratcher/prompts/shell.md]
+review: 89ee6f3f6a041e465edceec7637edbf88fcbcf57c3f0e49e4f50dd691e2f2b7a
 ---
 Shell tool
 runs the command line of a shell call in the project root and returns its exit status and output as the next prompt.

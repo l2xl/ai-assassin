@@ -1,6 +1,7 @@
 ---
 parents: [SYNGATE-API-REVIEW, ASSASSIN-UI-REVIEW-COMMIT]
-test: ~
+test: 00a9a150f145ae4a27ab204cbf9870add87dc2afe9c76bd8b7b38798348e3460
+review: 7ad19e3f57e99a21a9ded53a0346da3b3ea94991e4db16c63362f6b7d6a013fa
 ---
 Review is refused
 if the item's review footprint holds a change has not committed.

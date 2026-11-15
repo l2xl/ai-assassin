@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 20
-test: ~
+test: cb95025e80471466be0590a447fdcff9d57d2e2e3b6729990129fc6d4cbd3366
+review: b55a3b162b5db6994af7f66d74829b3e412cc08904ec55b27efd6f95dd222a7b
 ---
 Pruning change
 of a Claude Code session is a step or reply its next session would hold otherwise than the running one holds it — a verdict that waited, a switch set by hand either way — and the earliest turn with one is where the replay starts.

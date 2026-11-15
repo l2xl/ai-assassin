@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 order: 316
-test: ~
+test: b94edc7d580e222021f641fc7f77e7a944160200f176800559c1ec02c2c489d7
+review: 542a64b928aafb59bfa8d74fc12648dab96238b74ca97d4358843e8bdf4e8942
 ---
 Malformed scan answer
 — one naming a span absent from the text, or not matching its schema — counts as a finding.

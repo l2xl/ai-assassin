@@ -2,7 +2,7 @@
 parents: [AI_CHAT-CONTROLS, SYNTHETIC-SKILL-ROUTE]
 order: 20
 test: {marks: 9afa6a6f091212638f455d933e293552c0495faf4f65dbd1d2c2a2aa8cddea00, selection: 7dcc0775da929634c21637fe250bcd9bf2f7c4ce2e7fdd6481bf9462ba8e5a89}
-review: 6446da68854a59fdc2859125b43caef6450369f330b792c2b874e62e6da51312
+review: e26739efad6720b8ee7f7f3b5ecc0b8178458acadf21e97c15a427006e1d8ad9
 ---
 Item extraction marks
 of a message send its kept text as a turn of the anchored item's chat asking the AI to make it a new child or next sibling of that item.

@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 order: 290
-test: ~
+test: a9c6515051ca8394fef84c6cfe31430514d962b831aa364d2eda860b924566e4
+review: 421c2f118da6aad125ab7cfe6293f5e3b6834e19ecf81d57cbfc231883cfb33f
 ---
 Trusted text
 is everything of the project — the tree, its files, its test output, the AI's own edits — and the user's messages, which the scan leaves out.

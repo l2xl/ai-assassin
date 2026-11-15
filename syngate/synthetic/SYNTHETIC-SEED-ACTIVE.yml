@@ -2,7 +2,7 @@
 parents: [SYNTHETIC-SEED-CONTEXT]
 order: 80
 test: c6e85d4bf451e15b4926ec4d1f10073e25672c02d381cba5a0da50084b7bebf3
-review: 4a4eecdd4da7abec96b98c64a2de45a12dab9659d1443f2305503daae52087c3
+review: be23b0a9761f753ca6bb64155066fa1e7310fa101fc2b60b0e935a8105bb6ca6
 ---
 Seed context active item mark
 follows the `@UID` of the one statement the seed context is formed for with `(active item)`, or with the one-line `label` a syngate context call names in its place; the statements a message's references append carry none.

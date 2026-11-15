@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS]
 order: 10
-test: ~
+test: c2cc043fcd464a8f04fe72ebb360568bb66856598496e73ed0befdd1da9f2753
+review: e72307abb15f6b958c5c686f64c57502c3273844e55595e994badd4f115cc974
 ---
 Model preset
 is a folder holding one docker compose project of model servers for one kind of card, shipped with the package or kept in the project's `model_presets/`, a project's own standing over a shipped one of its name.

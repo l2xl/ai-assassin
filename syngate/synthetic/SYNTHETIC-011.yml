@@ -1,6 +1,7 @@
 ---
 parents: [AI_CONNECTION]
 order: 40
-test: ~
+test: bb74e912cd009f45342618930eabe55a02b1df734de7ea5453f86ac5846bd051
+review: 78f5cb49fa976967ba12608d5b337bfc2a01b6a0e116c68af16bdb6996fa9ff3
 ---
 AI query shall select the connection, the exact model and the effort

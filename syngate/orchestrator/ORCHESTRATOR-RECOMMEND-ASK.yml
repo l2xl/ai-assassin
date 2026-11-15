@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND-BEHAVIOUR]
-test: ~
+test: b93911b7d4a4358ec9a76fd63b44212b45759128fb3cd15a832b666a6ae403eb
+review: ee576ed31915a6eb72ad8b5d248668a5423cd342c87a046f5f5d17c1b625fcb5
 ---
 Ask behaviour
 asks the user to confirm every recommendation.

@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC]
 order: 55
+review: b3ff65a6896999df5d070267660cc001f770cc4fccfb678daf8909ffe2eac0b8
 ---
 Answer
 is what a model hands the harness to close a round of a turn — text, which ends the turn as its reply, or tool calls — the same whichever way an AI connection carries it.

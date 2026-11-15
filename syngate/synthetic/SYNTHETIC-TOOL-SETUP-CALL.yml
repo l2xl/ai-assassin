@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOL-SETUP]
-test: ~
+test: 61a258f3bcb56410f02a845b673aa63930feff5fd1517dd679f6132c8fac82a2
+review: da418952c362798d2ab182e0ecabee3ddd31bdd60c521cee3febc46883587660
 ---
 Setup call
 names a connection and a model of the models listing with its reason and, optionally, an effort that model lists, any other being refused.

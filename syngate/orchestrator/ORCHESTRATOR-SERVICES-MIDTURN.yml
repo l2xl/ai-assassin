@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SERVICES]
-test: ~
+test: b421917c9c165d1cdbde597bec18b91c89112d3747d248102dc5126dc4b54ab6
+review: 45ff52cbf1a255e8e3c4b4d40d7efd2b077a384b1cf7a6cee81df61b1eed27b8
 ---
 Service failure in turn
 — a role failing in the middle of a turn — holds the turn on the blocking alert.

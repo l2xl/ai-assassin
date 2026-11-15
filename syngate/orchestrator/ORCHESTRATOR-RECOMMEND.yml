@@ -2,6 +2,7 @@
 parents: [ORCHESTRATOR]
 order: 230
 sources: [src/ai_scratcher/recommend.py]
+review: ca50889a75e6beb7f7272db7c073e573df03ad49fb70acd03f1ccaa9cddfefbe
 ---
 Setup recommendation
 names a change of the chat's setup the turn at hand needs: another model, or a permission to switch on.

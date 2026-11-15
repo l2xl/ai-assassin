@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 5
 sources: [src/ai_scratcher/prompts/call_tool_block.md]
-test: ~
+test: dba14555b2875d8ba7a4bfc86cce16ab9f7e8448a29ae56bf86ac8cd787584c1
+review: fdbc7f1fbcc768d00f8cb482ebbefd3657683a6d48c9fcef0ca53e07d27f6298
 ---
 Call block skill
 The call block skill shall be a default skill of text delivery stating the plain answer: the calls in one fenced `syngate` block, the prose around the block being their text.

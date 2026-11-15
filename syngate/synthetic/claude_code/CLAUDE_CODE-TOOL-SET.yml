@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 45
-test: {argv: ~, live: ~}
+test: {argv: 5170fc30e49a31d15ed79d61940f7797c537f98e625e9652e947e9f85c164a41, live: 4e215e386ddcf2e211c242f1982ccc89266135bdcb2aea225827a11774042093}
+review: 5ef786dbda4c2f60fc74f87980efbe3f200922ef1f96778ffa15ca1659614d25
 ---
 Closed tool set
 of the Claude Code connector names the CLI its whole built-in tool set — `Read`, the tools of the call modes that are on and `Skill` while a skill on request is delivered — so a tool the connector does not name never reaches the model.

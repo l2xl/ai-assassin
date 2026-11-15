@@ -1,6 +1,7 @@
 ---
 parents: [CLAUDE_CODE-060]
-test: ~
+test: 92fe43aa06163de815f54014f53cf4e7457c272e5f60ff78e4c4e81d42979350
+review: f13fe6cd5532ef8a861c5e54585aeff506986eb1eb701f0019af3723f4b323eb
 ---
 Answer text
 of a Claude Code turn is what the model wrote as text, never a field of the answer tool: the text ahead of a text answer, or of the stream's end, is the reply the connector returns, and the text ahead of a calls answer or of a tool call of the CLI's own is a message.

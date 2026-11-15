@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 35
 test: {api: 4062827f1a6df037c42076d2ab3388803e68bd151fc8197a8dce174ed50873b6, list: 0251accca68a5ba43af7353382cd82ec7784222f47ad26d58b326ad9ad714309}
-review: 2074dab6169682048bdb208a15ea90ea4d52d5cc64954c0d34cdb475cac1e94e
+review: f036e2342b19b05261049f19c987557f678ae189b79ebfa2097aba7f4101cd07
 ---
 Conversation list
 of an item keeps every earlier conversation filed behind the live one, never erased, each resumable as the live chat.

@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: ~
+test: 75c897f0d0fa20eac0858344bc2c2ed8e0027b25b7b6508700012ad1173f0d29
+review: ad1429663df214a05a9aa9dbc4559f6b99aa9311df666c4caac515913e4e487f
 ---
 File re-read
 — the read of a file the system prompt holds whole — is pruned by rule.

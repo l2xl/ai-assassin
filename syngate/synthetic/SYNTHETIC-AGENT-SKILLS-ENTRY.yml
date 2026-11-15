@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-AGENT-SKILLS]
 order: 20
-test: ~
+test: 5f2cf506551384f7147ff1395979d75323f828c7cf24f080080ccba18793d619
+review: 03308db9273c4b28ed521b062b96a64b3d72cdeb1c697b44010a044e9ff205ff
 ---
 Skill entry
 puts the skills of the list into the agent's system prompt after its own text. No other skill enters.

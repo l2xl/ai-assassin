@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC]
 order: 35
-test: ~
+test: c91d76a7232e38b88d85d08f060aebc22a1d4d652f672b30958c77ad34074b51
+review: adc13b3953ba6edb3dcfbcf4086fd2328e526224e6ec88c8fd23adc9ce74765b
 ---
 Prompt library
 is the markdown files under the package's `prompts/` folder, each a skill, a tool or an agent named by its file stem.

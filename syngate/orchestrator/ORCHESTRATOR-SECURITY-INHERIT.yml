@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
-test: ~
+test: 4014c697b2dcd370467b4d56cbbe0d0a6b2643627383db62f2a015f99ba5be8f
+review: d97b276df93421e76c2c96ae7965fd4de4504dd0d41042720c5b15bfc1a226df
 ---
 Inherited mark
 is the mark a subagent starts with when started from a marked session.

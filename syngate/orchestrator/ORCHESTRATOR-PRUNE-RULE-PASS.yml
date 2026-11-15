@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: ~
+test: 43ab4aef69f71ee17c1a26adfc9645ac7e8c108e30e712fec2ba30a6cf8b021d
+review: 91aff2273ec6b46472a8d13a55a2d66e22447376023cac3e32a133d95007a4a3
 ---
 Passing run
 of tests has its output pruned by rule.

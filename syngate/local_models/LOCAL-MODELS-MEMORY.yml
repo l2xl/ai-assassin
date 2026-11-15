@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-UP]
 order: 20
-test: ~
+test: 1a0e80a9adc0445b89bfe0a5833fbed003d27fb8aa2aee4d1b1022c3c20a0037
+review: b5f4585f38f99d0916604683085d758a2aabe437e83b88df715df4bde09bdbe4
 ---
 Memory check
 refuses, before anything starts, a preset whose models on the card declare more memory together than this machine's card has.

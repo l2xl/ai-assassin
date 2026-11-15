@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-AGENT-TOOLS]
-test: ~
+test: 8ab93e2506250e970125d8326261c75fcec5ead1b30d3aa18fdb75c72471380a
+review: c717df81f07a814f7465470517d3c48490f6539775fef339e8789a4dedbda94f
 ---
 Tool list
 is the agent's `tools` list, in its order and each name once, empty for an agent without the key.

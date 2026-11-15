@@ -1,7 +1,8 @@
 ---
 parents: [AI_CONNECTION]
 sources: [src/ai_scratcher/api_connection.py]
-test: ~
+test: 606e506bbbc192346a3b2a2c6153d7ea546b762a89d4a3db7121eef49feb7049
+review: 73c604a47c199929b2e0c92d0fb0bee3906f58ec0e129ff95bacfe4b904aafa9
 ---
 Model family
 is the line of models a configured model is declared to belong to, its tier its place within that line, a larger tier the stronger model; the connection's settings list them with each model that declares a family.

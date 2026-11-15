@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND]
 order: 248
-test: ~
+test: 3318488c47ab073ccfae4730cdf4aeff5c79b22c24a3e18931d34fb59830d8aa
+review: 6c033c597feb182cf6a21274d58e15c6e20d2d9c45d138d2fb756ab4b541f306
 ---
 Subagent recommendation
 is made by a delegated turn as by any chat — a model and a permission — for its own chat alone.

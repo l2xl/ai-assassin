@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 145
 test: 5ae125423ed5686fe6b31e2170f553b398fc83f7ca6c44d606a2181797f24385
-review: 9f8040d6b70e4a7b8e5eeb4ba01c1c96c0991de2bd54db63abf3b5742fd28154
+review: 5b065da6683c3b604f1b84c46699c48713ebf040b0668c7ce2788ebbad8bf7b8
 ---
 Subagent mirror
 shows a subagent in the chat it was started from: its indicator while it runs and, once it ends, its report and transcript as an agent message.

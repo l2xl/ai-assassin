@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-PRESET]
 order: 50
-test: ~
+test: d8c08e41f1f79fd80de9d5275d5b6cbfdf7804d7193f3a85fe037d86541b2351
+review: 80a87900036f9f9a9d020f5c7c4724abb6ade7582ae174718ad811b1008113e0
 ---
 Down command
 removes the containers of a preset's project and keeps its volume.

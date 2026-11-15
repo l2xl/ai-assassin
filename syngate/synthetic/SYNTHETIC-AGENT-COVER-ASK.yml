@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-SUBAGENT-OFF-CONTEXT]
 order: 35
-test: ~
+test: 2f664de3a7fa34014b4ba0a859d0b501617252c8f9bbebf5de28303a134f44a3
+review: bce939a61eb45f05d8e88404fafa50a531abe6a3cbbf368547bbacc81c9eeebc
 ---
 Cover request
 asks the user in the starting chat, as the recommendation to switch the permission on, for every permission the agent's tools need that the chat has off, the run waiting for the answer; a granted permission is on for the chat from then on.

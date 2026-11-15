@@ -1,8 +1,8 @@
 ---
 parents: [AI_CHAT-011]
 order: 40
-test: bda0b56c1cf4d8db09bf3ca519ae79ebc119f429f13c35f10654a52af91b96a9
-review: ba5cd9ce2fe1f275688e6699134dbbf70f20227baddd1830beafc3cdff279783
+test: db9f5dfe924b2bcd45cc6934429233d34b6ea219a23b06664f3f2355d7398088
+review: c90a0df64571393265c5a596b6f41e932adfa93feda1b7e7bc8624c413d14ca7
 ---
 Tree edit permission
 switch of the chat is on by default and is the harness's own: with it off a reply's add, edit, move and remove calls are refused, the refusal going back to the AI as its next prompt, and the chat reads the DAG only — query and context never switch off — the model told so with every turn; a delegated turn cannot switch it on while its parent's is off.

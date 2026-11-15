@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 30
-test: {unit: ~, page: ~}
+test: {unit: 744c0c66425ea7461f76b96d24f1be906ab016fdf47c43e385a876194b998f10, page: 6405f837bb282a351d531391b3331ff2b673b8b636aaeece6ad794406738a126}
+review: c7713fd4fe75963bdb71613931e3a40b8211cfe44d8ac20db74b8e0dcf59d9f7
 ---
 Turn replay
 writes a new transcript, the old one kept: every entry ahead of the earliest changed turn copied as it stands, so the cached prefix holds, then that turn and each after it rebuilt from the transcript it was first sent in under the pruning now settled; the next message resumes it and carries the stubs, the turns staying true turns of user prompts and the model's own answers.

@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE, SYNTHETIC-SKILLS]
 order: 320
 test: c7a12dd0d3550cd1417d74fb835d1d6ad5be85526926fc6d9ec31d00739d0ddd
-review: a6b24cfd2de40c2eeeecb5f30280fa6d97028c1956f9f1f14d7d38b2168bb115
+review: 45deadc3eb6c977d8bb448aa831214c05381788c25a8630cf0c9e20dbe5dd2f4
 ---
 Native skill use
 shows the underlying model calling a skill that reached the CLI only through the library argument.

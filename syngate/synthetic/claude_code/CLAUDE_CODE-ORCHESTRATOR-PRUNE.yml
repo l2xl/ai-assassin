@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR]
 sources: [src/ai_scratcher/cc_transcript.py]
-test: ~
+test: a39560db443a12eddcafee2407145d20937ee615bb27309a18a59aa6b58572a7
+review: 1feb1a807e5524d966ba9231038ebe36a4359237666d5c0e810b11101c6fcea4
 ---
 Owned Claude Code session
 is the transcript of its CLI, which the harness never rewrites in place: a change of what the session holds pruned is brought in before the next message by a replay into a new transcript or by a forked rollback, and otherwise waits for the conversation's next session.

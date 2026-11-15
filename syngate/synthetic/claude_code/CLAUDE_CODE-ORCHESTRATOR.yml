@@ -1,6 +1,7 @@
 ---
 parents: [CLAUDE_CODE, ORCHESTRATOR]
 order: 292
+review: 1ec396e8fa4e51716bf0430b8e6e6a6ce56f6cb3b072bfcbeb1595e624642bfd
 ---
 Orchestrator exceptions of Claude Code
 are where the CLI owning its session and tools keeps the connector from the Orchestrator's design, a mode of its own recommended in a turn taking effect with the next turn.

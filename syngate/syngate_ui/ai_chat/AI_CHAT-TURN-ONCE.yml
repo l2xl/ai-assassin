@@ -2,7 +2,8 @@
 parents: [AI_CHAT-TURN-BLOCKS]
 order: 20
 sources: [src/ai_scratcher/synthetic.py]
-test: ~
+test: 20560e4d0a175c998379d2aef3a15f169e3a20119c56e076875fc6c9ebeec58d
+review: fc1a442c140f962374945817504af6b232b16f24371a8346c55d09f26126f360
 ---
 Message step reported once
 is added by the engine for the text said beside the calls of an answer only when the connection has not streamed that text already, as a message of its own or within one, whitespace aside.

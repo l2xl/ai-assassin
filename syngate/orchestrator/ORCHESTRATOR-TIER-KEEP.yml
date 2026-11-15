@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-TIER]
 order: 130
-test: ~
+test: 36faa9130c9b4071e1ccae93f34402eace43f8c6c2198dbbd05c03ce54fc8e5e
+review: 30f671b5234715709be674aac8485d66c86b280b37ed5633b190579a62a95ff5
 ---
 Kept context
 is the system prompt of a session, composed once with its files as measured and sent unchanged for as long as the session lives.

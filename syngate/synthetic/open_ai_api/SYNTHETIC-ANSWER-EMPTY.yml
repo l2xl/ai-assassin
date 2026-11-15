@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-ANSWER]
 order: 365
-test: ~
+test: 8e79341d2f55d1bfe19a489e77d0724083458796666cbb94c901c415d6fdf66b
+review: 0aa8bc425eb1cbef0acfa2ff556c166497a3fae4b6f4a32946dbd416f2513518
 ---
 Empty text answer
 A text answer carrying no text shall be refused back to the model within the turn, rather than ending the turn on an empty reply.

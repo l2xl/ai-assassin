@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SERVICES]
 sources: [src/ai_scratcher/assassin_setup.py]
+review: 947c0839aec25a497baba02cfc660052fd3658563d37d27088fc5c3a9e76de8a
 ---
 First setup
 is the `assassin-setup` command writing the model services a project starts with into the server settings.

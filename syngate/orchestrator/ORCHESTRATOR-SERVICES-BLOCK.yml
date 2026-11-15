@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SERVICES, AI-CHAT]
 order: 330
-test: ~
+test: f72c26412267a460b5965d988b307ad177cba3445c33d503646bc56ae06092bc
+review: 56a0d1a521fc6ebeb97cb15be91e411b7d0ae20f30c633479ced047886ed8a89
 ---
 Blocking alert
 stands in the chat while any model service is not configured or does not answer, naming the role, each model locator it was tried on and its failure, and no turn is dispatched until every one works.

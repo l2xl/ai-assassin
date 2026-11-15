@@ -2,7 +2,7 @@
 parents: [AI-CHAT, SYNTHETIC-TOOL-AGENT-BACKGROUND]
 order: 160
 test: a87da01783c9671de79c1007ed74754ca32b5d85972b1d12ebf72ce875b4e240
-review: 8cb970c49c441d222a18f04dabe60af6153a2c30e5d0934b88207551f2b617a3
+review: 0d4ec8c121cd70f3e818175f0f8da1b27194da47801af2ee648976e79da2b1bc
 ---
 Background subagent chat
 stays free while only background subagents run: no turn of the chat is running, so the stop pill and the busy state are absent and a new message is sent.

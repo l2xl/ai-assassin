@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-OFF-CONTEXT-AGENT, ORCHESTRATOR-SERVICES]
 order: -2
-test: ~
+test: f1a8a14fa7898988bfc272224e4383b99122d8e01487287ac0ef7db7338b90a8
+review: 0938b5c19026a66624c7f8585720fc0fe418274837dcdd22318c793a99596d95
 ---
 Agent model locator
 is the connection and model the settings point an agent to and the agent runs on, the default locator standing without an entry of its name.

@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOL-SETUP]
-test: ~
+test: b5c97c5e922118fb161626e3e93bee251886e7d2ced0daf9a4e660f81c5ed1e8
+review: c919bc7899e9b4cf95f326639fa2e3d8894dfe9188e5f2061467827cd0d8efba
 ---
 Models call
 returns every model a chat may run on with its connection, family, tier, strengths and efforts, the chat's own setup marked.

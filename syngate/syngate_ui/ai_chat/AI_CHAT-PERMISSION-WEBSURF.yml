@@ -1,8 +1,8 @@
 ---
 parents: [AI_CHAT-011]
 order: 30
-test: {offer: 06d11e4aed0e8470267767fc6b67fe2f6a2a1eabe2fba7f85e41b49de854053e, refuse: 587b3aaf6aed0bb9c3a51651ebb021592b99eb4f857bf44925a22a85a1f0cd72}
-review: 525f340b5220c97200186f038bb526433b90a9c7e73a6c4bfe00aa39c5b27f67
+test: {offer: 06d11e4aed0e8470267767fc6b67fe2f6a2a1eabe2fba7f85e41b49de854053e, refuse: 1d2befbeea7a5f8cfe2c8b862e00b6cb48526812d8c972ffb17a25963e42fde8}
+review: c9f8e6ffa93035478c9e01b214f176929a2ea207a99ec018570c4008f0eac44f
 ---
 Interactive WebSurf permission
 switch of the chat is the harness's own, off by default: with it off a websurf `fill` or `mouse` is refused, the passive actions staying on.

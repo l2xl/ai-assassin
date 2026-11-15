@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE, AI_CONNECTION-LIBRARY]
 order: 130
-test: 5179e140ff8acc029c382124b2de0a1bc03b5d74c0db0027fde112a1c0d3f430
-review: 0b9ec9b69fb0791961a57e8cb72fbc7a16ee506f634fbee49fb4dbca90528716
+test: 2347714f07b3fdc47f6acc233290255d6632e6529c3ba022cb2600822ebb2623
+review: 1752cbc08af9259b52a17e73f14759e4d62d4a8822ee2800628fc116ae35ff9f
 ---
 Native library delivery
 is the library delivery option the Claude Code connector declares: the skills on request and the tools of the prompt library reach the `claude` CLI through its own skill and tool configuration, not the seed prompt.

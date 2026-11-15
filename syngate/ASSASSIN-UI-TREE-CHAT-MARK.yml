@@ -1,8 +1,8 @@
 ---
 parents: [ASSASSIN-UI-TREE]
 order: 50
-test: 46fc85a6573f6b362b973431fa039053ed635b0dbc098aca93f6d01858100d57
-review: 6d03a5db69febe7e6fb967ebe5a504f74e94fc94ec3f551ca01306cd6f6520b5
+test: 8fe91d18d02c19d3fbef45997a6d98e3c2e2e0a8aea85caa7bfc691147d0ddd3
+review: 227f17e02a836b2427134144db4bd0e0bc6b8d3c48892f581e8c35a627a471c3
 ---
 Chat state mark
 follows the common label in the row while the item has a chat, showing its state; clicking it activates the block and shows the chat.

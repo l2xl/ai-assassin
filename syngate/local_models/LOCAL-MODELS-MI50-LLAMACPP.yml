@@ -2,7 +2,8 @@
 parents: [LOCAL-MODELS-MI50]
 order: 20
 sources: [src/ai_scratcher/model_presets/mi50-llamacpp/compose.yaml]
-test: ~
+test: 98b83e778ca21eef428a1b639f7aaa69b143065ceec794d853f85a4b8200d01f
+review: c8b27a72958f647206c1c5fba5156e6459688b3d9d28a99282fe2940da5fb518
 ---
 mi50-llamacpp preset
 is the generic llama.cpp preset of the MI50 cards: every service of its compose project builds on the gfx906 build of llama.cpp by mixa3607, `docker.io/mixa3607/llama.cpp-gfx906:<ver>-rocm-10.1` — daily builds, the tag pinned in the compose file's `x-server` anchor.

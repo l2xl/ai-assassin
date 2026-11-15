@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-HELD]
-test: ~
+test: 34d3b7d7259a7393e8e9a672165f204ff781f2b15175481f9134ebf9e4d16034
+review: 5ac1bba5a0685deea2db8e677a82eba39a4a038424d435450e583e10aed8c21d
 ---
 Held turn reset
 is refused, as is a rename of the chat, while its turn is held.

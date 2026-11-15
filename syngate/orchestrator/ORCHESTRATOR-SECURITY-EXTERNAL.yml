@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 order: 6
-test: ~
+test: 8b7bfb78639805565fb9e572eb04bf2576e2ca5ba8c83106f0b4d4a24e573940
+review: 8d5c93c08422a4de02984b8b8e0469891b09abc4ff9a4d439a39b8938b32cb27
 ---
 External result
 is the result of a web fetch, a web search or a WebSurf call of any action, and the report of a subagent whose session took such text.

@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-PRESET]
 order: 30
-test: ~
+test: eee3266f85dc32f650417df7d02af9d7ad7245743bfdab7e2c705fd0f936d726
+review: 2d3cbf9b4a6f020754ddefe93c3789955c00911fa8f23f847421b19bf83351a8
 ---
 Status command
 lists every model of a preset, or of all presets, with its container's state and health, its port and what it serves.

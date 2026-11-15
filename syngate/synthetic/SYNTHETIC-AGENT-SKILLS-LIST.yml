@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-AGENT-SKILLS]
-test: ~
+test: 4b5b9bb8b3cc9f3aedc3c8d6cca938e3d6612c10b1c6d86ec3f554037e739ffb
+review: dca36467237e7938c3d2f23e150cd6412f2e7c37fe0a8573993fd28186e5104d
 ---
 Skill list
 is the agent's `skills` list, in its order and each name once, empty for an agent without the key.

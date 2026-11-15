@@ -1,6 +1,7 @@
 ---
 parents: [AI_CHAT-STATE]
-test: ~
+test: 588e7cc657691d44fd92cf9edb626020ba28c52f68858806c77ef9f5dbc75ec4
+review: 67e7841c145e8fbe7ea7ed04b4fc24e54b8d6ade83e533439bc1314b07dde5ab
 ---
 Chat state
 is the server's and the same on every page, unread alone being the tab's.

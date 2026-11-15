@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND-BEHAVIOUR]
-test: ~
+test: e857172e674af51cda407457f6905a5276e027d4fd42ee645523ff5651e46fa6
+review: 23c76da5301747be44b660547eda4da6b2ee76e43486162057cac7c5f087512d
 ---
 Default behaviour
 is auto lower unless the settings name another, a chat's own choice standing over both.

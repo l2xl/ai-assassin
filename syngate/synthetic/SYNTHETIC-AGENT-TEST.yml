@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
 order: 60
 sources: [src/ai_scratcher/prompts/test.md]
-test: ~
+test: 622520b8161460d3939aa7e5f020e457d07ff7a0451ec2c37dcb5c7d827d62fb
+review: a7cf5dc6afed71d41c47cf049851b378357688d1effea956dfbb48efcb21d9af
 ---
 Test agent
 is an agent with the syngate tool alone, told to run the routines bound under the items its start message names and to report the failed ones.

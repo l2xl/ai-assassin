@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TURN-LIMITS]
 order: 10
-test: ~
+test: 80b0155f108a8ff6375f63afddd7cc9d712d0230211ca9d903cf14176ba6189d
+review: 570230159f8723e7f71f31bdf9532889dac88f7d91085dfaf6747786f5b99ecb
 ---
 Stall breaker
 tells the model the first time a round repeats the calls and results of the round before, and closes the turn the second time.

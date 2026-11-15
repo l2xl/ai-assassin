@@ -2,7 +2,8 @@
 parents: [LOCAL-MODELS]
 order: 20
 sources: [src/ai_scratcher/model_presets/cuda-4gb/compose.yaml]
-test: ~
+test: 6635610ce5d3a3ac484a980e22674bf8bd81a42f7eebd9e5cc4c94d9c88ab379
+review: 349165629826653d0a61078b7ef0ba44cbf6e0819a4c8511d5038d7d675b519d
 ---
 4 GB card preset
 `cuda-4gb` serves an embedding and a rerank model that fit a 4 GB NVIDIA card together, on the loopback ports 18081 and 18082.

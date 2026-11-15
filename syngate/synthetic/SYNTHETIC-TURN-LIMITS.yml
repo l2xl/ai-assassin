@@ -2,6 +2,7 @@
 parents: [SYNTHETIC-ANSWER]
 order: 480
 sources: [src/ai_scratcher/assassin_ui.py]
+review: 044130dc0053144dafffd183001099b746b4899eb20498f9fd963c61b0d202f9
 ---
 Turn limits
 end a turn by what the harness observes of it — no progress, or a fuse far above normal work — never by a small count of rounds, and a turn so ended still reports.

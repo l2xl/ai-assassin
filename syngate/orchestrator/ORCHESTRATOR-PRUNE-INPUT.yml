@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: ~
+test: cb26ea72cd30bb568320e4fb00c12d5dcd2781ecf36b4e463f0b0c662f30fe6d
+review: b6548782314bead772664d0d150b629675b30627c02815d8374c1ba1523c5dfd
 ---
 Prune input
 is the texts of the ended turn and the stubs of its steps, not the session.

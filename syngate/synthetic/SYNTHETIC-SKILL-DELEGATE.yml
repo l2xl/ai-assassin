@@ -3,7 +3,7 @@ parents: [SYNTHETIC-SKILLS]
 order: 20
 sources: [src/ai_scratcher/prompts/delegate.md]
 test: d78a45d0d137d9da77e43189361460a61925544b7ff9a955807ae9640140cf15
-review: 3c6888e59e9c77938900e40e603cad64a79e49a2da37b0a138b3a5b651feae03
+review: 7654cf8cae2bbb363e8946d22a3896825e042208050491cefba50974dffa495e
 ---
 Delegation skill
 The delegation skill shall be a default skill stating how a turn on an item with children delegates the separable ones through the agent tool, reviews their reports and, on one closed by a limit, delegates anew with a corrected prompt.

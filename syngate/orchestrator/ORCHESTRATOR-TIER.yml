@@ -2,6 +2,7 @@
 parents: [ORCHESTRATOR]
 order: 70
 sources: [src/ai_scratcher/tiering.py]
+review: 791d23a4cca8ff52ccd64587ba741ae36d66911a40243eb4d66a86145112e2f8
 ---
 File measuring
 enters every file of a seed context whole or, measured heavy for the message, as its reference alone — the items themselves never being cut.

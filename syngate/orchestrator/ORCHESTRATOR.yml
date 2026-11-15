@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC]
 order: 25
+review: 57b9aad753ce5b4f86b03a3182467f7ca8f0b171a03f436534cb2e76a7cdf6c1
 ---
 Orchestrator
 is the part of Synthetic deciding for every turn which agent answers it, above which context, with which model and permissions, and what of it stays in the session.

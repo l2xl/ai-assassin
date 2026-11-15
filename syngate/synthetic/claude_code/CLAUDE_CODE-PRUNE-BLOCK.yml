@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 70
-test: ~
+test: 0305ff267a61e85d881d857b03a21ff813689ade53314903d34db3ff4b811df9
+review: abcaa787610710c9c149be88261a57320fafb06bb3797d79e5e7892f5b8d2b56
 ---
 Replayed history block
 marks the turns of a rollback as earlier turns of the conversation, history and not new instructions: one JSON line for each entry, naming its turn and its origin — the user, the assistant, the harness for a result or a stub, a subagent by its item, external text inside its untrusted fence.

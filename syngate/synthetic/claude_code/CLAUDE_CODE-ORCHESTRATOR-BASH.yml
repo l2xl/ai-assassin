@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR]
 order: 10
-test: ~
+test: 6814164483350ea751edf7ba77362cf1831e25812910fff51a962fdebf1999fd
+review: 4ede0ccf544de220573d9de25f820a7252000608fa26822ed3ed435547afe902
 ---
 Unheld Claude Code shell
 is the CLI's own `Bash`, run without a security hold, while the results of its own web tools mark the session as harness results do.

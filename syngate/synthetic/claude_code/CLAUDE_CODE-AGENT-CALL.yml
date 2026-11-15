@@ -1,6 +1,7 @@
 ---
 parents: [CLAUDE_CODE]
-test: ~
+test: 129d6b53e84b8ac3fd9c77c41dfe43ae625ceeaeffa9b0e886f55c9de511faa5
+review: 8e62bb49ed66e01bbb11edae9923e0b502b57d609bcc43b87c01fce0e7b43f3d
 ---
 Agent call of CLI
 runs an off-context agent as a fresh call of the CLI with the agent's prompt as its system prompt and every tool of the CLI's own denied.

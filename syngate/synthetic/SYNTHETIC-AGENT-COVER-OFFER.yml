@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-SUBAGENT-OFF-CONTEXT]
 order: 25
-test: ~
+test: d9e536d97c7c9752a5813475cbd931bd187d7387457a7946be1b44b51f6c1df2
+review: 7c1f30fe88a46630da81810997698375b2aa20f676c46b3656299ee54c9917f9
 ---
 Offer cover
 forbids the run of an agent listing a tool, a skill or a permission the chat does not offer, such as `git` with no work tree at hand: no turn of the agent starts.

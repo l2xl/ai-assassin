@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-AGENT]
 order: 20
-test: ~
+test: 81188090e8ffbb1f196818cbe86a0a1155008c0e3cf3b7e6f9926a31fbb2fca6
+review: 033c3376fd7761eea451770673fd8e6cd145aa30eeb1bfc7e040ba49acb84897
 ---
 Named agent call
 runs the off-context subagent of the prompt library agent it names instead of an item, the report coming back the same way.

@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-UP]
 order: 30
-test: ~
+test: 2aa40eb2c34c2fbc1be0b7c2ae661359a9b2caaa5818a4df077305d0d56a9808
+review: 153ef7a8dd0478384ec89a840572f57eb2e80e71738191fc64d91957eba7b14b
 ---
 Readiness
 of a preset is one real answer taken from every model once the services are healthy, the up command failing with the tail of the project's log for a service that did not come up and by name for a model that gave no answer.

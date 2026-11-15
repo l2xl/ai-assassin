@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: ~
+test: a8d58b42d0550a3761025bb07b3fe92e8f36c7c9a78d378364c6f619d5e1161d
+review: 32cb86dbc55e9ab9943b197f929cadf341c1d0b3d508dea5b6964a3b81da1e90
 ---
 Tree read
 has its result pruned by rule.

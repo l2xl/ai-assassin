@@ -2,6 +2,7 @@
 parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
 order: 410
 sources: [src/ai_scratcher/patchlib.py]
+review: 4cfc7968be1ed5559d4794f43771518c124f10e199b02d3c84a68027d49c0653
 ---
 Patch tool
 changes project files of an answer by a unified diff applied with git, the switch Edit files gating it; syngate items are never in its reach.

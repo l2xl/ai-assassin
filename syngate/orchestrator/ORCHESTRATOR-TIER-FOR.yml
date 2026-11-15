@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-TIER, SYNTHETIC-TOOL-SYNGATE]
 order: 140
-test: ~
+test: a1f1c900263d5f4830d58de6f76376a30f83f46ea4e2b444f2296edb9751f717
+review: a11655bdb5cc3e098cbc1857268d5c9749d146241eb05deea02b32c03edfb7f6
 ---
 Context purpose
 is the `for` text of a context call its files are measured against, the turn's message standing in without it; the syngate command's context stays unmeasured.

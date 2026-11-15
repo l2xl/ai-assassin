@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 15
-test: ~
+test: 74eabf010df9cb9c9027f974b450f061860a23935603084bf5b0ce5f4ebc6a25
+review: 9f21dff6f70dfa5293a70ed5f989d6f1200ec9c005789552a49327ea555dd51d
 ---
 Claude Code session size
 is the input tokens of the transcript's last request, cache reads and writes included, never the sum the CLI reports over the requests of a whole call, which counts a session once for every request it made.

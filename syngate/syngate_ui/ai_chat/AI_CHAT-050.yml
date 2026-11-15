@@ -2,7 +2,7 @@
 parents: [AI-CHAT]
 order: 70
 test: 794f8eb7e280a0b718beec291d899df75777914e044c2a2e29828db5bacc9173
-review: 0080f02f1eec3409585e030151a0c051f3f17199ba06d9212d9c1829b4e1014f
+review: 67288b6e8805c9420abca1a2c109e487c1f961c1c124d0829426348c81de02bb
 ---
 Item reference
 in a chat message is `@UID`, the way a file is named, the harness bringing the item's statement into the turn.

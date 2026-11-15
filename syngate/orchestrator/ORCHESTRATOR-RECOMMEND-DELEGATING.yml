@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND]
 order: 247
-test: ~
+test: d0427385b1f36e00a391ecc44a32c43c630321dabbeae7387600fdae189e4dc1
+review: 179b3f924eac5601fc899865d26af639a6c702897ee0bda66a87871b65ae88d5
 ---
 Delegating recommendation
 is a setup an agent call names that differs from the delegating chat's own: it is a recommendation of that chat and passes its behaviour before the subagent starts.

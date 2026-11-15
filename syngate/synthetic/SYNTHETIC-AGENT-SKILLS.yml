@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
 order: 13
+review: 623c5527b744607484fe5e5f4a7da6a86f042d40e302255c8ac51c020533d509
 ---
 Agent skills
 are the skills the agent's `skills` list names, fixed by its prompt: the chat that starts the agent neither adds to them nor takes from them.

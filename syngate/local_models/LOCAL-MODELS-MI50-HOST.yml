@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-MI50]
 order: 10
-test: ~
+test: 0b4dd9e4409b043433add97053095d904c404dcd0958e6f82415f0af75bff845
+review: 856eaa0dcc1f0d237bc8f4975108158177b9663f3970e347dcb65c78b58bf5f1
 ---
 mi50 server host
 is the docker host of the server holding the cards, `ssh://alexey@213.158.1.168:49999`, which both mi50 presets name.

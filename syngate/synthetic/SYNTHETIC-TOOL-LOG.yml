@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-PRUNE, SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
 order: 440
-test: ~
+test: 7256edfcc45c48de91881a2c78f5f338763e31346a7c27389fe8d11a160f524a
+review: e186fd696224bf2ffe2e2c18adacfd1de879983f771c8e072fc5aa48737bbb8e
 ---
 Log tool
 returns the steps of a turn of the chat one line each, or one step in full.

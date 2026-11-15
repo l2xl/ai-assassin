@@ -5,7 +5,7 @@ sources: [src/ai_scratcher/prompts/websurf.md, src/ai_scratcher/websurf.py]
 test: {run: 7c836dc5697a38cd06df8e84643d950a44bd6810fcf41c2a9ab36235689af90e, absent: 9ac0980929ad04f2ba3f896602c1574ef7f944cbecb9ea030133e4e694aa50dc,
   image: e0f1f954346e1522579174b2885241858512dbb8b07f343d5dc672315857924c, stop: bef67aca09d5e7ec369d9e6fffdd2ef79cb891c34041a18788a0fafefbf63b61,
   covered: 65cc32e83150b4d1327fff6b2b4fe96e10b92e4bcd55265da903b80ab9845619}
-review: 5dcde2bf6f5c50352cdd12eabaca62347838446eac96b7972fe4ed12e81c3c70
+review: e9af231657c3ccd8fa83dc7f19e3fe8d9d5344f6eca58e6d658b0666bf7af5ce
 ---
 WebSurf tool
 sends each `websurf` call of an answer as a surf request to the browser extension attached to the harness, its answer coming back as the next prompt.

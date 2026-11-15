@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-PRESET]
 order: 15
-test: ~
+test: fd75606f1ffb816853354cc5e0c27d86646703147e7e07755cf6e7e62b5fc4ea
+review: 9b1ed1e737ef7032be967cbcf058d984f510a1614e8d93f876902983746e2c91
 ---
 Preset host
 is the docker host a preset names, on which its project is served in place of this machine.

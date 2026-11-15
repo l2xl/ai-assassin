@@ -2,7 +2,7 @@
 parents: [AI_CONNECTION]
 order: 10
 test: 1a0e17191fcfcc8886d01339b783410431c6e8301fbae8c72be381cfe7d548a8
-review: 29b6311ce43431ee9dcc469a8cf51aae5563ba30d6ef94cd04f4078be8234d2d
+review: f8ec7d3a965230de2dbad3a320f376874859cf855d4081c9d40d43579c7e0834
 ---
 Claude Code connector
 is the AI connection running the local `claude` CLI non-interactively, one call per turn.

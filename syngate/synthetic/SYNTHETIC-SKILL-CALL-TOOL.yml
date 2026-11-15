@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-SKILLS]
 sources: [src/ai_scratcher/prompts/call_tool.md]
-test: 14ae0b6ee5a8c7d69483c1dc6f4d63c861ee6e45b5755b20665d11836ef70770
-review: f0d8d7e0dbe2d929fa033527346bbd8aac1fd079edfef5c39f7c609002987a8e
+test: b685c8a0392fd5af5be7ac8567808e2bf94478c05a960580d3fdc303f1743e10
+review: 34366d4a434d0df62cc922a2a89bf042f5785ce5506602d786fd5901eb160243
 ---
 Tool call skill
 The tool call skill shall be a default skill stating how an answer requests tool calls and how they are applied.

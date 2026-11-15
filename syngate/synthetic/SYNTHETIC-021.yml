@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-ANSWER]
 order: 370
-test: fc928e9a225ac40b282b73189f0f91f67d4ba104b2122291261763e8c32eca1a
-review: a8730660132ba2bce0d3cb237d33342a59e86d4fd7f737e7caeb10e944e3d063
+test: 64453cadb16d534484cc01cc81fa2347204da7bd9474eb1a42034ef9f4d708cd
+review: 149543908c4130524b471ad89fe6f3735981ef4b2362998e591e082d87cbcfd9
 ---
 Result rounds
 The results of the query, context, test and agent calls of an applied answer shall go back into the same session as the next prompt, the exchange continuing until an answer carries no read, no run and no delegation.

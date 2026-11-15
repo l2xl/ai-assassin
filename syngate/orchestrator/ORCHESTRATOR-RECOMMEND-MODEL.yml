@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND]
 order: 232
-test: ~
+test: e0046c3b1c95ec22eff7b9833c656a93c12bd654f32906d3a9f3de1cb9deae2d
+review: dede4a5f3f0ba1cf8cafb751e8e183909fd84e0e8ca0bf591ca93bedf8697725
 ---
 Model recommendation
 is the setup call of the chat's own model naming another model for the task of a message.

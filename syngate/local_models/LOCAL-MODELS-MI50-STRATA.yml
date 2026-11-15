@@ -2,7 +2,8 @@
 parents: [LOCAL-MODELS-MI50]
 order: 30
 sources: [src/ai_scratcher/model_presets/mi50-strata/compose.yaml]
-test: ~
+test: 5e7c5478474aef36a6c5b35b311f2ee7dafa6476a5fc35bf109ca5e773d47cca
+review: e9d483ef07e9f616b264398c4d19caecb465cc10079bdf6dc362ac2b82c1f0f2
 ---
 mi50-strata preset
 is the generic Strata preset of the MI50 cards: its own compose project runs the gfx906 build of the Strata inference engine, not published as a ready-made image but built from the `strata` subproject of `mixa3607/ML-gfx906` against the ROCm base image, with the same cards and models folder as the llama.cpp preset, each service listening on its own loopback port.

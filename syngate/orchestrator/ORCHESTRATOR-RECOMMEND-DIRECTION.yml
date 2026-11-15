@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND]
 order: 236
-test: ~
+test: 081dd59b885dc190de29f309da0d193ad38f8a9aec8da2d6f304f77ad8c46bc0
+review: 705bc85d96fcc9174298519976403b8b2c9da8e8bc981e2c207284b94b80fa69
 ---
 Recommendation direction
 is a lower for a model of the chat's family at a lower tier and a raise at a higher one; a switch for a model of another family, or one without family or tier; a raise for a permission.

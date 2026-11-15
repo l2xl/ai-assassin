@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOL-SHELL]
-test: ~
+test: 6d96083f3754938b542672f902cd7b9621504bd599e38ad92eeee0acfae852b9
+review: 2ba0ee81e5e660e1cf70031c191d59183fc0d59a77cd559f8088889c75635d44
 ---
 Shell run
 has no stdin and a time limit, and its output is cut past a size limit.

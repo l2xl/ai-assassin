@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SERVICES]
-test: ~
+test: 263c6e14fad071f00f848685478d0854e25669cf87a6815eaf6ed221b999fa12
+review: 0e76c72dd7f74c2b8246e20253fa2161a1e26d135037fd4e0920a22a1aaeaa80
 ---
 Service health
 is checked when the server starts and whenever a call to a role fails, and kept in between.

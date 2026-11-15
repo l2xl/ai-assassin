@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
 order: 210
-test: {unit: ~, page: ~}
+test: {unit: 66304972a984a036aa744a937c9b19830129c32c8f3afc39d607103d846d73c0, page: f2cbf1b91a2db1f426bfcbf2171f0b00a68bc4203ba275847c295633ae3959ca}
+review: 10c7f9950d705e7824250227e1d98dfde21f02b3d94c52ea1b68c226e1e4709d
 ---
 Owned session
 of a connection the harness cannot rewrite is pruned only when a new session starts, the verdicts waiting until then.

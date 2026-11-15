@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND]
 order: 246
-test: ~
+test: 79853e966bd5f730ebd99ada76f77431125288334b9c470cd9408baaf6229149
+review: ff38e55aa2146521f8c8666acf47f9978aab1d2d037df81829e73b40009a5bac
 ---
 Delegated setup
 is the setup and behaviour of the delegating turn, which a delegated turn starts on.

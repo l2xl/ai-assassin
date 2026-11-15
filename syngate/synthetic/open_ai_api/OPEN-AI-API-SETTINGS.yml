@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API, ASSASSIN-SETTINGS]
 order: 10
 test: 42314bdc467ffca828e878ec51964e07cfc862b15debc55e7c729cdbff0332a0
-review: e9e08b7d5d2a9d7157106964950730042b352fb4e1d66a85ee611d1d44325dcb
+review: d36c5dab525af44bedcbea48499d17ed52afcfa26cc2c7ab9abd26a644c281fd
 ---
 Connection settings
 are the `connections` section of the server settings, one entry per connection id, read anew at every use.

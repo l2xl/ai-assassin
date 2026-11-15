@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-AGENT-TOOLS]
 order: 20
-test: ~
+test: f518aa8ce060184636b4b359c5f390e990b9c7c2956664b22c2e8fe04ff22daf
+review: 7ecde0f571a5690668a605bb615e98e0aed4d8b1f3fab7a556c9c64ec529931f
 ---
 Tool entry
 puts the tools of the list into the agent's system prompt after its own text. No other tool enters.

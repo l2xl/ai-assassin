@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-TIER]
 order: 107
-test: ~
+test: 5b8508490205a6538d911467d436b3a9dd1c0ee889150adc8fbf784ae0c56a69
+review: 3656bc71f5595c84b153d1107e3ba20e2fa6baee2562bde83b2c2d2a20fa53e4
 ---
 Heavy file handling
 is the job of the chat's AI, which decides whether a heavy file is read whole, read in part or left; the Orchestrator prepares no outline or excerpt of it.

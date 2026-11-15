@@ -1,6 +1,7 @@
 ---
 parents: [AI_CHAT-STATE]
-test: ~
+test: 970682f9e4bd7eb7bd633a5e185c721e17e326c510efd2dc71e93eb9a245fd34
+review: e96e4cdb21f0136a094d6b6b30b05ef14bcb74ba4c7d0450ebd18ef94afc222b
 ---
 Waiting chat
 waits for the user's message and is marked ○, shown or hidden alike.

@@ -1,8 +1,8 @@
 ---
 parents: [AI_CHAT-PERMISSION-BASH, OPEN-AI-API, SYNTHETIC-TOOL-SHELL]
 order: 100
-test: b26f9efd76da9f27ed45605eb62be0397c738557d4ed75e6c9f89ffe4b18aef1
-review: a2d201b31c0c82ea25eeea6abb156ff8266c3c8ab0a6401ee77002e55bb1dec1
+test: da18783781f682d7543c45429a648b54ffb9c760073277631fec2ee8ef6be953
+review: 3c83511acd7c5fda838efcded96394ffe2c0601b5e046b334cc0bf5435800fdc
 ---
 Raw command mode
 of an API connection lets the shell calls of its answers run in the project root through the harness, each refused while the switch is off.

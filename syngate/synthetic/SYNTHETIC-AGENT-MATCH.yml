@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-AGENT-VERDICT, ORCHESTRATOR-MATCH]
 order: 10
 sources: [src/ai_scratcher/prompts/match.md]
-test: ~
+test: a7b1676d3f5cbd69eba51cf5e130ca088f0deb3fd93378c5f973b83f6f0bc2b7
+review: a21f9416fc7f978db2ac0bae243de5606a50d9f446620cb84e3b17b2ac84dca3
 ---
 Match agent
 is a verdict agent whose schema names one of the shortlisted agents or none.

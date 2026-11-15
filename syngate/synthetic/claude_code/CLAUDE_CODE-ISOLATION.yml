@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE]
 order: 47
-test: {argv: ~, live: ~}
+test: {argv: 69e17a0098e73817e3fa9b91a35f98601bd79340d39cd0313459751cafed2d4b, live: 97595c44286dc753571805fd38cadfb943e66565ca6eba6740f20a4dacef22ad}
+review: f832431f847df24e7361d9c9734167550013ff5128b649766750155007988386
 ---
 Configuration isolation
 of the Claude Code connector calls the CLI with no setting source of the user, the project or its folder, no MCP server, and its auto memory and bundled skills off, so nothing of the machine's Claude Code configuration enters a turn.

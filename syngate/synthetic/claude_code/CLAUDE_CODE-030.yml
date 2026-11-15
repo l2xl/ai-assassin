@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE, AI_CHAT-PERMISSION-INTERNET]
 order: 30
-test: 8e1af32e5e71d6d340df43982827f8a797a24d7f3346c3c07f3125c1aa1bbc59
-review: 2495a74cae8c713a412e174b4c3293faf99f2abd3a627244c2cb20487773d0e9
+test: 180c42b14d76b4423b5ae9924355847949ac550b4ce0921bd2a982261d98d81d
+review: 290ab26ad12e16a56b2b19f6796dcc989c2fa6bf5326973ad34f1eac4dcaebbd
 ---
 Internet mode
 instructs the Claude Code connector to call `claude` with its web search and web fetch tools allowed without prompting.

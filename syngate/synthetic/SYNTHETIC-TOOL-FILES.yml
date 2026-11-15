@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS, ORCHESTRATOR-TIER-PATH]
 order: 460
 sources: [src/ai_scratcher/prompts/files.md, src/ai_scratcher/filelib.py]
-test: ~
+test: fbec5d18ad785b5f7c2e8c671502ab46e5f31fed1ae6075cfb605d8244ff7b3d
+review: e2cdcb1759568a6835b5353cde514da66bb5741fa118f44a6f4121599f9837b1
 ---
 Files tool
 lists a folder of the project and reads a file by line range in every mode, changing nothing, the result coming back as the next prompt.

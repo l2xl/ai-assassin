@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 10
-test: ~
+test: 654b910f31c52c300e9a48b93eb795f6b575867b0bf1ab8ad4640361e8ad864a
+review: 5b70c278dd21a9e966230095f372dac26523c8b4cba6c1303e96f13680a87985
 ---
 Turn span
 of an ended Claude Code turn is what its replay starts from: the session whose transcript first held the turn, the uuid of the prompt entry opening it and of the entry closing it, and the input tokens of its last request.

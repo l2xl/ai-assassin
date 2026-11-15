@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SKILLS, ORCHESTRATOR-RECOMMEND-MODEL]
 order: 300
 sources: [src/ai_scratcher/prompts/assess.md]
-test: ~
+test: 452d6c2d0a60b2487a20e39de7fd1b45705d96d242d14507b1e0359c44580d85
+review: 985bfe771cebffe4c794fa35b8f13acf48bbafd41faa02ec28c02dd8627fd7ba
 ---
 Assessment skill
 shall be a default skill telling every turn to weigh the task against the model it runs on, along its family and across families, and to recommend another through the setup call whenever the task proves lighter or heavier.

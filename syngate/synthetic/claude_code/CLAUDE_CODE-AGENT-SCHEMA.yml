@@ -1,6 +1,7 @@
 ---
 parents: [CLAUDE_CODE, SYNTHETIC-AGENT-VERDICT]
-test: ~
+test: 81e67daac842f940c98285942d967f93e3155121f2c1650bf9f1dc8e32ff09a0
+review: e4e9173e80a884e1f2c4e8890f2b4ee5661c8959692b322479a12205128cc2fa
 ---
 Verdict schema delivery
 hands a verdict agent's schema to the CLI as the answer schema of its call.

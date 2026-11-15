@@ -1,6 +1,7 @@
 ---
 parents: [AI_CHAT-STATE]
-test: ~
+test: 027b03cf4e68c06cbe312e10d3e0b5deeba6d907066f5f50c55d92f496e47fc8
+review: 4206c561ededb7ea998535b24b1dcb6d777b2445e3aa9189f1c379c732f0b564
 ---
 Failed chat
 ended its last turn on an error and is marked ⚠.

@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-TIER-LARGE]
-test: ~
+test: 165fefbd617c99f109332ba353cd927bef0a4c9fefbfd9b9db97555747e79193
+review: 86ddd688ec5c3e6f25e46e5e48f505eb25daaa55da29da7a0811e40e776cd636
 ---
 Message ends
 are what a message of more segments than a signal takes is reduced to: the first and the last segments, where the ask stands, the middle being dropped from the model signals alone.

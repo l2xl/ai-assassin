@@ -1,6 +1,8 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: {unit: ~, page: ~, retry: ~}
+test: {unit: 82b60c8426d784abfa39f1a833cff800ecd2ef0203600018db9142330fb635c3, page: 838d19fd09f673fbc6db9a38d6f7da969356c7e27e14e77afc9313746701f440,
+  retry: 16e13aaff6ec75e059eba8ea3102f5e1883f72655a3330035a56386049ab3f0d}
+review: caad41af2ae65fb450c1548520a00753e6fe485053bf0116f211883fef812d6a
 ---
 Session renewal
 starts the conversation's next session at its next message, a retry aside, once the last request of the running session took the renewal bound of input tokens or more — `renew_tokens` of the orchestrator settings, 100000 by default, 0 never — so the verdicts that waited and the switches set by hand apply, and the kept messages with their stubs head a fresh session instead of the connection compacting the old one by a summary of its own; the turn says so in a context step.

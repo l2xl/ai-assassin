@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-TIER]
-test: ~
+test: 8f3312a66805479f4f5a62293e2739b9eb7112b3d46d29799f021be29167ad8c
+review: c554dcb955261d1439509f19cfb6ae2facd00fe90f666017e2183ef9585d9a5d
 ---
 Propagation
 spreads the fused scores over the DAG along parent and shared-source edges, so an item rises by its position.

@@ -2,6 +2,7 @@
 parents: [ORCHESTRATOR]
 order: 280
 sources: [src/ai_scratcher/security.py]
+review: cc46093914627ceba655c0f1bd52fb4693fc3de3c04511b4d5488c9d36a24487
 ---
 Security scan
 examines the external text a session holds for prompt injection — text its model may take for an instruction where none belongs — before the session may act on it.

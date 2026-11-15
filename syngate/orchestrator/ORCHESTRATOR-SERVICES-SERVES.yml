@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SERVICES, OPEN-AI-API, LOCAL-MODELS-ROUTES]
 order: 110
-test: ~
+test: 8975d150918210861914c6fce9e5fe79821c1edc1dfc8814aa57902eb6376b9b
+review: da2ae40e77736672834d4c1844ed315836dce795a9f837243f0c0b852869de2e
 ---
 Served kind
 is what a connection names in `serves`: one serving embeddings or reranking is offered to no chat.

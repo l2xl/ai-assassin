@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-TIER]
 sources: [src/ai_scratcher/segmenting.py]
-test: ~
+test: 470afe260cd2934333141744ad419b5b6aa6431467106a258cfe1113c0fc0403
+review: b306e665fa98e6ae235db99631ffa3a54bc24ea9253e14464a0f4af2c09dd20b
 ---
 Large message
 is measured segment by segment, never as one text: a pasted log or test output of tens of thousands of characters reaches the embedding and the reranker as segments each far under the model's window, the dense and rerank signals each aggregated into one ranking, and neither a model service marked failed nor a call held on the alert for an input that cannot be sent.

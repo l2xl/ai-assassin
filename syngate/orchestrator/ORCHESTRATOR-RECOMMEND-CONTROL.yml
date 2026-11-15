@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND-BEHAVIOUR, AI-CHAT]
 order: 390
-test: ~
+test: 70b11f091aa68e6292fea68dcdba5991c5178a38df59645da7c762b20bf3d07d
+review: afb0b1f182904d34e358df2c9ec73a1dc1f16c9ce56d65da035ce2350d20d490
 ---
 Behaviour control
 stands among the chat's setup controls and changes the chat's recommendation behaviour at any time.

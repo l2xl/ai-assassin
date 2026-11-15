@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-SUBAGENT]
 order: 10
-test: ~
+test: 84eab03225bce2acebfc65c717678533c2e22868c57c59e22c4fd21c88ec3dd3
+review: 5f4014c6b33dc3520648362f9a276e2140643941fa1d9b83de05b65f78815662
 ---
 DAG-bound subagent
 is a turn of an item's chat above that item's seed context, its start message holding only what the tree does not.

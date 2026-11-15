@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE, SYNTHETIC-TOOLS]
 order: 490
 test: 543c8dfff793e59bf82e81b78d34c3c46e8d845050a2481dac86b28dd2088f21
-review: 580c2ee33ca66144616d380906867f92f0a0833944acd439e1aec33a196a6864
+review: 39bf04cc6ec9ed1599a72376c8924e143c12976137afaa952d82f806f05100ef
 ---
 Native tool use
 shows the underlying model answering with a call of a tool that reached the CLI only through the library argument, the reply parser accepting it.

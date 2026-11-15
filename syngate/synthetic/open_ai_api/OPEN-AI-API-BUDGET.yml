@@ -1,6 +1,7 @@
 ---
 parents: [OPEN-AI-API-MODELS]
-test: ~
+test: 572df99ca23d72805a633a37d06c033ac21b9d2fb543fbf2dea08b991c9e407c
+review: e24f5129e924b392363b6439c51e778ce466268489a977c56ca9873ee996a34d
 ---
 Reasoning budget
 sends, beside the chosen effort, the token count the model's reasoning budgets give that effort as `reasoning_budget_tokens`, and none for an effort they do not name.

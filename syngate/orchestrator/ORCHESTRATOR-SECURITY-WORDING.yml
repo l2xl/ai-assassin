@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
-test: ~
+test: 5668450b3b7bda984cfda9dc65eece45aa4909d74e70d44a3953ea3d816d5d04
+review: 94f44674108330b2e0173d08fc61172f7b3226a09bd6d5295f86419d84aa5ce9
 ---
 Scan wording
 for a scan without findings is `nothing found`, never `safe`.

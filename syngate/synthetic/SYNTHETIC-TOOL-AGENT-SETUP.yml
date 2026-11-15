@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOL-AGENT]
-test: ~
+test: 628b4ccc95384e15d6012fcb7a209eba3cdabbf3ae75df7b0c544af6304652a2
+review: ffa40b637679d5ae998828a69fe30ff0f432e1bb3ec927d4002bf2bdb0f5fca7
 ---
 Subagent setup
 is the connection and model of the models listing an agent call may name for its subagent to run on, the delegating chat's own setup standing without it.

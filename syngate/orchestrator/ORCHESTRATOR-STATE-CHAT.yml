@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR]
 order: 280
-test: ~
+test: ee819c0fa38435bc607ff0b73aedb04a093a53ef53a96048b3116aa4f0534256
+review: 2cb8b4a0401e5d6908a6d1e9b95030d835f19add9a8785e69e260d7c80158aa8
 ---
 Conversation state
 of the Orchestrator — the stored system prompt, the scan mark, the prune verdicts and switches, the recommendation behaviour and the denied recommendations — is kept with the chat log and ends with its reset.

@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC]
 order: 75
+review: 04b41ad8ef935796eee70734c1551b609a39493f88e5cf529546728877b5dac9
 ---
 Tool execution
 is the harness's one way to run a tool: every call an answer carries is executed by one implementation in the harness, the same whichever AI connection carried the answer.

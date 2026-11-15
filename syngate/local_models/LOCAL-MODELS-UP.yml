@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-PRESET]
 order: 20
-test: ~
+test: 10a34f044f8acd765b24ea8920e33097a9ed19e1fb06f92576ba3ebaf74eab9b
+review: 751da9d37694d8b9372b214598e476c7d05069ea8cc3092c1bd32dd4325644b4
 ---
 Up command
 brings the compose project of the named preset up and waits until every one of its services is healthy.

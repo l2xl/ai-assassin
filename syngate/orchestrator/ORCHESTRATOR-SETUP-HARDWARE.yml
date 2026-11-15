@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SETUP, LOCAL-MODELS-PRESET]
 order: 70
-test: ~
+test: 71659211e8a1dc5b2b4f6cd6ca1023b1c4208e0b8854a04c6c87276ea76a205b
+review: 6dbc767031c0a623c0f3f63d9a822307afad8e8492057da2b9b63a7aede71185
 ---
 Hardware setup
 serves the shipped model preset that fits the machine's card and routes the embedding and rerank roles to it.

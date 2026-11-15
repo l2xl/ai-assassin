@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND-BEHAVIOUR]
-test: ~
+test: c7a4e80d6e109bb926445cf6bdd4aebad28026dd53bb7f22d99c0c4978acebb1
+review: 03b8fd784b926971a9826d38e358e50f106b1dcda34aca85b8eecaecaadbd0f0
 ---
 Auto behaviour
 applies every recommendation at once.

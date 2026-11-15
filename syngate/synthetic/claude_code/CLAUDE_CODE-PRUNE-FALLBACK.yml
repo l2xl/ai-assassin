@@ -1,7 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 60
-test: ~
+test: 9b980a5350fe738024a305c2712fb3da4cbe88624e0a588ba1a796182704dd4a
+review: 3a00f90bf839a211384240a47c8982a21c3a1f38553b732763ffe96d4dcda1e1
 ---
 Forked rollback
 replaces the replay for a transcript of a CLI version the replay does not know: the next call resumes the session at the entry ahead of the earliest changed turn, forked, and its message is headed by the replayed history block of the turns since.

@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 order: 4
-test: ~
+test: 8d8e8953eed93107b445779b6fff19e89189aa7423b822a520ab225d8cbea7d0
+review: 2a2573edc241ebd3985d75c5744fd0fd86e2704f99dc7fa8ef106755eca4fff7
 ---
 Finding
 is wording addressed to the AI as an instruction, or an instruction outside the scope of the session's problem; what a page offers its human reader is none.

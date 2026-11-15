@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-AGENT-VERDICT, ORCHESTRATOR-SECURITY]
 order: 320
 sources: [src/ai_scratcher/prompts/scan.md]
-test: ~
+test: 8e87d8ce721a4c846bb2c0842f86eccfa00cbb3a7432edaea99162b9dc374110
+review: d9c634a011c37f49990ffbbd02b5d269159b2f665e84a4aa507a1392d6e0b5ff
 ---
 Scan agent
 is a verdict agent whose schema is a list of findings, each a span, a category and a reason.

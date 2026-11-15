@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-SKILL-ASSESS]
-test: ~
+test: 60c1aa4eac545549bf5dfdc1f2e998cd23fc8d4356fa4aac3b4975dc5ed1790b
+review: 53582f41a9d98430c9a1d2a8cfa12646bebe88aa1ad19c11842a742ae4ce2b84
 ---
 Contradiction notice
 is what the assessment skill tells a turn to give before it changes anything: where the message contradicts a statement of its context.

@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SECURITY]
 order: 7
-test: ~
+test: c1c57336d975b4b69fe0c32e36a114b6d7aac7fefb9776a5ac4e04531c00afed
+review: a5513cb11769bb45e8814bf36c6f614e591ac56d337951207dc67e11295084e6
 ---
 Raise scan
 runs before a permission recommendation is applied or asked.

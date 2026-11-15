@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-SECURITY-DROP]
-test: ~
+test: 122ba869543351c842d81ff1ba2d2da8b91b701b7dfec3a997c6f6b01f17ed91
+review: 614d7694ad27bd372d3e9e6676fdabc0f98beac2cba69c5404646f82e2d2f1bc
 ---
 Drop session
 is the new session of the conversation, composed without the dropped result, that dropping a finding's result starts.

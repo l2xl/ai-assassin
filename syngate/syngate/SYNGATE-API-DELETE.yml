@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-API]
 order: 50
-test: ~
+test: f5791067bdf2aab55027534a96da5c642ceb8d8dcc1ff677f6db216cdb767db1
+review: fb0df3f1a59f948bd1e82f876ee84a6630b7f6d7148c1bdd8a6f76da680e334d
 ---
 Syngate delete node.
 

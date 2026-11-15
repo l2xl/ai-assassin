@@ -1,8 +1,8 @@
 ---
 parents: [OPEN-AI-API]
 order: 35
-test: b7ba5fc7d9d71568214b2ffb7382a26fcfab9a2172a4303250a7e45167dd35c8
-review: dade8e50205bbf69ae3046a37668f408f0d0938614a29062bc713a2cf9fd6775
+test: a9f087a9f6547cafc79c2b7599d56e619a1312a03fe91458f10282891fe90362
+review: 41e3df64d9ae977e8a44f25f3f5ce8419b1c33b3695e3e22962a0362cd32c0fc
 ---
 Queried model list
 of a connection whose `models` setting is `query` is its server's own model listing.

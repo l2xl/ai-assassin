@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SETUP, AI-CHAT]
 order: 340
-test: ~
+test: b5b07359982714b1e780ce8279c86b1e63f8183db28803f74360e10bc47a9205
+review: 1e334f378e6e3b4d00d967f850f94e655b54427f48f66b147b228f1b483ea9a2
 ---
 Setup at first start
 is run by the server itself while the settings hold no orchestrator section, every chat showing its progress in place of the reply line's hint.

@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND]
 order: 240
-test: ~
+test: 8287be6eac78f46c6de2520f3a7c5dda43f9ec25071b0e81c1d24d4dbebc336d
+review: 876a3051ac2b83fef1418774745ee079cb3138b39cc7da0bb842f670e2624ab1
 ---
 Recommendation pause
 holds the turn on a recommendation that is asked until the user accepts or denies it.

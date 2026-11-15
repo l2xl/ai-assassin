@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-TIER-LARGE]
-test: ~
+test: 742c022a13bfb03f50344beb2b07920f1feabf80172a3682ec0560bcbb0bdcba
+review: 1cf247b2f11cffdfd850c98a23254af2926c9fc12961866275dd3f67ebfac72d
 ---
 Rerank score of segments
 of an item is the greatest score the reranker gives any of the few end segments of the message against the item's statement.

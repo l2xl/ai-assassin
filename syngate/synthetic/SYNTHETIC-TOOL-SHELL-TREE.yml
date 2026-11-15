@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-TOOL-SHELL]
-test: ~
+test: b028d71c061d615f95d8bea99512dd523c7f28bf89fd5cdf26b8394f7e5c0bb0
+review: 72dadbc953f9d42baf2d58a02be1d53d67c3ffaafdd1b76d78e8f4df6938d4f2
 ---
 Shell tree guard
 refuses a command naming syngate in every mode.

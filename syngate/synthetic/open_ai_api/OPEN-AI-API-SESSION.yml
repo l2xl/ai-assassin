@@ -2,7 +2,7 @@
 parents: [OPEN-AI-API]
 order: 50
 test: e30431a2c73cba6053cabbd2b7c8d54e75552a040ca37fdf39270a2678ad772e
-review: 3a26456852f1a7a0ecbd0e4083d5d6f4ce727d0f97a7386f2bdd474148834e6c
+review: ccbdafa2821369b6a1d81c9e543336ba38355a250e0d397e7f5b974356829ebb
 ---
 Conversation session
 is kept by the connection itself, resent by a turn resuming it and written only once an answer is in.

@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-SUBAGENT-OFF-CONTEXT]
 order: 45
-test: ~
+test: ad29c40d248501c0363abbe170773d3a849511d55d81b8a2ca80203ae7ba2d2a
+review: 3592ede681c4e287933248786d501b7018a92c1f35d693e0ca7aa2a1233ed757
 ---
 Cover denial
 forbids the whole run of an agent when the user denies a permission it needs, or denied it before in the conversation, and stops it: no turn of the agent starts.

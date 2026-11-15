@@ -1,6 +1,7 @@
 ---
 parents: [ORCHESTRATOR-MATCH]
-test: ~
+test: 6426b8c013f7f86739744f8075ade4e92625e94f1a9d18900cc8a6552388d2dc
+review: 32108d3117c6fee95ca3bd4f6cf14186e14ec57dcb73126c3f025e4e7e0ee1b3
 ---
 Match gate
 selects an agent outright when its example is the one element, agent or item statement, ranking at or above the match threshold for the message, and asks the match agent over the agents at or above it alone when other elements rank there too; no agent there asks nothing.

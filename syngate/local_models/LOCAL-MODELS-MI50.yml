@@ -1,6 +1,7 @@
 ---
 parents: [LOCAL-MODELS]
 order: 30
+review: 4312beba64d1b34696e3f4a508b20a2a36a275dee5a3cdc2c90c55e1c7872df7
 ---
 mi50 presets
 are the presets of the two 32 GB AMD Instinct MI50 cards of the user's server, one per inference engine — `mi50-llamacpp` and `mi50-strata`: neither defines a model of its own, and `up` refuses each until a service is added.

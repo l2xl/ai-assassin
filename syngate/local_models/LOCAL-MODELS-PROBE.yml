@@ -1,7 +1,8 @@
 ---
 parents: [LOCAL-MODELS-PRESET]
 order: 40
-test: ~
+test: 3a6e0c821f84988cd87b399e25125c4d9c0a030764c8ffbe142891a819cb1abf
+review: 281e64036818e88025196b1c8e8839be6807abb76470a4d2faa22f46e65d4005
 ---
 Probe command
 asks every model for one real answer of the kind it serves and fails naming those that gave none.

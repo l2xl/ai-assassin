@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-SERVICES]
 order: 410
-test: ~
+test: d36b706da639e892536bbcde5373d882ee22d3f10db4100c73672221061763a5
+review: d45eb8b8c43334a617b62c56676ddaae075584134adbc1205a8ec2f37d63497b
 ---
 Locator fallback
 serves a role given a list of model locators by the first of them that answers, a failed call moving the role on to the next answering one; the role fails only while none answers.

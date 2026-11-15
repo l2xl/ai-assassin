@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-AGENT-TOOLS, SYNTHETIC-PROMPTS-OFFER]
 order: 40
-test: ~
+test: 26fd0d5c8ea962734bd28fe2b7fca357b7297301925067b8a1d4c01273345a2d
+review: 0160da2a8e0b3f99feb6185e44220018e4606a279a6cc8f62b42e291b7c57972
 ---
 Default tool offer
 puts a tool whose prompt declares `default: true` — the read-only grep tool — into every chat and every agent but a verdict agent while its requirements are met, and into none, default or not, while they are not.

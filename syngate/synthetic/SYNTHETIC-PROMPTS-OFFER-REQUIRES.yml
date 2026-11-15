@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-PROMPTS-OFFER]
-test: ~
+test: 235aba8642a537ebebd51ca95a09f3d9a142d6a40abe9b7f862f3fbb8a216d6d
+review: 20afce171210ce5df671c03cf3fa68de7ae1fd89a305a2a5e336efc7006b2451
 ---
 Prompt requirement
 keeps a prompt in the offered library only while every command its `requires` lists exits 0 in the project root and prints the `output` it names, a prompt without `requires` always offered.

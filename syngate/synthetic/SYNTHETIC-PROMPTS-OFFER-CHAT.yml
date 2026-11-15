@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-PROMPTS-OFFER]
 order: 30
-test: ~
+test: b4e37cc63119d2ba03b7722804e2820c6efaa3642d2797380132fd60a14a230a
+review: 6d02ad91a9eb311eae906f654bc707e4f00b33d47c25ce9e5368fabd5332c9ac
 ---
 Offered chat
 builds a chat's turns — their default prompt, answer schema, skill calls and the lists of an off-context agent — from the offered library, the shipped library staying whole.

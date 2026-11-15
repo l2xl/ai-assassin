@@ -2,8 +2,8 @@
 parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
 order: 50
 sources: [src/ai_scratcher/prompts/commit.md]
-test: 08eea0b00e2d31cdb89ef85af34ad734fa8eb1191424dc706c2fbada21f34a4f
-review: 2bf2c3d9ce1a0bdadaac14a423bf7f4ce765f9fa09b7146ce4d9a1b65f772ba5
+test: dbe1c75e5e80239050b15e3e529781c628f4412bbddd17fe6b660dfbe2b0284d
+review: 90e11b1817794e39c4b4e0867c271c0fe48738ed3c86884bfe6e02ae47843779
 ---
 Commit agent
 is an agent listing the git tool alone, told to commit the uncommitted changes from their diff under a one-line subject without a body.

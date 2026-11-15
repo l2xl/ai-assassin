@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-060]
 order: 20
-test: ~
+test: e2f3d68f9981cb4625782c9807345b3ef00002bbec0b56d496471224f885ce7d
+review: 2846a391c4e1fd24a0cae4e64a63e01d17b0e100b01f082d1f7556ae5486a60d
 ---
 Message saved first
 joins the chat's log as the first act of a turn being started, before the turn is prepared or the AI called, so a failure in preparing it leaves the message in the log followed by the error, which retry sends again.

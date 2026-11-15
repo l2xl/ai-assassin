@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-GREP]
 order: 10
-test: ~
+test: 8fc4d1997a48c6ca462c100a07615f6c9458b9a28160a5d8ec88e6a57c4b0a24
+review: 171b3b8e64d08ef636e0e5167c4c4e1923d95352a59c950aed1a136bdd61c524
 ---
 Grep run
 hands the program the words of the command line in the project root without stdin and reports its exit status over its output, every match under its path and line number, exit 1 of no match being a result rather than a refusal.

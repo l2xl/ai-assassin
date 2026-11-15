@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-GREP]
 order: 30
-test: ~
+test: 03d08c2f25a01e2b003ef5ee73d10b7af973a0b12e3dd2fa2d2d3ecd4d441b0c
+review: 326a43e5fc9e26b78fb4a66c074cf8bb8ee59beb0f57680e113834bfe338bed3
 ---
 Grep absence
 leaves the grep tool out of the offered library while neither ripgrep nor GNU grep is found and git is not at hand for the project, as the git tool is left out without git, a grep call then refused naming why.

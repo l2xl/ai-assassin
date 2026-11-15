@@ -2,8 +2,8 @@
 parents: [SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
 order: 390
 sources: [src/ai_scratcher/prompts/git.md, src/ai_scratcher/gitlib.py]
-test: {run: ee4bb64fbe3c73865632d2c13b550a248f82c88ca623e9099dc7000b568dbac1, offer: c18336ff83358b93da725e46c4fa38772d57e5df4880a495342ff2abbd48287c}
-review: 26c4b988aaadb10f37c7045f6f155978661c8ddeb64301b7e2facf1bb726d6b3
+test: {run: ee4bb64fbe3c73865632d2c13b550a248f82c88ca623e9099dc7000b568dbac1, offer: 232a3b2cf15f92f97bb56d9d61279830c728a7779d1a1fa025a550580f2fb6be}
+review: 963a7a538079f4b91d8e96f53b8191f8480ea674eb26e9afa32305b15bfe3c68
 ---
 Git tool
 runs one git command line of an answer without a shell, in the project root or in the submodule its `path` names, its output coming back as the next prompt, while git is at hand for the project.

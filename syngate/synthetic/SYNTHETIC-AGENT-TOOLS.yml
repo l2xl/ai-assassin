@@ -1,7 +1,7 @@
 ---
 parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
 order: 8
-review: 4c9c7b35387d7111108e6345249180d0c0b412daca3d9cb77b91efc311197de0
+review: ac1fb36bced9a540bda71e467082fb32027291398b6768aa805c0747c4358274
 ---
 Agent tools
 are the tools the agent's `tools` list names and the default tools of the offered library, fixed by the prompts: the chat that starts the agent neither adds to them nor takes from them.

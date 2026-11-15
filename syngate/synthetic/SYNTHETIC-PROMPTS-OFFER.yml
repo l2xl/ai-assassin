@@ -1,6 +1,7 @@
 ---
 parents: [SYNTHETIC-PROMPTS]
 order: 50
+review: 697ff62864d96518ab1d56794d894193510fbe5ee2e0f34512fdba2ab0af0f17
 ---
 Offered library
 is the part of the prompt library a chat is offered: every prompt whose requirements the system meets, and of the alternative prompts of one feature only the first that meets them.

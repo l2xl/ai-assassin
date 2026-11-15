@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 40
-test: e21458f2c7b28d8548d192e90f4e0caddf6fa3ff3cbb0db05aadbcdf3badff4b
-review: 91159c571a1ddde45a5760f06085c2a028036ec5365970209c3c0a38a15a2c05
+test: 389df9557a6f2afde85c075368c4633048345aded73f0e35293856886d59805c
+review: b53a53a469b1a292c05c7b79b6899b9a0cfefb5621f131359413cb686ca16f51
 ---
 Replayed entries
 are a turn's own: a pruned result made its form in the prompt entry that carried it, a pruned AI text's entry left out unless it is its answer's only block, every bookkeeping entry of the CLI left out, every other entry that is no message — an attachment, a system record — kept as it is and passed over in finding what is pruned, the entries re-chained past what was left out and no thinking entry changed, its signature staying valid.

@@ -2,7 +2,7 @@
 parents: [AI-CHAT, SYNTHETIC]
 order: 90
 test: f9365291b908bf84921612ca356e8359f26b2e4ee79881aa4041704be261082b
-review: 74ab31463179acb8f409ac157c158ddb554d2e412063bb2d038b44f3e73a22aa
+review: 1bcd5ad44b3a7dccc86dd3fa703fd1d7065a79cad0ae34513496039a48d841b1
 ---
 Server turn
 runs an exchange as a job on the server whose steps the page receives as they happen, the reply closing it; a reloaded page re-attaches to the running turn, receives the steps so far and the reply when it comes.

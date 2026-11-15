@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-PROMPTS-OFFER]
 order: 10
-test: ~
+test: dbd5ef30f16852a5319b2af717ce8d5573a136077bc1ee7abd07bbd7fa88eaa3
+review: b60b5fbec129b1e32baceee564ab5df55f559a06ee3c110a91b48249628d666f
 ---
 Feature alternatives
 leave in the offered library, of the prompts naming one `feature`, the first by `rank` whose requirements are met — a lower rank first, an unranked one after the ranked, ties by name — and none of them where none is.

@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-AGENT-TOOLS]
 order: 30
-test: c199d33a6c915ae9f9661c3a05702092e9e96a4d3b16f85c77b0ccb8512fec4f
-review: 291683b18440ecaa0a512c607db9f62fcfe4f4913ea3bd5563f8aa9b67f985e8
+test: abf985dca245a708e3a622b70638ea9281840a216bc411f310f3203868e612fa
+review: 3eb706e814b41cf75db2f2774ebf73c7b970306631eeae833e0aea9edb724495
 ---
 Tool call refusal
 refuses a call of a tool outside the agent's tools.

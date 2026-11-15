@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-PROMPTS-OFFER]
+order: 20
+test: ~
+---
+Requirement probe
+runs each requirement once in a server's run, at its first need, every later read of the offered library keeping its outcome while the prompt files stay live.

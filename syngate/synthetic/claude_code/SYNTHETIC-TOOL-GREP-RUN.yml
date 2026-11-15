@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-GREP]
+order: 10
+test: ~
+---
+Grep run
+hands the program the words of the command line in the project root without stdin and reports its exit status over its output, every match under its path and line number, exit 1 of no match being a result rather than a refusal.

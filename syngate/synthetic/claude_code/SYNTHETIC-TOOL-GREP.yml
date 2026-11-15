@@ -1,0 +1,9 @@
+---
+parents: [SYNTHETIC-TOOLS, SYNTHETIC-EXECUTION]
+order: 500
+sources: [src/ai_scratcher/greplib.py, src/ai_scratcher/prompts/grep_rg.md, src/ai_scratcher/prompts/grep_gnu.md, src/ai_scratcher/prompts/grep_git.md]
+---
+Grep tool
+searches the project's files by one command line of an answer, run without a shell by the search program the offered library selects — ripgrep, else GNU grep, else git grep — its output coming back as the next prompt.
+
+[design/tools/grep.md](design/tools/grep.md)

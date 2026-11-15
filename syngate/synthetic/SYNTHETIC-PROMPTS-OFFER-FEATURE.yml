@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-PROMPTS-OFFER]
+order: 10
+test: ~
+---
+Feature alternatives
+leave in the offered library, of the prompts naming one `feature`, the first by `rank` whose requirements are met — a lower rank first, an unranked one after the ranked, ties by name — and none of them where none is.

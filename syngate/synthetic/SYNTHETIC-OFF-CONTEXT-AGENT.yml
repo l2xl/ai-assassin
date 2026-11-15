@@ -4,6 +4,6 @@ order: 40
 review: 00d09408d80a2d6a14f9b64a9765456ec73ea24e454a5ee61652869cb723bd68
 ---
 Off-context agent prompt
-is a prompt of the library that stands as the whole system prompt of a turn run above no item's seed context, with the tools and skills its own lists name and no others.
+is a prompt of the library that stands as the whole system prompt of a turn run above no item's seed context, with the tools and skills its own lists name and the default tools, no others.
 
 [design/synthetic/agents.md](design/synthetic/agents.md)

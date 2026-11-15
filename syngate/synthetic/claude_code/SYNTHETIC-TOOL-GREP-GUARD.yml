@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-GREP]
+order: 20
+test: ~
+---
+Grep guard
+refuses an option the program's definition does not list and a path or `-f` file outside the project, in `.git`, under `syngate/` or naming the server's own files, and keeps a recursive search out of them whatever the turn's own filters.

@@ -21,7 +21,8 @@ skills: [call_tool, call_tool_answer, call_tool_block]
   1. *list* — the names of the key, in its order and each once; an agent without the key has
      none;
   2. *entry* — the prompts of the lists, skills then tools, are added to the system prompt after
-     the agent's own text. No other prompt enters, a default skill included.
+     the agent's own text, then the default tools of the offered library the tool list lacks — the
+     read-only grep tool. No other prompt enters, a default skill included.
 
   A call of a tool outside the tool list is refused. A listed skill naming a `delivery` enters
   only on a connection of it, as the prompt library states.

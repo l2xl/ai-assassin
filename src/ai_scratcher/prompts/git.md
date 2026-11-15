@@ -1,6 +1,9 @@
 ---
 kind: tool
 description: Read the project's git history and record changes in it, never erasing what git holds
+requires:
+  - command: [git, rev-parse, --is-inside-work-tree]
+    output: "true"
 calls:
   git:
     required: [command]

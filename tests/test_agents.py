@@ -113,14 +113,26 @@ def _check_entry(kind, tmp_path):
     assert synthetic.agent_prompt(_worker(kind), library) == "# Worker\n"  # nothing listed, nothing entering, a default skill included
 
 
+def _defaulted(folder, requires=""):
+    """The `_library` with one more tool, `look`, declaring `default: true` under the `requires` front matter lines given."""
+    _library(folder)
+    (folder / "look.md").write_text(f"---\nkind: tool\ndescription: Look\ndefault: true\n{requires}calls:\n  look:\n    required: [text]\n---\n# Look\nIt looks.\n")
+    return synthetic.load_prompts(folder)
+
+
 @pytest.mark.syngate("SYNTHETIC-AGENT-TOOLS-LIST")
 def test_the_tool_list_is_the_names_of_the_tools_key_in_order_each_once_none_without_the_key(tmp_path):
     _check_listed("tool", tmp_path)
 
 
 @pytest.mark.syngate("SYNTHETIC-AGENT-TOOLS-ENTRY")
-def test_the_tool_prompts_of_the_list_alone_enter_the_system_prompt_after_the_agents_text(tmp_path):
+def test_the_tool_prompts_of_the_list_then_the_default_ones_it_lacks_alone_enter_the_system_prompt_after_the_agents_text(tmp_path):
     _check_entry("tool", tmp_path)
+    library = _defaulted(tmp_path / "defaulted")
+    prompt = synthetic.agent_prompt(_worker("tool", "echo"), library)
+    assert prompt == "# Worker\n\n# Echo\nIt echoes.\n\n# Look\nIt looks.\n" and "It shouts." not in prompt  # the list, then the default tool
+    assert synthetic.agent_prompt(_worker("tool", "look", "echo"), library) == "# Worker\n\n# Look\nIt looks.\n\n# Echo\nIt echoes.\n"  # listed, at its place, once
+    assert synthetic.agent_prompt(_worker("tool"), library) == "# Worker\n\n# Look\nIt looks.\n"
 
 
 @pytest.mark.syngate("SYNTHETIC-AGENT-TOOLS-REFUSED")
@@ -130,6 +142,8 @@ def test_a_call_of_a_tool_outside_the_list_is_refused(tmp_path, app):
     assert known == {"echo": ("text",)} and synthetic.parse_reply(_calls({"tool": "echo", "text": "hi"}), known)[0] == "calls"
     with pytest.raises(synthetic.protocol_error, match="shout"):
         synthetic.parse_reply(_calls({"tool": "shout", "text": "hi"}), known)
+    defaulted = _defaulted(tmp_path / "defaulted")
+    assert synthetic.parse_reply(_calls({"tool": "look", "text": "hi"}), synthetic.agent_calls(defaulted["echoer"], defaulted))[0] == "calls"  # a default tool is its own
     _library_agent(app, "reader", "tools: [files]\n")
     (app.root / "notes.txt").write_text("one\n")
     _routed(app, {"default": {"connection": "heard", "model": "model-a"}},
@@ -216,14 +230,14 @@ def test_a_denied_permission_forbids_the_whole_run_of_the_agent_and_is_not_asked
 @pytest.mark.syngate("SYNTHETIC-AGENT-EXPLORE")
 def test_the_explore_agent_has_the_reading_tools_alone_and_reports_the_places_found():
     agent = _shipped("explore")
-    assert agent.tools == ("files",) and agent.schema is None and set(synthetic.agent_calls(agent)) == {"list", "read"}
+    assert agent.tools == ("files",) and agent.schema is None and set(synthetic.agent_calls(agent)) == {"list", "read", "grep"}
     assert "report the places found" in agent.text and "change nothing" in agent.text
 
 
 @pytest.mark.syngate("SYNTHETIC-AGENT-COMMIT")
-def test_the_commit_agent_has_the_git_tool_alone_and_commits_from_the_diff_under_a_one_line_subject_without_a_body():
+def test_the_commit_agent_lists_the_git_tool_alone_and_commits_from_the_diff_under_a_one_line_subject_without_a_body():
     agent = _shipped("commit")
-    assert agent.tools == ("git",) and set(synthetic.agent_calls(agent)) == {"git"} and agent.examples
+    assert agent.tools == ("git",) and set(synthetic.agent_calls(agent)) == {"git", "grep"} and agent.examples
     assert all(words in agent.text for words in ("git diff", "from its diff", "one-line subject", "without a body"))
 
 

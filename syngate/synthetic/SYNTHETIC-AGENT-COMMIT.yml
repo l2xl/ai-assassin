@@ -6,4 +6,4 @@ test: 08eea0b00e2d31cdb89ef85af34ad734fa8eb1191424dc706c2fbada21f34a4f
 review: 2bf2c3d9ce1a0bdadaac14a423bf7f4ce765f9fa09b7146ce4d9a1b65f772ba5
 ---
 Commit agent
-is an agent with the git tool alone, told to commit the uncommitted changes from their diff under a one-line subject without a body.
+is an agent listing the git tool alone, told to commit the uncommitted changes from their diff under a one-line subject without a body.

@@ -49,11 +49,12 @@ CONTEXT_UPDATE = "Context update -- what changed since this session started:\n"
 
 class prompt(NamedTuple):
     """One markdown file of the library: its stem is the name, its front matter the `kind` (skill|tool|agent), the `description`
-    listing it and, for a skill, whether it is in the default prompt; the text is the body after the front matter. A tool's `calls`
+    listing it and whether it is default -- a skill in the default prompt, a tool in every agent but a verdict one; the text is the body after the front matter. A tool's `calls`
     map each call it defines to its `required` string fields and its `optional` JSON-schema properties. An agent's `tools` and `skills`
     are the lists of the library prompts its system prompt holds, its `schema` the answer schema of a verdict agent and its
     `examples` the phrasings it is matched from a message by. A skill's `delivery` names the library delivery of the connections
-    whose system prompts it enters, None for every connection."""
+    whose system prompts it enters, None for every connection. Its `requires` are the commands it needs to be offered, its `feature` the
+    facility it serves as one of several alternatives, preferred by its `rank`."""
     name: str
     kind: str
     description: str
@@ -65,10 +66,22 @@ class prompt(NamedTuple):
     schema: dict | None = None
     examples: tuple = ()
     delivery: str | None = None
+    requires: tuple = ()
+    feature: str | None = None
+    rank: int | None = None
 
 
 def names_of(value):
     return tuple(str(name) for name in value) if isinstance(value, list) else ()
+
+
+def requirements_of(value):
+    """The entries of a `requires` field as given, one entry standing alone taken as a list of it; () without the field."""
+    return () if value is None else tuple(value) if isinstance(value, list) else (value,)
+
+
+def rank_of(value):
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def read_prompt(path):
@@ -79,7 +92,8 @@ def read_prompt(path):
     return prompt(path.stem, str(meta.get("kind") or "skill"), str(meta.get("description") or ""), bool(meta.get("default")),
                   body.strip("\n") + "\n", meta.get("calls") or None, names_of(meta.get("tools")), names_of(meta.get("skills")),
                   meta.get("schema") if isinstance(meta.get("schema"), dict) else None, names_of(meta.get("examples")),
-                  meta["delivery"] if meta.get("delivery") in DELIVERIES else None)
+                  meta["delivery"] if meta.get("delivery") in DELIVERIES else None, requirements_of(meta.get("requires")),
+                  str(meta["feature"]) if meta.get("feature") else None, rank_of(meta.get("rank")))
 
 
 def load_prompts(prompts_dir=None):
@@ -170,14 +184,16 @@ def is_verdict(agent):
 
 
 def agent_library(agent, library=None, delivery=None):
-    """The prompts of the library an agent's lists name -- its skills, then its tools, in their order -- the library's other
-    prompts left out; a verdict agent has none. With a `delivery`, a listed skill naming another one is left out too."""
+    """The prompts of the library an agent's lists name -- its skills, then its tools, in their order -- then the default tools of the library
+    its tool list lacks, the library's other prompts left out; a verdict agent has none. With a `delivery`, a listed skill naming another one
+    is left out too."""
     library = read_library(library)
     if is_verdict(agent):
         return {}
-    return {**{name: library[name] for name in agent.skills if name in library and library[name].kind == "skill"
-               and (delivery is None or delivers(library[name], delivery))},
-            **{name: library[name] for name in agent.tools if name in library and library[name].kind == "tool"}}
+    listed = {**{name: library[name] for name in agent.skills if name in library and library[name].kind == "skill"
+                 and (delivery is None or delivers(library[name], delivery))},
+              **{name: library[name] for name in agent.tools if name in library and library[name].kind == "tool"}}
+    return {**listed, **{name: entry for name, entry in library.items() if entry.kind == "tool" and entry.default and name not in listed}}
 
 
 def agent_prompt(agent, library=None, delivery="text"):
@@ -227,17 +243,19 @@ DELEGATIONS = {"agent": ()}
 DELEGATION_TEXT = ("Carry out @{uid}: its statement, with the context this chat is seeded with, is your task. Bring the project to what it "
                    "states, then report what you did and what still blocks it.")
 GITS = {"git": ("command",)}
+GREPS = {"grep": ("command",)}
 SURFS = {"websurf": ("action",)}
 PATCHES = {"patch": ("diff",), "replace": ("path", "old")}
 SHELLS = {"shell": ("command",)}
 FILES = {"list": (), "read": ("path",)}
 LOGS = {"log": ()}
 SETUPS = {"models": (), "setup": ("connection", "model", "reason")}
-CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **SURFS, **PATCHES, **SHELLS, **FILES, **LOGS, **SETUPS}
+CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **GREPS, **SURFS, **PATCHES, **SHELLS, **FILES, **LOGS, **SETUPS}
 # The Raw command call mode as a connection without a shell of its own lists it: its shell calls run through the harness only while it
 # is on. The Claude Code connector lists its own `bash` mode, which allows the CLI's Bash tool.
 BASH_MODE = {"id": "bash", "label": "Raw command", "hint": "run shell commands", "default": False, "advanced": True}
-GIT_TOOL = "git"
+# Seconds the command of a prompt's requirement may run before it counts as unmet.
+PROBE_TIMEOUT = 10
 EDITABLE = ("description", "sources", "tests")
 QUERY_ROUNDS = 100  # a fuse far above normal work, `orchestrator.rounds` of the server settings in its place: a count of rounds cannot tell a loop from work
 # What a turn the harness closes -- at its fuse or stalled -- is asked with its last prompt: one text answer, the turn's reply.
@@ -278,7 +296,7 @@ def answer_schema(library, text=True):
     their texts as the description of the answer -- so the shape of a call is enforced by the model side rather than by the parser alone.
     Without `text` it has no field for the text: the schema of a carrier whose model writes its text outside the answer."""
     tools = [entry for entry in library.values() if entry.kind == "tool"]
-    shapes = [_call_schema(name, spec) for entry in tools for name, spec in (entry.calls or {}).items()]
+    shapes = list({name: _call_schema(name, spec) for entry in tools for name, spec in (entry.calls or {}).items()}.values())  # one shape per call, as `library_calls` keeps it
     return {"type": "object", "description": "\n".join(entry.text for entry in tools),
             "properties": {"kind": {"enum": ["text", "calls"] if shapes else ["text"]}, **({"text": STRING} if text else {}),
                            **({"calls": {"type": "array", "minItems": 1, "items": {"anyOf": shapes}}} if shapes else {})},
@@ -497,6 +515,10 @@ def is_git(call):
     return call["tool"] in GITS
 
 
+def is_grep(call):
+    return call["tool"] in GREPS
+
+
 def is_surf(call):
     return call["tool"] in SURFS
 
@@ -551,12 +573,67 @@ def recommend_setup(listing, call):
     return f"- setup {call['connection']} {call['model']}{f' at {effort}' if effort else ''}: {' '.join(str(call['reason']).split())}"
 
 
-def offered_library(git, library=None):
-    """The library a turn is offered: the git tool only while git is at hand for the project; without a `library` given, the shipped one,
-    read from the prompt files at every access."""
-    if library is None:
-        return LIBRARY if git else live_mapping(lambda: {name: entry for name, entry in load_prompts().items() if name != GIT_TOOL})
-    return library if git else {name: entry for name, entry in library.items() if name != GIT_TOOL}
+def requirement_key(entry):
+    """(argv, output) of a well-formed requirement -- a mapping of a `command` that is a non-empty list of words and an optional `output`
+    text --, None of any other entry."""
+    if not isinstance(entry, dict):
+        return None
+    command, output = entry.get("command"), entry.get("output")
+    if not (isinstance(command, list) and command and all(isinstance(word, str) for word in command)) or not (output is None or isinstance(output, str)):
+        return None
+    return tuple(command), output
+
+
+def probe(root, command, output=None, timeout=None):
+    """Whether a requirement is met: `command` run in `root` without a shell or stdin exits 0 within `timeout` seconds (`PROBE_TIMEOUT`)
+    and, where `output` is named, prints it on its stdout or stderr."""
+    try:
+        done = subprocess.run(list(command), cwd=root, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace",
+                              timeout=PROBE_TIMEOUT if timeout is None else timeout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0 and (output is None or output in done.stdout or output in done.stderr)
+
+
+class requirement_probes:
+    """The outcomes of the requirements probed in one server's run for the project `root`, keyed by command and output: each probed once,
+    at its first need, and kept for every later read."""
+
+    def __init__(self, root=None):
+        self.root, self.outcomes, self.lock = Path(root or syngatelib.ROOT), {}, threading.Lock()
+
+    def met(self, entry):
+        """Whether the requirement `entry` is met, a malformed one never."""
+        key = requirement_key(entry)
+        if key is None:
+            return False
+        with self.lock:
+            if key not in self.outcomes:
+                self.outcomes[key] = probe(self.root, *key)
+            return self.outcomes[key]
+
+
+def offer(library, probes):
+    """The offered part of `library`, in its order: every prompt whose requirements `probes` finds met, and of the prompts naming one feature
+    only the first by rank -- a lower one first, an unranked one after every ranked, ties by name -- whose requirements are, the others
+    of the feature probed no further."""
+    taken, offered = set(), set()
+    for entry in sorted(library.values(), key=lambda entry: (entry.rank is None, entry.rank or 0, entry.name)):
+        if entry.feature is not None and entry.feature in taken:
+            continue
+        if all(probes.met(requirement) for requirement in entry.requires):
+            offered.add(entry.name)
+            if entry.feature is not None:
+                taken.add(entry.feature)
+    return {name: entry for name, entry in library.items() if name in offered}
+
+
+def offered_library(root=None, library=None, probes=None):
+    """The library a chat on the project `root` is offered: the `offer` of `library` -- the shipped one by default -- under `probes`, those of
+    one server's run, a new set without them; a live view taking the prompt files as they are at every access, a requirement once probed
+    not run again."""
+    probes = requirement_probes(root) if probes is None else probes
+    return live_mapping(lambda: offer(read_library(library), probes))
 
 
 def run_report(items, targets, records, output=()):
@@ -662,7 +739,7 @@ def parse_reply(reply, known=CALLS):
     return "calls", calls
 
 
-def apply_call(items, anchor, call, syngate_dir=None, measure=None):
+def apply_call(items, anchor, call, syngate_dir=None, measure=None, library=None):
     """Perform one parsed Syngate API call against the loaded tree, `@` standing for the
     anchored item. -> the line reporting what it did, or what a query read; a refusal raises
     `syngatelib.tree_error`.
@@ -672,13 +749,13 @@ def apply_call(items, anchor, call, syngate_dir=None, measure=None):
     rather than a silently unreviewed item.
 
     A `context` call is measured when `measure` -- (uid, purpose) -> the heavy files by path and reference -- is given, `purpose` being the
-    call's `for` text or None; without it every file enters whole."""
+    call's `for` text or None; without it every file enters whole. A `skill` call brings a skill of `library`, the shipped one by default."""
     at = lambda value: anchor if value == "@" else value
     tool, uid = call["tool"], at(call.get("uid"))
-    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in SURFS or tool in PATCHES or tool in SHELLS or tool in FILES or tool in LOGS or tool in SETUPS:
+    if tool in RUNS or tool in DELEGATIONS or tool in GITS or tool in GREPS or tool in SURFS or tool in PATCHES or tool in SHELLS or tool in FILES or tool in LOGS or tool in SETUPS:
         raise syngatelib.tree_error(f"{tool} runs through the page's harness, not against the tree")
     if tool == "skill":
-        skill = skills_of(load_prompts()).get(call["name"])
+        skill = skills_of(read_library(library)).get(call["name"])
         if skill is None:
             raise syngatelib.tree_error(f"unknown skill '{call['name']}'")
         return f"- skill {call['name']}:\n{skill.text}"

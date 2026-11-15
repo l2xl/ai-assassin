@@ -113,7 +113,7 @@ def test_the_seed_context_ends_with_the_key_sources_of_the_selection_each_once(t
     app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
     app.connectors = {"echo": EchoAnswer()}
     reply = app.chat({"uid": "LEAF-001", "connector": "echo", "model": "model-a", "effort": "low", "modes": ["tree"], "text": "Go."})["reply"]
-    offered = synthetic.default_prompt(synthetic.offered_library(git)) + TESTS_ON
+    offered = synthetic.default_prompt(synthetic.offered_library(tmp_path)) + TESTS_ON
     assert app.git is git and (synthetic.LIBRARY["git"].text in reply) is git
     assert reply == offered + seed.removeprefix(prompt) + "|Go.|model-a|low||None"
     synthetic.apply_call(items, "ROOT", {"tool": "add", "uid": "LEAF-002", "description": "Second\n\nIt shall follow.", "sources": ["src/leaf.py"]}, syngate_dir=syngate_dir)

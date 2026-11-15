@@ -50,6 +50,7 @@ from . import assassin_setup
 from . import filelib
 from . import loglib
 from . import gitlib
+from . import greplib
 from . import matching
 from . import patchlib
 from . import pruning
@@ -108,6 +109,9 @@ SHELL_TREE_RE = re.compile(r"(?<![\w.-])syngate(?![\w.-])")
 SHELL_TIMEOUT = 300
 SHELL_LIMIT = 20000
 GIT_ABSENT = "git is not at hand for this project"
+# A grep call while the offered library holds no grep prompt: none of its programs is at hand.
+GREP_ABSENT = ("no grep tool is offered: neither ripgrep nor GNU grep is found and git is not at hand for this project — "
+               "list and read the files with the files tool")
 # The git commands outside the git tool's reads and records that erase nothing: their refusal points to the shell, which runs them while
 # the chat's Raw command permission is on.
 GIT_SHELL_COMMANDS = ("submodule", "remote", "fetch", "ls-remote", "clone")
@@ -660,9 +664,10 @@ class AssassinApp:
         return thread
 
     def detect_git(self):
-        """Read once whether git is at hand for the project: it decides the library a turn is offered."""
+        """Read once whether git is at hand for the project, and take the library its chats are offered, the requirements of its prompts
+        probed once in this server's run."""
         self.git = gitlib.at_hand(self.root)
-        self.library = synthetic.offered_library(self.git)
+        self.library = synthetic.offered_library(self.root)
 
     def rankers(self, section):
         """(embed, rerank) of the dense and rerank signals: the callables set on the app, else those over the model locator in use of the `embed`
@@ -920,7 +925,8 @@ class AssassinApp:
         tree_errors = [message for uid, message in syngatelib.layout_problems(items) if uid is None]
         uncommitted = gitlib.uncommitted(self.root) if self.git else set()
         pending = self._pending(items, problems)
-        dirty = {uid: syngatelib.review_footprint(items, uid, discovered, self.root) & uncommitted for uid in pending} if uncommitted else {}
+        content = gitlib.content_uncommitted(self.root, uncommitted) if uncommitted else set()  # review marks never block a review
+        dirty = {uid: syngatelib.review_footprint(items, uid, discovered, self.root) & content for uid in pending} if content else {}
 
         payload = {}
         for uid, entry in report.items():
@@ -1716,6 +1722,14 @@ class AssassinApp:
                     if records:
                         shown.append(line)
                     continue
+                if synthetic.is_grep(call):
+                    try:
+                        results.append(self._grep(call))
+                    except ApiError as err:
+                        refusal, refused = denied(f"grep {call['command']}", err), call
+                        break
+                    inputs.append(call)
+                    continue
                 if synthetic.is_patch(call):
                     if not patch:
                         granted = self._permit(turn, agent, "patch", call, modes, shown)
@@ -1816,7 +1830,7 @@ class AssassinApp:
                 renamed = named(call) if call["tool"] == "rename" else None
                 try:
                     results.append(self._rename(items, uid, call, turn) if renamed else _call(
-                        lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir,
+                        lambda: synthetic.apply_call(items, uid, call, syngate_dir=self.syngate_dir, library=self.library,
                                                      measure=lambda target, purpose: self._measure(items, target, purpose or message).heavy)))
                     if call["tool"] in tiering.TREE_EDITS:
                         synthetic.absorb(keep, items, [named(call), call.get("new_uid")])  # the session's own edits are no news to it
@@ -1855,7 +1869,7 @@ class AssassinApp:
             batch_step(results, payload, inputs)
             applied += shown
             calls += payload
-            if (refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_surf(call) or synthetic.is_shell(call) or synthetic.is_file(call) or synthetic.is_log(call) or synthetic.is_setup(call) for call in payload)
+            if (refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_grep(call) or synthetic.is_surf(call) or synthetic.is_shell(call) or synthetic.is_file(call) or synthetic.is_log(call) or synthetic.is_setup(call) for call in payload)
                     and not runs and not delegations):
                 return {"ok": True, "reply": "", **applied_lines(applied), "session": session, "calls": calls}
             mark = json.dumps([payload, results], sort_keys=True, default=str)
@@ -2174,6 +2188,18 @@ class AssassinApp:
         cut = f"\n… cut at {SHELL_LIMIT} characters" if len(output) > SHELL_LIMIT else ""
         return f"- shell {command}:\n" + f"exit {done.returncode}\n{output[:SHELL_LIMIT]}{cut}".rstrip("\n")
 
+    def _grep(self, call):
+        """Run a grep call of an answer by the program of the grep prompt the chat's library offers, through the tool's guard, the server
+        settings and the stored chats out of its reach. -> the line telling its exit status and output; a refusal is an `ApiError`."""
+        name = greplib.program(self.library)
+        if name is None:
+            raise ApiError(403, GREP_ABSENT)
+        try:
+            words = greplib.guard(self.root, call["command"], name, UNREADABLE)
+        except greplib.refused as err:
+            raise ApiError(403, str(err)) from None
+        return f"- grep {call['command']}:\n{greplib.run(self.root, words)}"
+
     def _git(self, call):
         """Run a git call of an answer through the tool's guard. -> (the line telling its outcome, whether it records)."""
         if not self.git:
@@ -2417,7 +2443,8 @@ class AssassinApp:
     def _review_targets(self, items, uids, targets):
         """(the `targets` a review stamps -- those whose own review does not stand, an unknown UID passing through for the CLI to judge --,
         what closes the run: the review commit while git is at hand); refused when none needs review or, with git, while their review
-        footprints hold uncommitted changes."""
+        footprints hold uncommitted content -- review marks left uncommitted in them block nothing and join the review commit, so a
+        review mark never shares a commit with content."""
         discovered = syngatelib.discover_bindings(self.root)
         pending = self._pending(items, syngatelib.item_problems(items, discovered))
         targets = [target for target in targets if target not in items or target in pending]
@@ -2425,15 +2452,19 @@ class AssassinApp:
             raise ApiError(400, f"nothing under {', '.join(uids)} needs review")
         if not self.git:
             return targets, None
-        blocked = self._blocked(items, targets, discovered, gitlib.uncommitted(self.root))
+        uncommitted = gitlib.uncommitted(self.root)
+        content = gitlib.content_uncommitted(self.root, uncommitted)
+        blocked = self._blocked(items, targets, discovered, content)
         if blocked:
             raise ApiError(409, f"commit first: {', '.join(blocked)}", files=blocked)
         root = self.root.resolve()
         paths = [items[target].path.resolve().relative_to(root).as_posix() for target in targets if target in items and items[target].path.resolve().is_relative_to(root)]
+        paths += [path for path in self._blocked(items, targets, discovered, uncommitted - content) if path not in paths]  # the marks left uncommitted
         return targets, lambda job: self._review_commit(job, paths, uids[0])
 
     def _review_commit(self, job, paths, uid):
-        """Close a review run in a git work tree: of the item files `paths`, clean when it started, those it stamped are committed alone,
+        """Close a review run in a git work tree: of the item files `paths` -- the targets', and those whose uncommitted change was review
+        marks alone when it started -- those uncommitted now are committed alone,
         as `Review: <subject>` of the one commit since the last review commit, else with the message the AI formulates in `uid`'s chat.
         -> the lines the console ends with."""
         stamped = sorted(set(paths) & gitlib.uncommitted(self.root))

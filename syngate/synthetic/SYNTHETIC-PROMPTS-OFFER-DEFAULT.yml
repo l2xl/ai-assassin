@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-AGENT-TOOLS, SYNTHETIC-PROMPTS-OFFER]
+order: 40
+test: ~
+---
+Default tool offer
+puts a tool whose prompt declares `default: true` — the read-only grep tool — into every chat and every agent but a verdict agent while its requirements are met, and into none, default or not, while they are not.

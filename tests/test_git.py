@@ -76,12 +76,13 @@ def test_a_git_call_runs_in_the_project_root_without_a_shell_and_its_outcome_com
 @pytest.mark.syngate("SYNTHETIC-TOOL-GIT", "offer")
 def test_the_git_tool_is_offered_only_while_git_finds_a_work_tree_around_the_project_root(repo):
     root, syngate_dir, _ = repo
-    assert "git" in synthetic.LIBRARY and synthetic.offered_library(True) is synthetic.LIBRARY and "git" not in synthetic.offered_library(False)
+    assert "git" in synthetic.LIBRARY and "git" in synthetic.offered_library(root) and synthetic.LIBRARY["git"].requires  # the hook of its requirement
     offered = assassin_ui.AssassinApp(root=root, syngate_dir=syngate_dir)
     offered.connectors = {"echo": Scripted()}
-    assert offered.git and offered.library is synthetic.LIBRARY and offered.build_model()["git"] is True
+    assert offered.git and "git" in offered.library and offered.build_model()["git"] is True
     assert [mode["id"] for mode in offered.build_model()["connectors"]["echo"]["modes"]] == ["tree", "patch", "edit"]  # always offered, no switch of its own
     shutil.rmtree(root / ".git")
+    assert "git" in synthetic.LIBRARY and "git" not in synthetic.offered_library(root)
     bare = assassin_ui.AssassinApp(root=root, syngate_dir=syngate_dir)
     tools = [shape["properties"]["tool"]["const"] for shape in synthetic.answer_schema(bare.library)["properties"]["calls"]["items"]["anyOf"]]
     assert not bare.git and "git" not in bare.library and "git" not in tools and "query" in tools

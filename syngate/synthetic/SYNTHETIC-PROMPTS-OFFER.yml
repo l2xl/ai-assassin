@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-PROMPTS]
+order: 50
+---
+Offered library
+is the part of the prompt library a chat is offered: every prompt whose requirements the system meets, and of the alternative prompts of one feature only the first that meets them.
+
+[design/synthetic/offered_library.md](design/synthetic/offered_library.md)

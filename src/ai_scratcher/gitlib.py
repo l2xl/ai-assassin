@@ -157,6 +157,46 @@ def uncommitted(root):
     return paths
 
 
+def _unmarked(data):
+    """The fields of a parsed item with its review marks blanked: the `review` stamp, and the routine shas of `test`, so two versions
+    differing by their marks alone compare equal; a switch word other than `enabled` is kept, since it changes what the tree does."""
+    data = dict(data)
+    for key in ("review", "reviewed"):
+        if key in data and data[key] != "disabled":
+            data[key] = None
+    for key in ("test", "tests"):
+        value = data.get(key)
+        if isinstance(value, dict):
+            data[key] = dict.fromkeys(value)
+        elif isinstance(value, str) and value not in ("enabled", "disabled"):
+            data[key] = None
+    return data
+
+
+def marks_only(root, paths):
+    """The item files under the tree among `paths` whose change against HEAD is their review marks alone -- the `review` stamp and the
+    routine shas of `test` -- an item git does not hold at HEAD, or one deleted or unparsable, never being one."""
+    from .syngatelib import parse_item
+    found = set()
+    for rel in paths:
+        if not (rel.startswith(TREE + "/") and rel.endswith(".yml")):
+            continue
+        shown = git(root, "show", f"HEAD:./{rel}")
+        try:
+            old, new = parse_item(shown.stdout) if shown.returncode == 0 else None, parse_item((pathlib.Path(root) / rel).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(old, dict) and isinstance(new, dict) and _unmarked(old) == _unmarked(new):
+            found.add(rel)
+    return found
+
+
+def content_uncommitted(root, uncommitted_paths=None):
+    """The uncommitted files that change content: `uncommitted` -- or the given set of them -- less the item files whose change is review marks alone."""
+    paths = uncommitted(root) if uncommitted_paths is None else set(uncommitted_paths)
+    return paths - marks_only(root, paths)
+
+
 def state(root):
     """What tells a change of the repository: the commit at HEAD and the status of the work tree."""
     return git(root, "rev-parse", "HEAD").stdout + git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout

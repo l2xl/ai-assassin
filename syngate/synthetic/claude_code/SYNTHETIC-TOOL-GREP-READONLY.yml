@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-GREP]
+order: 40
+test: ~
+---
+Read-only grep run
+leaves every file of the project, `.git` included, as it was, whatever options of its definition a command line combines: no listed option writes a file or runs another program.

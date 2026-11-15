@@ -4,7 +4,9 @@
 (`synthetic.LIBRARY`), read from the files anew whenever a prompt is needed — every round of every turn, a skill call, the
 default prompt, the answer schema — and never kept between two reads: `LIBRARY`, `SKILLS`, `PROMPTS` and `ANSWER_SCHEMA` are live
 views that build themselves from the files at every access, a turn taking one consistent read of them per round. Each file is opened by a front matter: `kind` — `skill`, `tool` or `agent` ([agents.md](agents.md)) — a
-`description` and, for a skill, `default` and `delivery`. A *tool* defines the format of a structured answer the
+`description`, `default` and, for a skill, `delivery`. A default skill heads the default prompt; a default tool —
+the read-only grep tool — is the one tool an off-context agent has without listing it, a verdict agent
+aside ([agents.md](agents.md)). A *tool* defines the format of a structured answer the
 harness turns into a call whose result reaches the model with the next turn; a *skill* is
 description only — the rules of calling tools (`call_tool.md`, with `call_tool_block.md` and `call_tool_answer.md`), the rules of the DAG
 (`syngate.md`) and the format of an answer (`answer.md`: the lead first, a long or secondary list —

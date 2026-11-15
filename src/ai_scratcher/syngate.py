@@ -266,7 +266,7 @@ def cmd_review(args):
         return 1
     structural = syngatelib.validate_structure(items)
     discovered = syngatelib.discover_bindings()
-    uncommitted = gitlib.uncommitted(syngatelib.ROOT) if gitlib.at_hand(syngatelib.ROOT) else set()
+    uncommitted = gitlib.content_uncommitted(syngatelib.ROOT) if gitlib.at_hand(syngatelib.ROOT) else set()  # review marks never block a review
     with _Recording(args.coverage_out) as recording:
         failed = [uid for uid in uids if not _review_one(items, structural, discovered, uid, args.build_dir, recording, uncommitted)]
     if failed:

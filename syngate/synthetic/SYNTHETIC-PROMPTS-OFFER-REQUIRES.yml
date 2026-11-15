@@ -1,0 +1,6 @@
+---
+parents: [SYNTHETIC-PROMPTS-OFFER]
+test: ~
+---
+Prompt requirement
+keeps a prompt in the offered library only while every command its `requires` lists exits 0 in the project root and prints the `output` it names, a prompt without `requires` always offered.

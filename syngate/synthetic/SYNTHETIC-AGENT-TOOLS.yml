@@ -4,4 +4,4 @@ order: 8
 review: 4c9c7b35387d7111108e6345249180d0c0b412daca3d9cb77b91efc311197de0
 ---
 Agent tools
-are the tools the agent's `tools` list names, fixed by its prompt: the chat that starts the agent neither adds to them nor takes from them.
+are the tools the agent's `tools` list names and the default tools of the offered library, fixed by the prompts: the chat that starts the agent neither adds to them nor takes from them.

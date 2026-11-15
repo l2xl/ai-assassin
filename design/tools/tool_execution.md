@@ -19,6 +19,7 @@ A tool is seen from four sides, and the tree keeps them apart:
 |---|---|---|---|
 | Syngate API | `query`, `context`, `add`, `edit`, `move`, `rename`, `remove`, `test` | `synthetic.py`, `syngatelib.py` | Tree edit, for the changing calls |
 | files | `list`, `read` | `filelib.py` | nothing — reads are always allowed |
+| grep | `grep` | `greplib.py`, `assassin_ui.py` | nothing — it reads; offered by the system's search program |
 | patch | `patch`, `replace` | `patchlib.py` | Edit files |
 | git | `git` | `gitlib.py` | nothing; its guard refuses what erases |
 | shell | `shell` | `assassin_ui.py` | Raw command |

@@ -117,12 +117,13 @@ def prune_rows(rows, turn, steps, verdicts, reply=""):
     """(rows, dropped) of the turn's `rows` under the `verdicts` on `turn`: its rounds are walked as its `steps` ran -- each calls step's results
     carried by the next round's prompt, an AI text said in the answer of the round it stood in, the reply in the last one -- a pruned result made
     its `pruning.form` in that prompt, a pruned AI text's entry left out unless it is its answer's only block; `dropped` maps every entry left
-    out to its parent. Nothing else changes: a thinking entry, its signature with it, stays as it was."""
+    out to its parent. Nothing else changes: an entry that is no message -- an attachment, a system record -- and a thinking entry, its
+    signature with it, stay as they were."""
     if not verdicts:
         return rows, {}
     rounds, current = [], None
-    for row in rows:
-        if is_message(row) and is_prompt(row):
+    for row in (row for row in rows if is_message(row)):  # an attachment or a system record is passed over, kept as it is
+        if is_prompt(row):
             current = []
             rounds.append(current)
         if current is not None:

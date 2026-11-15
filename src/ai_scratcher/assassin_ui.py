@@ -419,10 +419,11 @@ class Chat:
         self.turn = Turn(f"{self.uid}:{self.turns}", connector, changed, parent)
         return self.turn
 
-    def kept(self):
-        """The exchange as it travels: every message but a failed or stopped turn's, its cuts taken out, one left empty left out."""
+    def kept(self, upto=None):
+        """The exchange as it travels: every message -- of the log ahead of index `upto`, where given -- but a failed or stopped turn's, its
+        cuts taken out, one left empty left out."""
         kept = []
-        for m in self.log:
+        for m in self.log[:upto]:
             kept += [{"role": "user", "text": step["text"]} for step in m.get("steps") or () if step.get("kind") == "user" and str(step.get("text") or "").strip()]
             said = "" if pruning.reply_pruned(m, self.prune) else kept_text(m["text"], m.get("cuts"))  # a pruned reply leaves its stub with the next message
             text = "\n".join([*m.get("applied", ()), said]).strip("\n")  # the lines the log shows as blocks
@@ -1272,12 +1273,10 @@ class AssassinApp:
         While a turn of the chat runs, a plain message marked `queue` joins the chat's queue instead -- the running turn hands it to the
         model at its next round, or the next turn starts with it once the running one ends -- and one marked `interrupt` joins it and
         stops the running turn, so the next turn carries it on in the same session; -> `{"queued": n, "chat": …}`. `queued` texts start
-        a turn as messages of their own, sent together."""
+        a turn as messages of their own, sent together.
+        The messages join the log first, before the turn is prepared: a failure preparing it is logged as an error under them and refused
+        with the `chat`, so nothing the user sent is lost and a retry sends it again."""
         uid, text = str(data.get("uid") or ""), str(data.get("text") or "")
-        table, defaults = self.mode_table(), self.chat_defaults()  # read outside the lock: a connector may answer slowly
-        bound = pruning.renew_bound(self.settings("orchestrator"))
-        item = self._load().get(uid)
-        current = item.description.strip() if item else None
         with self._chat_lock:
             if self.engine["restarting"]:
                 raise ApiError(503, RESTARTING)
@@ -1296,19 +1295,51 @@ class AssassinApp:
                 running, queued = None, {"queued": len(chat.queue), "chat": self._changed(chat)}
             else:
                 queued = None
+                if data.get("fresh"):
+                    chat.file()
+                new, at = not chat.log, len(chat.log)  # the log ahead of this turn's messages
+                if isinstance(data.get("queued"), list):
+                    chat.log += [{"role": "user", "text": str(message)} for message in data["queued"]]
+                elif not data.get("statement") and not data.get("retry"):
+                    chat.log.append({"role": "user", "text": text, **({"agent": data["agent"]} if data.get("agent") else {})})
+                self._bump()
         if queued:
             if data.get("interrupt") and running:
                 self.stop_turn(running, withdraw=False)
             return queued
+        try:
+            return self._begin_turn(chat, data, text, parent, new, at)
+        except Exception as err:
+            failed = err if isinstance(err, ApiError) else ApiError(500, INTERRUPTED.format(error=f"{type(err).__name__}: {err}"))
+            with self._chat_lock:
+                chat.log.append({"role": "error", "text": str(failed)})
+                raise ApiError(failed.status, str(failed), **{**failed.extra, "chat": self._changed(chat)}) from err
+
+    def _queued_refused(self, chat, texts, err):
+        """Keep the queued `texts` whose turn `start_turn` refused: a refusal carrying the `chat` logged them and its error already, any other
+        -- refused ahead of them -- logs them now, under the error saying they were not sent."""
+        if "chat" in err.extra:
+            return
+        with self._chat_lock:
+            chat.log += [{"role": "user", "text": text} for text in texts]
+            chat.log.append({"role": "error", "text": f"the queued message was not sent: {err}"})
+            self._bump()
+
+    def _begin_turn(self, chat, data, text, parent, new, at):
+        """Prepare and start the turn of `chat` whose messages its log holds from index `at` on -- `new` where nothing was logged ahead of
+        them -- the notices heading them inserted at `at`; -> `{"turn": "<UID>:<n>", "chat": …}`."""
+        uid = chat.uid
+        table, defaults = self.mode_table(), self.chat_defaults()  # read outside the lock: a connector may answer slowly
+        bound = pruning.renew_bound(self.settings("orchestrator"))
+        item = self._load().get(uid)
+        current = item.description.strip() if item else None
         with self._chat_lock:
             if chat.running:  # another start won the race meanwhile
                 raise ApiError(409, f"a turn of {uid} is running ({chat.turn.id})")
             if data.get("fresh"):
-                chat.file()
                 self._advanced_off(chat, table)
             if chat.started is None:
                 chat.started = time.time()
-            new = not chat.log
             chat.setup.update({key: data[key] for key in SETUP_KEYS if key in data})
             if chat.session and chat.session_connector not in (None, chat.setup.get("connector")):
                 chat.session = chat.session_connector = None  # handover: the new connector knows nothing of the old one's session, so the kept messages head its own
@@ -1329,22 +1360,20 @@ class AssassinApp:
                 pruning.take_stubs(chat.prune)
             if chat.session is None and not new:  # the conversation's next session: the verdicts that waited and the switches set by hand apply
                 pruning.new_session(chat.prune)
-            kept = chat.kept()
+            kept = chat.kept(at)
             history = [] if chat.session else kept[:-1] if data.get("retry") else kept
             changed = chat.statement is not None and current is not None and current != chat.statement
+            heads = []  # the notices heading this turn's messages in the log
             if reset_note:
-                chat.log.append({"role": "user", "text": reset_note, "notice": True})
+                heads.append({"role": "user", "text": reset_note, "notice": True})
                 text = f"{reset_note}\n\n{text}"
-            note = STATEMENT_NOTE.format(uid=uid, statement=current) if chat.log and not data.get("retry") and current and (data.get("statement") or changed) else None
+            note = STATEMENT_NOTE.format(uid=uid, statement=current) if (at or heads) and not data.get("retry") and current and (data.get("statement") or changed) else None
             if note:
-                chat.log.append({"role": "user", "text": note, "statement": True})
+                heads.append({"role": "user", "text": note, "statement": True})
                 text = note if data.get("statement") else f"{note}\n\n{text}"
             elif data.get("statement") and not data.get("retry"):
                 text = current or text
-            if isinstance(data.get("queued"), list):
-                chat.log += [{"role": "user", "text": str(message)} for message in data["queued"]]
-            elif not data.get("statement") and not data.get("retry"):
-                chat.log.append({"role": "user", "text": str(data.get("text") or ""), **({"agent": data["agent"]} if data.get("agent") else {})})
+            chat.log[at:at] = heads
             if current is not None:
                 chat.statement = current
             turn = chat.next_turn(chat.setup.get("connector"), self._notify, parent)
@@ -1393,9 +1422,7 @@ class AssassinApp:
                 try:
                     self.start_turn({**chat.setup, "uid": chat.uid, "text": "\n\n".join(m["text"] for m in waiting), "queued": [m["text"] for m in waiting]})
                 except ApiError as err:
-                    with self._chat_lock:
-                        chat.log.append({"role": "error", "text": f"the queued message was not sent: {err}"})
-                        self._bump()
+                    self._queued_refused(chat, [m["text"] for m in waiting], err)
 
         turn.thread = threading.Thread(target=run, daemon=True)
         turn.thread.start()
@@ -1525,9 +1552,7 @@ class AssassinApp:
             try:
                 self.start_turn({**chat.setup, "uid": chat.uid, "text": "\n\n".join(texts), "queued": texts})
             except ApiError as err:
-                with self._chat_lock:
-                    chat.log.append({"role": "error", "text": f"the queued message was not sent: {err}"})
-                    self._bump()
+                self._queued_refused(chat, texts, err)
 
     def _turn(self, key):
         """The turn `<UID>:<n>` addresses: the latest of its item's chat, readable until the next one starts."""

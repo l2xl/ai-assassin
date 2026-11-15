@@ -1751,7 +1751,15 @@ async function sendChat(row, statement = null, retry = false, composed = null, h
     const started = await api("/api/turn", { uid, connector, model, effort, modes, text, statement: statement !== null, fresh, retry });
     takeChat(started.chat);
     watchChats();
-  } catch (err) { if (fresh) view.fresh = true; toast(err.message); renderDoc(); }
+  } catch (err) {  // a refusal carrying the chat logged the message under its error; any other gives the typed text back to the line
+    if (err.body?.chat) takeChat(err.body.chat);
+    else {
+      if (fresh) view.fresh = true;
+      if (input && statement === null && composed === null && !retry && !input.value) input.value = text;
+    }
+    toast(err.message);
+    renderDoc();
+  }
 }
 
 async function queueChat(chat, input, text, how) {

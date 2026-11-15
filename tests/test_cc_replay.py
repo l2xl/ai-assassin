@@ -176,17 +176,27 @@ def test_a_replay_writes_a_new_transcript_copying_what_stands_ahead_of_the_chang
 @pytest.mark.syngate("CLAUDE_CODE-PRUNE-ENTRIES")
 def test_replayed_entries_cut_a_pruned_result_and_text_leave_bookkeeping_out_rechain_and_change_no_thinking_entry():
     log, second = two_turns()
+    for at in reversed([index for index, row in enumerate(log.rows) if row.get("promptId")]):  # the CLI's context and records, no message
+        prompt = log.rows[at]["uuid"]
+        log.rows[at + 1:at + 1] = [{"type": "attachment", "uuid": str(uuid.uuid4()), "parentUuid": prompt, "isSidechain": False, "sessionId": log.session,
+                                    "attachment": {"type": "date", "date": "2026-11-15"}, "rendered": [{"content": "<system-reminder>date</system-reminder>"}]},
+                                   {"type": "system", "subtype": "turn_duration", "uuid": str(uuid.uuid4()), "parentUuid": prompt, "isSidechain": False,
+                                    "sessionId": log.session, "durationMs": 1}]
     one = cc_transcript.span(log.rows[:log.rows.index(second)], 2)
     rows = cc_transcript.turn_rows(log.rows, one)
     assert rows and not any(row["type"] in cc_transcript.BOOKKEEPING for row in rows)
+    others = [row for row in rows if not cc_transcript.is_message(row)]
+    assert [row["type"] for row in others] == ["attachment", "system"] * 2
     verdicts = {"1:1": {"rule": "text", "stub": "a"}, "1:2": {"rule": "tree", "stub": STUB}, "1:3": {"rule": "text", "stub": "b"}}
-    kept, dropped = cc_transcript.prune_rows(rows, 1, TURN1_STEPS, verdicts)
+    whole, dropped = cc_transcript.prune_rows(rows, 1, TURN1_STEPS, verdicts)
+    assert [row for row in whole if not cc_transcript.is_message(row)] == others  # kept as they are
+    kept = [row for row in whole if cc_transcript.is_message(row)]
     texts = [block.get("text") for row in kept if isinstance(row["message"]["content"], list) for block in row["message"]["content"] if block.get("type") == "text"]
     assert "I read the leaf." not in texts and "It leafs." not in texts and len(dropped) == 2
-    thinking = lambda found: [row for row in found if isinstance(row["message"]["content"], list) and row["message"]["content"][0]["type"] == "thinking"]
+    thinking = lambda found: [row for row in found if cc_transcript.is_message(row) and isinstance(row["message"]["content"], list) and row["message"]["content"][0]["type"] == "thinking"]
     assert thinking(kept) == thinking(rows) and thinking(rows)
     assert f"Results of the calls in your last answer:\n{STUB}" in [row["message"]["content"] for row in kept]
-    assembled = cc_transcript.assemble([], [(kept, dropped)], "new")
+    assembled = cc_transcript.assemble([], [(whole, dropped)], "new")
     assert chained(assembled) and all(row["sessionId"] == "new" for row in assembled)
     lone = Transcript()
     lone.round("Only", texts=["Sole."], thinking=False)  # a text that is its answer's only block beside the structured answer

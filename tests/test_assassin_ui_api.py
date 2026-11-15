@@ -297,6 +297,25 @@ def test_a_retry_resends_the_last_user_text_without_logging_it_again_and_a_faile
     assert (status, body["error"]) == (400, "'index' must be a number")
 
 
+@pytest.mark.syngate("AI_CHAT-SEND-SAVED")
+def test_a_message_whose_turn_fails_to_be_prepared_stays_in_the_log_under_the_error_and_a_retry_sends_it(server, monkeypatch):
+    base, app = server
+    app.connectors = {"echo": (scripted := Scripted({"kind": "text", "text": "fine"}, {"kind": "text", "text": "sent"}))}
+    turn(base, app, "LEAF-001", "First")
+
+    def broken(chat):
+        raise KeyError("message")
+    monkeypatch.setattr(app, "_replay", broken)
+    status, body = refused(base, app, "/api/turn", {**SETUP, "uid": "LEAF-001", "text": "Second"})
+    roles = lambda log: [(m["role"], m["text"]) for m in log]
+    assert status == 500 and "KeyError" in body["error"] and roles(body["chat"]["log"])[2:] == [("user", "Second"), ("error", body["error"])]
+    assert roles(call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"]) == roles(body["chat"]["log"]) and len(scripted.heard) == 1  # the AI not called
+    monkeypatch.undo()
+    retried = turn(base, app, "LEAF-001", "Second", retry=True)
+    assert retried["reply"] == "sent" and scripted.heard[1]["text"].rpartition("\n")[2] == "Second"
+    assert roles(call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"])[2:] == [("user", "Second"), ("error", body["error"]), ("ai", "sent")]
+
+
 @pytest.mark.syngate("AI_CHAT-CONTROLS-FOLD-KEEP", "cuts")
 def test_cuts_are_merged_and_clipped_the_kept_text_travels_and_a_stored_dropped_mark_reads_as_a_whole_cut(server, syngate_tree):
     base, app = server

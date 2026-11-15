@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-060]
+order: 20
+test: ~
+---
+Message saved first
+joins the chat's log as the first act of a turn being started, before the turn is prepared or the AI called, so a failure in preparing it leaves the message in the log followed by the error, which retry sends again.

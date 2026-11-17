@@ -13,8 +13,8 @@ the session is a message list the harness writes, and every tool is the harness'
 **Status.** Every step below is implemented and stated by items whose tests are bound and pass.
 What stays open: the Claude Code connector keeps the exceptions of
 [claude_code_orchestrator.md](../connections/claude_code_orchestrator.md) — its own `Bash` and web tools
-unheld, its session never rewritten — and a new session is composed of the kept message texts
-alone, so the steps no verdict pruned, a first file read among them, do not reach it.
+unheld, its session never rewritten in place — and a superseded statement or file of a context
+update is not cut out of a running session, only the readings of calls are.
 
 Two words are kept apart throughout. A **conversation** is what the user sees: the log of a chat
 since its last reset. A **session** is what a model is sent: the system prompt and the message

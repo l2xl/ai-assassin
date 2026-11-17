@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE-TEST-SETUP]
+order: 10
+test: ~
+---
+Setup scope
+is the item carrying a setup and everything below it up to the next setup, the nearest one holding whole and the built-in one where none is above; an item carrying none whose parents hand it different setups takes its first parent's, which is no layout problem.

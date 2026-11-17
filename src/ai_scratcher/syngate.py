@@ -19,12 +19,14 @@ import argparse
 import fnmatch
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from . import gitlib, syngatelib, synthetic
+from . import gitlib, syngatelib, synthetic, testreport, testselect
 
 
 def _load_or_die():
@@ -58,8 +60,27 @@ def cmd_add(args):
 
 def cmd_edit(args):
     changes = {field: value for field, value in (("description", args.description), ("order", args.order), ("sources", args.source)) if value is not None}
+    shaped = any(value is not None for value in (args.files, args.report, args.env))
+    if args.no_setup and (args.run is not None or shaped):
+        print("--no-setup removes the test setup: it takes no --run, --files, --report or --env", file=sys.stderr)
+        return 1
+    if shaped and args.run is None:
+        print("a test setup is given whole: --files, --report and --env go with its --run", file=sys.stderr)
+        return 1
+    if args.run is not None:
+        env = {}
+        for pair in args.env or ():
+            key, eq, value = pair.partition("=")
+            if not eq or not key:
+                print(f"--env takes K=V, not {pair!r}", file=sys.stderr)
+                return 1
+            env[key] = value
+        changes["setup"] = {"run": args.run, **({"files": args.files} if args.files else {}),
+                            **({"report": args.report} if args.report else {}), **({"env": env} if env else {})}
+    elif args.no_setup:
+        changes["setup"] = None
     if not changes:
-        print("nothing to edit: pass --description, --order or --source", file=sys.stderr)
+        print("nothing to edit: pass --description, --order, --source, --run or --no-setup", file=sys.stderr)
         return 1
 
     def run(items):
@@ -97,20 +118,18 @@ def cmd_context(args):
     return _mutate(lambda items: synthetic.seed_context(items, args.uid, label=args.label).rstrip("\n"))
 
 
-def _require(items, feature):
-    """False, with the root switch to set printed, when the tree keeps the feature off."""
-    if syngatelib.features(items)[feature]:
+def _require(scopes, uid, feature):
+    """False, with the switch to set printed, when the feature is off for the item; an unknown UID passes for the command to judge."""
+    if uid not in scopes or scopes[uid][feature]:
         return True
-    print(f"the tree's {feature} feature is off; switch it on with '{feature}: enabled' in the root item", file=sys.stderr)
+    print(f"{uid}: the {feature} feature is off for the item; switch it on with '{feature}: enabled' on the root item or on a branch over it", file=sys.stderr)
     return False
 
 
 def _addressable(items):
     """The items `review` and `test` address: those with own tests, or -- with the test feature off -- the childless ones."""
-    if syngatelib.features(items)["test"]:
-        return lambda item: item.is_leaf
-    children = syngatelib.children_map(items)
-    return lambda item: not children[item.uid]
+    scopes, children = syngatelib.feature_scopes(items)[0], syngatelib.children_map(items)
+    return lambda item: item.is_leaf if scopes[item.uid]["test"] else not children[item.uid]
 
 
 def _bindings_of(item, discovered, tests_on):
@@ -145,13 +164,94 @@ def _resolve(item, discovered, names):
     return resolved, unrun
 
 
-def _run_bound(resolved, build_dir):
-    """Run the routines of {uid: {binding: Location}}: pytest routines are
-    selected by node id in one process, Catch2 cases by an OR of their tag pairs
-    in one process per binary. -> (all passed, {(uid, binding): why it did not run})."""
-    node_ids, tags_by_binary, unrun = [], {}, {}
+ENV_PASSED_RE = re.compile(r"^\$([A-Za-z_][A-Za-z0-9_]*)$")  # an `env` value passing a variable of the server through
+
+
+def _discover(items):
+    """({(uid, binding): [Location]}, [(uid, message)]) -- the routines of the built-in test trees joined by those of the files of all test setups, with the problems of comment tags binding none."""
+    return syngatelib.discover_setups(items, syngatelib.discover_bindings())
+
+
+def _setup_env(setup):
+    """The environment of a setup's command: its `env` entries over the server's own, a value `$NAME` passing that variable through and leaving the entry out where the server has none."""
+    env, entries = dict(os.environ), setup.get("env")
+    for key, value in (entries.items() if isinstance(entries, dict) else ()):
+        through = ENV_PASSED_RE.match(str(value))
+        if not through:
+            env[str(key)] = str(value)
+        elif through.group(1) in os.environ:
+            env[str(key)] = os.environ[through.group(1)]
+        else:
+            env.pop(str(key), None)
+    return env
+
+
+def _run_setup(holder, setup, bindings, recording, unrun):
+    """Run the addressed bindings of the test setup of item `holder` by its command -- an argument list, never a shell line, in the
+    project root under its `env` -- and record every outcome from the first source holding a result of theirs: the coverage records
+    the run appended, its report file, its standard output, then the exit status of a command run one by one. The bindings of a
+    command that cannot start land in `unrun` with that reason. -> all passed."""
+    keys = lambda group: [(binding["uid"], binding["binding"]) for binding in group]
+
+    def cannot(group, why):
+        print(f"{holder}: {why}", file=sys.stderr)
+        unrun.update(dict.fromkeys(keys(group), why))
+        return False
+
+    run = setup.get("run") if isinstance(setup.get("run"), str) else ""
+    with tempfile.TemporaryDirectory() as scratch:
+        coverage, report, select = (Path(scratch) / name for name in ("coverage.jsonl", "report", "select.jsonl"))
+        try:
+            runs = testselect.commands(run, bindings, syngatelib.ROOT, report)
+        except ValueError as err:
+            return cannot(bindings, f"its test setup cannot run: {err}")
+        one_by_one = any(match.group(1) in testselect.SINGULAR for match in testselect.PLACEHOLDER_RE.finditer(run))
+        env = _setup_env(setup) | {"SYNGATE_COVERAGE_FILE": str(coverage), "SYNGATE_REPORT_FILE": str(report), "SYNGATE_SELECT_FILE": str(select)}
+        passed = True
+        for argv, group in runs:
+            coverage.unlink(missing_ok=True)
+            report.unlink(missing_ok=True)
+            select.write_text("".join(json.dumps(binding) + "\n" for binding in group), encoding="utf-8")
+            print(f"running {shlex.join(argv)}", flush=True)
+            try:
+                done = subprocess.run(argv, cwd=syngatelib.ROOT, env=env, stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace")
+            except OSError as err:
+                passed = cannot(group, f"command cannot start: {argv[0]}: {err.strerror or err}")
+                continue
+            output = done.stdout + done.stderr
+            print(output, end="", flush=True)
+            records = syngatelib.load_coverage([coverage])[0] if coverage.is_file() else {}
+            found = {key: [(record["passed"], record["name"], record["log"]) for record in records.get(key, [])] for key in keys(group)}
+            for text in ([report.read_text(encoding="utf-8", errors="replace")] if report.is_file() else []) + [done.stdout]:
+                if any(found.values()):
+                    break
+                joined = testreport.join(testreport.parse(text, setup.get("report")), group)
+                found = {key: [(result["passed"], result["name"], result["log"]) for result in joined[key]] for key in joined}
+            if one_by_one and not any(found.values()):
+                found = {key: [(done.returncode == 0, group[0]["name"], output[-testreport.TAIL:])] for key in keys(group)}
+            for key in keys(group):
+                for ok, test, log in found[key] or [(False, "", testreport.verdict([], output)[1])]:
+                    passed &= ok
+                    recording.record(*key, ok, test, log)
+                    if not ok:
+                        summary = str(log).strip().splitlines()
+                        print(f"{key[0]}: {syngatelib.binding_tag(*key)} failed: {summary[0] if summary else 'no log'}", file=sys.stderr)
+    return passed
+
+
+def _run_bound(items, resolved, build_dir, recording):
+    """Run the routines of {uid: {binding: Location}}, each by the test setup holding for its item. Under a setup of the tree its
+    command runs them and their outcomes go to `recording`; under the built-in one pytest routines are selected by node id in one
+    process and Catch2 cases by an OR of their tag pairs in one process per binary, their own emitters recording.
+    -> (all passed, {(uid, binding): why it did not run})."""
+    scopes = syngatelib.setup_scopes(items)
+    node_ids, tags_by_binary, by_setup, unrun = [], {}, {}, {}
     for uid, bindings in resolved.items():
         for name, loc in bindings.items():
+            if scopes.get(uid):
+                by_setup.setdefault(scopes[uid], []).append({"uid": uid, "binding": name, "tag": syngatelib.binding_tag(uid, name),
+                                                             "name": loc.routine, "path": loc.path, "line": loc.line})
+                continue
             if loc.path.endswith(".py"):
                 node_ids.append(loc.name)
                 continue
@@ -168,6 +268,8 @@ def _run_bound(resolved, build_dir):
     for binary, tags in tags_by_binary.items():
         print(f"running {binary.name} \"{','.join(tags)}\"", flush=True)
         passed &= subprocess.run([str(binary), ",".join(tags)], cwd=syngatelib.ROOT).returncode == 0
+    for holder, bindings in by_setup.items():
+        passed &= _run_setup(holder, items[holder].setup, bindings, recording, unrun)
     return passed, unrun
 
 
@@ -187,10 +289,14 @@ class _Recording:
             os.environ["SYNGATE_COVERAGE_FILE"] = str(self.fresh)
         return self
 
-    def unrun(self, uid, name, why):
+    def record(self, uid, name, passed, test="", log=""):
+        """Append one result of a binding the way the coverage emitters of the tests append theirs: the outcome a setup's command told."""
         if self.coverage_out:
             with open(self.fresh, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"tags": [uid] + ([name] if name else []), "passed": False, "name": "", "log": why}) + "\n")
+                f.write(json.dumps({"tags": [uid] + ([name] if name else []), "passed": passed, "name": test, "log": log}) + "\n")
+
+    def unrun(self, uid, name, why):
+        self.record(uid, name, False, log=why)
 
     def __exit__(self, *exc):
         if self.coverage_out:
@@ -237,7 +343,7 @@ def _review_one(items, structural, discovered, uid, build_dir, recording, uncomm
         print(f"{uid}: uncommitted changes in its review footprint, commit them first: {', '.join(blocked)}", file=sys.stderr)
         return False
     resolved, unresolved = _resolve(item, discovered, item.tests) if item.is_leaf else ({}, {})
-    passed, unrun = _run_bound({uid: resolved}, build_dir) if not unresolved else (False, {})
+    passed, unrun = _run_bound(items, {uid: resolved}, build_dir, recording) if not unresolved else (False, {})
     for name, why in [*unresolved.items(), *((name, why) for (_, name), why in unrun.items())]:
         recording.unrun(uid, name, why)
     if unresolved or unrun:
@@ -257,18 +363,17 @@ def _review_one(items, structural, discovered, uid, build_dir, recording, uncomm
 
 def cmd_review(args):
     items = _load_or_die()
-    if not _require(items, "review"):
-        return 1
-    uids, errors = _expand_uids(items, args.uid, _addressable(items), "leaf")
+    scopes, addressable = syngatelib.feature_scopes(items)[0], _addressable(items)
+    uids, errors = _expand_uids(items, args.uid, lambda item: addressable(item) and scopes[item.uid]["review"], "leaf")
     if errors:
         for line in errors:
             print(line, file=sys.stderr)
         return 1
-    structural = syngatelib.validate_structure(items)
-    discovered = syngatelib.discover_bindings()
+    discovered, tag_problems = _discover(items)
+    structural = syngatelib.validate_structure(items) + [message for _uid, message in tag_problems]
     uncommitted = gitlib.content_uncommitted(syngatelib.ROOT) if gitlib.at_hand(syngatelib.ROOT) else set()  # review marks never block a review
     with _Recording(args.coverage_out) as recording:
-        failed = [uid for uid in uids if not _review_one(items, structural, discovered, uid, args.build_dir, recording, uncommitted)]
+        failed = [uid for uid in uids if not (_require(scopes, uid, "review") and _review_one(items, structural, discovered, uid, args.build_dir, recording, uncommitted))]
     if failed:
         print(f"review: {len(failed)}/{len(uids)} item(s) not stamped: {' '.join(failed)}", file=sys.stderr)
         return 1
@@ -282,7 +387,7 @@ def cmd_test(args):
     enforce that its items carry tests, so the routines tagged for them still
     run and still record coverage. Stamping is `review`'s and stays gated."""
     items = _load_or_die()
-    tests_on = syngatelib.features(items)["test"]
+    scopes = syngatelib.feature_scopes(items)[0]
     narrowed, whole, errors = {}, set(), []
     for arg in args.uid:
         pattern, _, name = arg.partition(":")
@@ -295,13 +400,15 @@ def cmd_test(args):
             else:
                 whole.add(uid)
     uids = list(narrowed)
-    discovered = syngatelib.discover_bindings()
+    discovered, tag_problems = _discover(items)
+    errors += [message for uid, message in tag_problems if uid in narrowed]
     resolved, unresolved = {}, {}
     for uid in uids:
         item = items.get(uid)
         if item is None:
             errors.append(f"unknown UID '{uid}'")
             continue
+        tests_on = scopes[uid]["test"]
         names = _bindings_of(item, discovered, tests_on)
         unknown = [name for name in dict.fromkeys(narrowed[uid]) if name not in names]
         declared = ", ".join(syngatelib.binding_tag(uid, name) for name in names) or "none"
@@ -319,7 +426,7 @@ def cmd_test(args):
         resolved[uid], missing = _resolve(item, discovered, names)
         unresolved.update({(uid, name): why for name, why in missing.items()})
     with _Recording(args.coverage_out) as recording:
-        passed, unrun = _run_bound(resolved, args.build_dir)
+        passed, unrun = _run_bound(items, resolved, args.build_dir, recording)
         unrun.update(unresolved)
         for (uid, name), why in unrun.items():
             recording.unrun(uid, name, why)
@@ -332,8 +439,7 @@ def cmd_test(args):
 
 def cmd_clear(args):
     items = _load_or_die()
-    if not _require(items, "review"):
-        return 1
+    scopes = syngatelib.feature_scopes(items)[0]
     uids, errors = _expand_uids(items, args.uid, lambda item: bool(item.reviewed), "reviewed")
     if errors:
         for line in errors:
@@ -346,10 +452,13 @@ def cmd_clear(args):
             print(f"unknown UID '{uid}'", file=sys.stderr)
             ret = 1
             continue
+        if not _require(scopes, uid, "review"):
+            ret = 1
+            continue
         if not item.reviewed:
             print(f"{uid}: not reviewed")
             continue
-        syngatelib.clear_review(item)
+        syngatelib.clear_review(item, items)
         syngatelib.write_item(item)
         print(f"{uid}: review stamp cleared")
     return ret
@@ -358,14 +467,16 @@ def cmd_clear(args):
 def cmd_validate(args):
     items, errors = syngatelib.load_tree()
     errors.extend(syngatelib.validate_structure(items))
-    discovered = syngatelib.discover_bindings()
+    discovered, tag_problems = _discover(items)
+    errors.extend(message for _uid, message in tag_problems)
     errors.extend(syngatelib.check_frozen(items, discovered))
     if args.coverage:
         records, coverage_errors = syngatelib.load_coverage(args.coverage)
         errors.extend(coverage_errors)
         errors.extend(syngatelib.check_coverage(items, records))
     if args.strict:
-        errors.extend(f"{uid}: not reviewed (strict mode)" for uid, item in sorted(items.items()) if not item.reviewed)
+        stampable = syngatelib.stampable(items)
+        errors.extend(f"{uid}: not reviewed (strict mode)" for uid, item in sorted(items.items()) if uid in stampable and not item.reviewed)
     pending = syngatelib.check_bindings_exist(items, discovered)
     if pending:
         print(f"validate: {len(pending)} unreviewed binding(s) without a tagged routine yet (pending, non-fatal)")
@@ -385,7 +496,11 @@ def cmd_report(args):
         print(f"warning: {line}", file=sys.stderr)
     # Validation problems land on the items that own them, not on whichever
     # item's tooling found them.
-    problems = syngatelib.item_problems(items, syngatelib.discover_bindings())
+    discovered, tag_problems = _discover(items)
+    problems = syngatelib.item_problems(items, discovered)
+    for uid, message in tag_problems:
+        if uid in items:
+            problems.setdefault(uid, []).append(message)
     report = syngatelib.compute_status(items, records, problems)
     out = Path(args.out)
     import json
@@ -425,10 +540,15 @@ def main():
     p.add_argument("--branch", action="store_true", help="carry no test binding of its own")
     p.set_defaults(func=cmd_add)
 
-    p = mutation("edit", "change an item's description, key sources or sibling order")
+    p = mutation("edit", "change an item's description, key sources, sibling order or test setup")
     p.add_argument("--description", help="the body: its first line names the item in the outline")
     p.add_argument("--order", type=int)
     p.add_argument("--source", action="append", help="root-relative key source file; repeatable, the given list replaces the item's")
+    p.add_argument("--run", help="the test setup's command line, run without a shell in the project root; the setup given replaces the item's")
+    p.add_argument("--files", action="append", help="root-relative glob of the setup's test files; repeatable")
+    p.add_argument("--report", choices=syngatelib.REPORT_FORMATS, help="the report format, overruling its detection")
+    p.add_argument("--env", action="append", help="K=V over the environment of the run; repeatable")
+    p.add_argument("--no-setup", action="store_true", help="remove the item's test setup, its bindings kept")
     p.set_defaults(func=cmd_edit)
 
     p = mutation("move", "add and remove an item's parent links, and place it among its siblings")

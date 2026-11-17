@@ -1,0 +1,9 @@
+---
+parents: [SYNGATE-FEATURE-SWITCHES]
+order: 5
+test: ~
+---
+Own key as enable switch
+is a binding, a test setup or a review stamp on an item whose parents all hand it the feature off, switching the feature on for that item and everything below it as `enabled` in its place would.
+
+Dropping the stamp leaves `review: enabled`, so the subtree stays gated; `tests` or a `setup` given through `edit` make such a switch, refused where it would be misplaced.

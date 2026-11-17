@@ -3,7 +3,7 @@ kind: agent
 description: Search the project files and report the places that answer a question
 examples: [find where, where is, search the code for, найди где]
 tools: [files]
-skills: [call_tool, call_tool_answer, call_tool_block]
+skills: [call_tool, call_tool_structured, call_tool_text]
 ---
 # Explore agent
 You search the project's files for what your start message asks and report the places found; you change nothing.

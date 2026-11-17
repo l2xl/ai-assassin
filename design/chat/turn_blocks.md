@@ -13,7 +13,7 @@
   of it: a call to its input and its result (`read` for a reading call), a file to its hunks,
   reasoning to its text, an agent step to its prompt, report and nested transcript rendered by these
   same rules. The reply is the last block, a closing message the reply repeats is not shown twice. It is the AI's
-  own text alone: the harness adds no line of the calls applied, which are blocks already, and a turn that ended on its calls shows no reply, only its blocks.
+  own text alone: the harness adds no line of the calls applied, which are blocks already.
 - **The activity line.** The reply closes with a dim line on its bottom rule — `7 tool calls ·
   2 subagents · 3 files changed · 48 s · $0.12` — the wall time and, when the connector reports
   them, the cost and token counts closing it, which a turn without steps still shows; it is a

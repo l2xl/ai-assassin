@@ -16,6 +16,12 @@ Two independent axes per item (`compute_axes`; what the UI shows):
   item whose tooling detected it, and never the whole tree: a coverage gap is not an item problem,
   since one missing coverage file would otherwise redden every reviewed leaf at once.
 
+An item whose feature is off for it (*Tree model*, the subtree override) has no state of its own on
+that axis; with nothing but such
+items below, it stands outside its parents' rollup on that axis, and outside the single-status one
+below where it awaits no tests. A misplaced or conflicting switch is a layout problem of the item it
+names, red like any other.
+
 The single-status rollup below (`compute_status`) is what `syngate report`, the CI summary and the
 check run still publish; SYNGATE-LEAF-STATUS and SYNGATE-BRANCH-STATUS define it, so retiring it in favour of the axes is a
 user decision.

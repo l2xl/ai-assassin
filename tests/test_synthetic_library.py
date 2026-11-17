@@ -100,7 +100,8 @@ def test_a_skill_on_request_reaches_the_cli_as_a_skill_of_a_plugin_folder_and_st
     assert "ZETA-4711" not in echoed["seed"]
     argv = echoed["argv"]
     assert argv[argv.index("--plugin-dir") + 1] and "Skill" in argv[argv.index("--allowedTools") + 1].split(",")
-    for plain in ({name: entry for name, entry in library.items() if name != "zeta"}, synthetic.LIBRARY):
+    for plain in ({name: entry for name, entry in library.items() if name != "zeta"},
+                  {name: entry for name, entry in synthetic.LIBRARY.items() if entry.kind != "skill" or entry.default}):
         argv = native_echo(tmp_path, plain)["argv"]
         assert "--plugin-dir" not in argv and "Skill" not in (argv[argv.index("--allowedTools") + 1].split(",") if "--allowedTools" in argv else [])
 

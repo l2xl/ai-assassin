@@ -1,0 +1,6 @@
+---
+parents: [SYNGATE-TEST-SETUP]
+test: ~
+---
+Setup mapping
+of the `test` key is read as the item's own setup — `run`, `files`, `report`, `env` — with its bindings under `stamp`, told from a mapping of bindings by the values of its keys and written back as it was read; an unknown key of a setup is a layout problem.

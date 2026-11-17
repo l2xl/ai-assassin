@@ -6,4 +6,4 @@ test: 79f170f6e9a4a346da89e01dfa6b330c491732dbd9ffa388fb7ce0f3bab45420
 review: 5259224df3a34b472e47a77fbc280949b5e8a2913763edb459132840813e8f15
 ---
 Prune agent
-is a verdict agent whose schema carries, for every AI text handed to it, whether it states something new.
+is a verdict agent whose schema carries, for every AI text handed to it, whether it states something new, and for every reading, whether the turn's conclusions rest on it.

@@ -10,5 +10,5 @@ headed `delegated by UID (turn n)` (`.msg-from`).
 `<summary>…</summary>` on the same line or the next, markdown up to the matching `</details>`
 line — as a section folded to its summary (`details.md-fold`, `▸` dim), expanded on a click;
 `<details open>` starts expanded. The reader's choice survives the re-renders of the log. The
-answer format skill asks the AI to write its long or secondary lists so,
+reply format skill asks the AI to write its long or secondary lists so,
 the point of the answer staying in sight. The tags are not text: the selection steps over them.

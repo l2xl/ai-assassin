@@ -10,7 +10,7 @@ kind: agent
 description: Commit the uncommitted changes
 examples: [commit the changes, commit the changes with message, commit all the changes related to]
 tools: [git]
-skills: [call_tool, call_tool_answer, call_tool_block]
+skills: [call_tool, call_tool_structured, call_tool_text]
 ---
 ```
 
@@ -44,6 +44,9 @@ The agents shipped (least but not last):
   shell.
 - **explore** — searches the project files for what the start message asks and reports the places
   found; it changes nothing. It stands in for the search subagents a connector would launch itself.
+- **history** — `tools: [log]`: searches the record of every item's chat by words, UIDs and time
+  for what the start message asks and reports a summary over the exact turns it rests on, each
+  named `@UID turn N, step M`, so the asking chat reads further only where it needs to.
 
 ## Verdict agents
 

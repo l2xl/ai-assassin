@@ -5,4 +5,4 @@ test: {unit: 66304972a984a036aa744a937c9b19830129c32c8f3afc39d607103d846d73c0, p
 review: 10c7f9950d705e7824250227e1d98dfde21f02b3d94c52ea1b68c226e1e4709d
 ---
 Owned session
-of a connection the harness cannot rewrite is pruned only when a new session starts, the verdicts waiting until then.
+of a connection the harness cannot rewrite in place takes the verdicts through its connection's replay, under the pruning worth, the session never restarted for them.

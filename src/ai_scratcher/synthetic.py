@@ -256,7 +256,7 @@ CALLS = {**TOOLS, **QUERIES, **RUNS, **DELEGATIONS, **GITS, **GREPS, **SURFS, **
 BASH_MODE = {"id": "bash", "label": "Raw command", "hint": "run shell commands", "default": False, "advanced": True}
 # Seconds the command of a prompt's requirement may run before it counts as unmet.
 PROBE_TIMEOUT = 10
-EDITABLE = ("description", "sources", "tests")
+EDITABLE = ("description", "sources", "tests", "setup")
 QUERY_ROUNDS = 100  # a fuse far above normal work, `orchestrator.rounds` of the server settings in its place: a count of rounds cannot tell a loop from work
 # What a turn the harness closes -- at its fuse or stalled -- is asked with its last prompt: one text answer, the turn's reply.
 TURN_CLOSING = ("\nThe harness closes this turn here: answer now in text alone, with no calls -- what you did, what its tests showed and what is left. "
@@ -321,7 +321,7 @@ def seed_context(items, uid, prompt=DEFAULT_PROMPT, root=None, head=None, label=
     statements = "".join(statement_section(selected, items[selected].description, label if selected == uid else None) + held_back(items, selected, heavy)
                          for selected in selection)
     designs, sources = seed_files(items, selection, root)
-    return ((PROMPTS[prompt] if head is None else head) + features_section(items) + statements
+    return ((PROMPTS[prompt] if head is None else head) + features_section(items, uid) + statements
             + "".join(design_section(rel, root) for rel in designs if rel not in heavy) + "".join(source_section(rel, root) for rel in sources if rel not in heavy))
 
 
@@ -339,9 +339,9 @@ def held_back(items, uid, heavy):
     return "".join(HELD_BACK.format(reference=heavy[rel]) for rel in tiering.item_files(items, uid) if rel in heavy)
 
 
-def features_section(items):
-    """The tree's test switch as a section of the seed context, which tells the delivery skill whether the items await tests."""
-    return TREE_FEATURES.format("enabled" if syngatelib.features(items)["test"] else "disabled")
+def features_section(items, uid=None):
+    """The test switch as a section of the seed context -- the anchored item's, the tree's without one -- which tells the delivery skill whether the items await tests."""
+    return TREE_FEATURES.format("enabled" if syngatelib.features(items, uid)["test"] else "disabled")
 
 
 def statement_section(uid, description, label=None):
@@ -479,7 +479,7 @@ def transcript(history, text):
     """The user's text headed by the kept messages of an exchange that has no session to resume."""
     if not history:
         return text
-    lines = [f"{'user' if message.get('role') == 'user' else 'assistant'}: {message.get('text') or ''}" for message in history]
+    lines = [f"{message.get('role') if message.get('role') in ('user', 'harness') else 'assistant'}: {message.get('text') or ''}" for message in history]
     return HISTORY_PREAMBLE + "\n".join(lines) + "\n\n" + text
 
 
@@ -489,14 +489,15 @@ def rounds_left(left):
 
 
 def item_view(items, uid):
-    """The item as the AI reads it back: its fields, its kind, the UIDs of its children in sibling order and, for a leaf, the names
-    of its test bindings, "" naming the default one."""
+    """The item as the AI reads it back: its fields, its kind, the UIDs of its children in sibling order, for a leaf the names
+    of its test bindings, "" naming the default one, and, for an item carrying one, its test setup."""
     if uid not in items:
         raise syngatelib.unknown_uid(f"unknown UID '{uid}'")
     item = items[uid]
     return {"uid": uid, "description": item.description, "parents": item.parents, "sources": list(item.sources),
             "children": syngatelib.sorted_children(items, syngatelib.children_map(items), uid),
-            "kind": "branch" if item.tests is None else "leaf", **({} if item.tests is None else {"tests": [name or "" for name in item.tests]})}
+            "kind": "branch" if item.tests is None else "leaf", **({} if item.tests is None else {"tests": [name or "" for name in item.tests]}),
+            **({} if item.setup is None else {"setup": dict(item.setup)})}
 
 
 def is_query(call):
@@ -734,7 +735,8 @@ def parse_reply(reply, known=CALLS):
         if tool == "context" and "for" in call and not (isinstance(call["for"], str) and call["for"].strip()):
             raise protocol_error("context: for must be a line of text")
         if tool == "edit" and not ((isinstance(call.get("description"), str) and call["description"].strip())
-                                   or any(isinstance(call.get(field), list) for field in ("sources", "tests"))):
+                                   or any(isinstance(call.get(field), list) for field in ("sources", "tests"))
+                                   or "setup" in call and (call["setup"] is None or isinstance(call["setup"], dict))):
             raise protocol_error(f"edit: missing {' or '.join(EDITABLE)}")
     return "calls", calls
 
@@ -1290,12 +1292,13 @@ class claude_code_connector:
         found = cc_transcript.span(cc_transcript.read(self.transcript_path(session)), rounds)
         return {"session": session, **found} if found else None
 
-    def replay_session(self, session, turns, block, now=None):
+    def replay_session(self, session, turns, block, now=None, force=False):
         """Bring the pruning settled for `turns` -- {turn, span, steps, reply, verdicts} each, from the earliest changed turn on, in order --
         into the session before its next call, where that is worth it. A transcript the replay knows is written anew, the old one kept: what
         stands ahead of the first turn copied as it is, every turn rebuilt from the transcript its span names -> ("replayed", new session). Any
         other is rolled back: the next call resumes `session` forked at the answer ahead of the first turn, the `block` heading its message
-        -> ("forked", None). None where neither is worth it or can be done: the change waits."""
+        -> ("forked", None). None where neither is worth it or can be done: the change waits; with `force` -- a switch set by hand -- the
+        worth is not asked."""
         rows, now = cc_transcript.read(self.transcript_path(session)), cc_transcript.now() if now is None else now
         first = turns[0]["span"].get("first") if turns else None
         at = next((index for index, row in enumerate(rows) if first and row.get("uuid") == first), None)
@@ -1315,14 +1318,14 @@ class claude_code_connector:
                 rebuilt.append(cc_transcript.prune_rows(part, record["turn"], record["steps"], record["verdicts"], record.get("reply") or ""))
             if rebuilt is not None:
                 sent = cc_transcript.tokens([row for part, _ in rebuilt for row in part])
-                if not cc_transcript.worth(held - sent, sent, last, now):
+                if not force and not cc_transcript.worth(held - sent, sent, last, now):
                     return None
                 replayed = str(uuid.uuid4())
                 cc_transcript.write(self.transcript_path(replayed), cc_transcript.assemble(rows[:at], rebuilt, replayed))
                 return "replayed", replayed
         resume = cc_transcript.anchor(rows, first)
         sent = len(block) // 4
-        if resume is None or not cc_transcript.worth(held - sent, sent, last, now):
+        if resume is None or not (force or cc_transcript.worth(held - sent, sent, last, now)):
             return None
         self.forks[session] = resume
         return "forked", None

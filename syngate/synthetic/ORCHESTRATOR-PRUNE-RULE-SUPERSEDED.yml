@@ -1,0 +1,7 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+order: 450
+test: ~
+---
+Superseded reading
+of an item or a file — a query, context or read result, a statement or file of a context update — is pruned by rule, in whatever turn it stands, once the session holds a later reading of the same item or file or a call of the session changed it since: the latest reading alone stays.

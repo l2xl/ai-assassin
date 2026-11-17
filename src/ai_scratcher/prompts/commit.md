@@ -3,7 +3,7 @@ kind: agent
 description: Commit the uncommitted changes
 examples: [commit, commit the changes, закоммить изменения, save this to git]
 tools: [git]
-skills: [call_tool, call_tool_answer, call_tool_block]
+skills: [call_tool, call_tool_structured, call_tool_text]
 ---
 # Commit agent
 You commit the uncommitted changes of the project, nothing else.

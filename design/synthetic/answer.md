@@ -11,8 +11,8 @@ them, a connection only carries them.
   the chat shows last, what a delegating turn receives as its subagent's report, what the history
   of a new session keeps.
 - **Calls.** A `kind: calls` answer is executed by the harness, the results going back into the same
-  session as the next round's prompt; the exchange goes on until an answer carries no read, no run
-  and no delegation.
+  session as the next round's prompt; the results of changing calls go back like those of reads, and the exchange goes on until a text
+  answer ends the turn.
 - **Message.** A step of the turn holding what the model said on the way — the text beside the
   calls of an answer, split off rather than refused. It is shown in the log in its place and never
   reaches the caller of a subagent. A text is one message however many ways a connection reported
@@ -50,10 +50,11 @@ answer or at the closing `result`. The answer it returns to the harness is the o
 connection returns, the text put back into it, so nothing past the connector tells the carriers
 apart. The reasoning written behind a held text waits with it and is a step either way, in its
 place. A text answer with nothing written ahead of it carries no text and is refused like any
-malformed answer. The answer tool skill (`call_tool_answer.md`, native delivery only) tells the
+malformed answer. The structured answer skill (`call_tool_structured.md`, native delivery only) tells the
 model to write its reply as text and to close the round with the tool, which takes no text.
 
-**What each connection is told.** The tool call skill states the answer in the form every
-connection takes. The fenced block of a plain answer is told to connections of text delivery alone
-and the answer tool to those of native delivery alone, so a model is never offered a way to answer
-its connection does not carry.
+**What each connection is told.** The tool call skill states the round every connection runs and
+names no carrier. The answer object and the fenced block of a plain answer are told to connections
+of text delivery alone (`call_tool_text.md`), the answer tool to those of native delivery alone, so
+a model is never offered a way to answer its connection does not carry; what only the CLI does —
+awaiting a workflow, killing a background shell at the turn's end — is told with the answer tool.

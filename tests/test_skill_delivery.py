@@ -2,8 +2,8 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""A skill naming a delivery enters the system prompts of the connections of that library delivery alone: the fenced block of a plain
-answer is told to text delivery, the answer tool to native delivery."""
+"""A skill naming a delivery enters the system prompts of the connections of that library delivery alone: the answer written as the message
+content is told to text delivery, the structured answer through the answer tool to native delivery."""
 
 import pytest
 
@@ -57,30 +57,32 @@ def test_a_skill_naming_a_delivery_enters_only_the_prompts_of_connections_of_tha
         assert agent == synthetic.agent_prompt(worker, library, name)
     for shipped in ("commit", "explore", "test"):  # every shipped agent that calls tools is told the carrier of its connection, never the other
         agent = synthetic.load_agents()[shipped]
-        block, tool = synthetic.SKILLS["call_tool_block"].text, synthetic.SKILLS["call_tool_answer"].text
+        block, tool = synthetic.SKILLS["call_tool_text"].text, synthetic.SKILLS["call_tool_structured"].text
         told = [synthetic.agent_prompt(agent, delivery=delivery) for delivery in synthetic.DELIVERIES]
         assert [(block in prompt, tool in prompt) for prompt in told] == [(True, False), (False, True)]
-        assert all(synthetic.SKILLS["call_tool"].text in prompt for prompt in told)
 
 
-@pytest.mark.syngate("SYNTHETIC-SKILL-CALL-BLOCK")
-def test_the_call_block_skill_is_a_default_skill_of_text_delivery_stating_the_plain_answer_with_its_fenced_block():
-    skill = synthetic.SKILLS["call_tool_block"]
-    assert skill.default and skill.delivery == "text" and skill.text.startswith("# Call block\n")
-    for phrase in ("write it plain", "single fenced block tagged `syngate`", "```syngate\n[{\"tool\": \"query\", \"uid\": \"@\"}", "prose around that block"):
+@pytest.mark.syngate("SYNTHETIC-SKILL-CALL-TEXT")
+def test_the_text_answer_skill_is_a_default_skill_of_text_delivery_stating_the_answer_object_or_the_plain_answer_with_its_fenced_block():
+    skill = synthetic.SKILLS["call_tool_text"]
+    assert skill.default and skill.delivery == "text" and skill.text.startswith("# Text answer\n")
+    for phrase in ("content of your message", '{"kind": "text", "text": "…"}', '{"kind": "calls", "calls": [...], "text": "…"}', "write it plain",
+                   "single fenced block tagged `syngate`", "```syngate\n[{\"tool\": \"query\", \"uid\": \"@\"}", "prose around that block", "tool-use markup"):
         assert phrase in skill.text
+    assert "call_tool_block" not in synthetic.SKILLS and synthetic.ANSWER_TOOL not in skill.text
     library = synthetic.read_library()
     assert skill.text in synthetic.default_prompt(library) and skill.text not in synthetic.native_prompt(library)
 
 
-@pytest.mark.syngate("CLAUDE_CODE-ANSWER-ONCE")
-def test_the_answer_tool_skill_is_a_default_skill_of_native_delivery_telling_to_write_the_reply_as_text_and_close_the_round_with_the_tool_taking_no_text():
-    skill = synthetic.SKILLS["call_tool_answer"]
-    assert skill.default and skill.delivery == "native" and skill.text.startswith("# Answer tool\n")
+@pytest.mark.syngate("SYNTHETIC-SKILL-CALL-STRUCTURED")
+def test_the_structured_answer_skill_is_a_default_skill_of_native_delivery_telling_to_write_the_reply_as_text_and_close_the_round_with_the_tool_taking_no_text():
+    skill = synthetic.SKILLS["call_tool_structured"]
+    assert skill.default and skill.delivery == "native" and skill.text.startswith("# Structured answer\n")
     for phrase in (f"`{synthetic.ANSWER_TOOL}`", "takes the `kind` and the `calls` and no text", "Call it once to close the round", "`kind: text` to end the turn",
-                   "Write your reply once, as text", "is your whole reply", "nothing written ahead of it is an empty answer, refused", "said on the way"):
+                   "Write your reply once, as text", "is your whole reply", "nothing written ahead of it is an empty answer, refused", "said on the way",
+                   "workflow you launch is awaited", "background is killed when the turn ends"):
         assert phrase in skill.text
-    assert "`text`" not in skill.text  # no text field of the tool is offered
+    assert "`text`" not in skill.text and "call_tool_answer" not in synthetic.SKILLS  # no text field of the tool is offered
     library = synthetic.read_library()
     native = synthetic.native_prompt(library)
     assert synthetic.claude_code_connector.library_delivery == "native" and skill.text in native and skill.text not in synthetic.default_prompt(library)

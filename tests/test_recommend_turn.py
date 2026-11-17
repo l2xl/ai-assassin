@@ -147,11 +147,11 @@ def test_a_call_only_a_switched_off_permission_refuses_is_held_on_the_harnesss_r
 @pytest.mark.syngate("ORCHESTRATOR-RECOMMEND-GRANTED")
 def test_an_accepted_permission_is_switched_on_for_the_chat_and_the_held_call_applied(server):
     base, app = server
-    app.connectors = {"echo": Listed(calls(ADD), calls({**ADD, "uid": "NEW-002"}))}
+    app.connectors = {"echo": Listed(calls(ADD), {"kind": "text", "text": "Added."}, calls({**ADD, "uid": "NEW-002"}))}
     started = call(base, app, "/api/turn", {**SETUP, "uid": "ROOT", "text": "Add it.", "modes": [], "recommendations": "ask"})[1]
     app.release(held_turn(app, "ROOT").id, "accept")
     outcome = call(base, app, f"/api/turn/{started['turn']}?wait=10")[1]
-    assert (outcome["reply"], outcome["applied"]) == ("", ["- added NEW-001 under ROOT"]) and "NEW-001" in app._load()
+    assert (outcome["reply"], outcome["applied"]) == ("Added.", ["- added NEW-001 under ROOT"]) and "NEW-001" in app._load()
     assert app.chats["ROOT"].setup["modes"] == ["tree"]  # on for the chat from then on
     outcome = turn(base, app, "LEAF-001", "Add it.", modes=[], recommendations="auto")  # applied at once: its line in the log
     assert outcome["applied"] == [recommend.applied_line(TREE), "- added NEW-002 under LEAF-001"] and app.chats["LEAF-001"].setup["modes"] == ["tree"]

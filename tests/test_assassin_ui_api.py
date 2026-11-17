@@ -88,8 +88,9 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
 
     app.connectors = {"echo": (scripted := Scripted(calls(add)))}
     outcome = turn(base, app, "ROOT", "Add it.", modes=["edit", "tree"])
-    assert outcome["reply"] == "" and outcome["applied"] == ["- added NEW-001 under ROOT"] and "NEW-001" in app._load()
-    assert scripted.heard == [{"text": "Add it.", "modes": ["edit"], "session": None}]
+    assert outcome["reply"] == "done" and outcome["applied"] == ["- added NEW-001 under ROOT"] and "NEW-001" in app._load()
+    assert scripted.heard[0] == {"text": "Add it.", "modes": ["edit"], "session": None}
+    assert scripted.heard[1]["text"] == synthetic.RESULTS_PREAMBLE + "- added NEW-001 under ROOT" and len(scripted.heard) == 2  # the change's result goes back too
     assert outcome["steps"][-1]["kind"] == "calls" and outcome["steps"][-1]["tools"] == ["add"] and outcome["steps"][-1]["lines"] == ["- added NEW-001 under ROOT"]
 
     child = {"tool": "agent", "uid": "LEAF-001", "prompt": "Add one more", "modes": ["edit", "tree"]}
@@ -98,16 +99,16 @@ def test_tree_edits_are_refused_while_the_tree_edit_permission_is_off_and_a_chil
     answering(app, "LEAF-001", "deny")  # the child's held call is denied by the user, and not asked again in its conversation
     app.connectors = {"echo": (scripted := Scripted(calls(child), calls(dict(add, uid="NEW-002")), {"kind": "text", "text": "Could not."}, {"kind": "text", "text": "Reported."}))}
     outcome = turn(base, app, "ROOT", "Delegate.", modes=["edit"])
-    assert outcome["reply"] == "Reported." and outcome["applied"] == [f"- agent LEAF-001: {denied}\nCould not."]
+    assert outcome["reply"] == "Reported." and outcome["applied"] == ["- agent LEAF-001: Could not."]
     assert scripted.heard[1]["text"] == assassin_ui.TREE_OFF + "\nAdd one more" and scripted.heard[1]["modes"] == ["edit"] and "NEW-002" not in app._load()
     assert scripted.heard[2]["text"] == synthetic.RESULTS_PREAMBLE + denied  # the child hears its refusal and answers in text
-    assert scripted.heard[3]["text"] == synthetic.RESULTS_PREAMBLE + f"- agent LEAF-001: {denied}\nCould not."
+    assert scripted.heard[3]["text"] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-001: Could not."
 
     call(base, app, "/api/chat/LEAF-001", {"modes": ["edit", "tree"]})  # the child's own panel has Tree edit on
     app.connectors = {"echo": (scripted := Scripted(calls({"tool": "agent", "uid": "LEAF-001", "prompt": "Add one more"}), calls(dict(add, uid="NEW-003")), {"kind": "text", "text": "Could not."}, {"kind": "text", "text": "Reported."}))}
     started = call(base, app, "/api/turn", {**SETUP, "uid": "ROOT", "text": "Delegate."})[1]  # no modes key at all: Tree edit is off
     outcome = call(base, app, f"/api/turn/{started['turn']}?wait=10")[1]
-    assert outcome["reply"] == "Reported." and outcome["applied"] == [f"- agent LEAF-001: - add NEW-003 refused: {assassin_ui.TREE_REFUSAL}\nCould not."]
+    assert outcome["reply"] == "Reported." and outcome["applied"] == ["- agent LEAF-001: Could not."]
     assert scripted.heard[1]["modes"] == ["edit"] and "NEW-003" not in app._load()
 
     status, body = refused(base, app, "/api/chat", {**SETUP, "uid": "ROOT", "modes": ["edit"], "text": "  "})
@@ -465,7 +466,7 @@ def test_the_reply_is_the_ais_text_alone_and_the_applied_lines_tallied_go_only_w
     assert app.chats["ROOT"].log[-1]["text"] == "Done." and app.chats["ROOT"].kept()[-1]["text"] == "- edited LEAF-001 (×3)\n- edited ROOT\nDone."
     assert assassin_ui.told(outcome) == "- edited LEAF-001 (×3)\n- edited ROOT\nDone." and assassin_ui.tallied(["- a", "- b", "- a"]) == ["- a (×2)", "- b"]
 
-    app.connectors = {"echo": (scripted := Scripted(calls({"tool": "agent", "uid": "LEAF-001", "prompt": "Edit the leaf"}), calls(edit), {"kind": "text", "text": "Reported."}))}
+    app.connectors = {"echo": (scripted := Scripted(calls({"tool": "agent", "uid": "LEAF-001", "prompt": "Edit the leaf"}), calls(edit), {"kind": "text", "text": "Edited."}, {"kind": "text", "text": "Reported."}))}
     outcome = turn(base, app, "ROOT", "Delegate.", modes=["tree"])
-    assert outcome["reply"] == "Reported." and app.chats["LEAF-001"].log[-1]["text"] == ""  # the child's turn ended on its calls: nothing more to say
-    assert scripted.heard[2]["text"] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-001: - edited LEAF-001"  # the parent model is told what the child applied
+    assert outcome["reply"] == "Reported." and app.chats["LEAF-001"].log[-1]["text"] == "Edited."  # the child's reply is its own text alone
+    assert scripted.heard[3]["text"] == synthetic.RESULTS_PREAMBLE + "- agent LEAF-001: Edited.\nChanged items: LEAF-001 changed"  # the parent model is told what the child changed

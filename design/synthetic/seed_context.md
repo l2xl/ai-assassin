@@ -1,7 +1,7 @@
 # Seed context
 
 The seed context of an item is the default prompt (`synthetic.PROMPTS["default"]`), then the tree's
-test switch under `# Tree features` (`test: enabled|disabled`, read off the root item), then the seed
+test switch under `# Tree features` (`test: enabled|disabled`, as the switches set it for the anchored item), then the seed
 contexts of its parents in order, then its own statement, then those of all its children built
 recursively in depth. Thus the seed context of the root is the whole DAG. The switch is what the
 delivery skill (`deliver.md`) reads to tell a task that reworks items how to carry them into the

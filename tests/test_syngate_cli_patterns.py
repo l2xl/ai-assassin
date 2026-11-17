@@ -172,6 +172,15 @@ def test_the_test_option_at_the_root_withholds_bindings_and_stamping_alone(monke
     written.clear()
     assert syngate.cmd_review(review) == 0  # with the option on, an item without a binding of its own still stamps, nothing to run
     assert [(item.uid, item.tests, item.reviewed == syngatelib.compute_stamp(item)) for item in written] == [("PAT-001", None, True)]
+    make_item = syngate_tree[1]  # the option of an item is what the switches above it set: a subtree switched off under a root switched on
+    make_item(syngate_dir, "PAT-OFF", "sub\n", parents=("PAT",), tests="disabled")
+    make_item(syngate_dir, "PAT-001", "x shall y\n", parents=("PAT-OFF",))
+    make_item(syngate_dir, "PAT-002", "x shall z\n", parents=("PAT",), tests=None)
+    items = _load_tree(syngate_dir)[0]
+    assert syngatelib.features(items, "PAT-001")["test"] is False and syngatelib.leaves_under(items, "PAT") == ["PAT-002", "PAT-001"]
+    passed = {("PAT-002", None): [{"passed": True, "name": "", "log": ""}]}
+    assert syngatelib.compute_axes(items, passed)["PAT"]["test"] == syngatelib.TEST_PASSED  # the items awaiting no tests stand outside it
+    assert syngatelib.compute_status(items, passed)["PAT"]["status"] == syngatelib.TEST_PASSED
 
 
 @pytest.mark.syngate("SYNGATE-REVIEW-OPT")
@@ -185,10 +194,22 @@ def test_the_review_option_at_the_root_closes_the_stamping_commands(monkeypatch,
     monkeypatch.setattr(syngatelib, "discover_bindings", lambda: {})
     assert syngate.cmd_review(argparse.Namespace(uid=["PAT-001"], build_dir=str(tmp_path), coverage_out=None)) == 1
     assert syngate.cmd_clear(argparse.Namespace(uid=["PAT-001"])) == 1
-    assert capsys.readouterr().err.count("the tree's review feature is off; switch it on with 'review: enabled' in the root item") == 2
+    assert capsys.readouterr().err.count("the review feature is off for the item; switch it on with 'review: enabled' on the root item") == 2
     items = _rooted(syngate_tree, features=("test", "review"), tests=None)
     items["PAT-001"].reviewed = syngatelib.item_stamp(items, "PAT-001")
     written = []
     monkeypatch.setattr(syngatelib, "write_item", written.append)
     assert syngate.cmd_clear(argparse.Namespace(uid=["PAT-001"])) == 0  # with the option on, the stamp is dropped
     assert [(item.uid, item.reviewed) for item in written] == [("PAT-001", None)]
+    make_item = syngate_tree[1]  # the option of an item is what the switches above it set: a subtree switched off under a root switched on
+    make_item(syngate_dir, "PAT-OFF", "sub\n", parents=("PAT",), reviewed="disabled")
+    make_item(syngate_dir, "PAT-001", "x shall y\n", parents=("PAT-OFF",))
+    make_item(syngate_dir, "PAT-002", "x shall z\n", parents=("PAT",))
+    items = _load_tree(syngate_dir)[0]
+    for uid in ("PAT-002", "PAT"):
+        items[uid].reviewed = syngatelib.item_stamp(items, uid)
+    assert syngatelib.compute_axes(items, {})["PAT"]["review"] == syngatelib.REVIEWED  # the items carrying no stamp stand outside it
+    capsys.readouterr()
+    assert syngate.cmd_review(argparse.Namespace(uid=["PAT-001"], build_dir=str(tmp_path), coverage_out=None)) == 1
+    assert syngate.cmd_clear(argparse.Namespace(uid=["PAT-001"])) == 1
+    assert capsys.readouterr().err.count("PAT-001: the review feature is off for the item") == 2

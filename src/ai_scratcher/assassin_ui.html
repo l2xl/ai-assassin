@@ -210,6 +210,12 @@ main { flex: 1; display: flex; min-height: 0; }
 .msg-tools button:hover, .msg-tools button:focus-visible, .reply-clear:hover, .reply-clear:focus-visible { color: var(--accent); border-color: currentColor; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--panel); }
 .msg-tools button.msg-drop:hover { color: var(--red); background: linear-gradient(var(--red-soft), var(--red-soft)), var(--panel); }
 .msg-fold[aria-disabled=true] { opacity: 0.45; pointer-events: none; }
+/* The prune switch of a step line or an AI message: dim while the session holds it, lit once it is pruned or set to be with the next message. */
+.prune-mark { float: right; margin: 0 0 0 0.5rem; padding: 0 0.3rem; border: 0; background: none; color: inherit; font: inherit; font-size: 0.7rem; opacity: 0.3; cursor: pointer; }
+.prune-mark:hover, .prune-mark:focus-visible, .prune-mark.on { opacity: 0.75; }
+.prune-mark.now { font-style: italic; }
+.prune-mark::before { content: "prune"; }  /* the label is drawn, so the text of a message stays its own */
+.prune-mark.now::before { content: "pruned"; }
 .chatting textarea.chat-input { min-height: 3.1em; }
 /* The reply line rests as an empty line whose rule and hint come with the block's border; it joins the Tab order only with the open chat or the editor. */
 textarea.chat-input { border-top: 1px solid transparent; padding-top: 0.35rem; cursor: text; transition: border-color 0.15s; }
@@ -340,6 +346,9 @@ mark.finding-span { background: var(--red-soft); color: var(--red); border-radiu
 .binding-row button.unbind { border: none; background: none; padding: 0 0.15em; color: var(--dim); }
 .binding-row button.unbind:hover:not(:disabled) { color: var(--red); }
 .binding-row .new-uid { flex: 1 1 14rem; min-width: 0; }
+.setup-editor { display: flex; flex-direction: column; gap: 0.3rem; }
+.setup-editor input, .setup-editor textarea { font-size: 0.82rem; min-width: 0; }
+.setup-actions { display: flex; gap: 0.6rem; }
 .testrec summary { cursor: pointer; font-size: 0.85rem; overflow-wrap: anywhere; }
 .testrec pre { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 3px; padding: 0.5rem 0.7rem; font-size: 0.75rem; overflow-x: auto; }
 
@@ -700,8 +709,9 @@ function rowHtml(row) {
     + (row.cycle ? '<span class="dupmark">(cycle)</span>' : "") + "</div>";
 }
 
-// The tree's feature switches (root item `test: enabled` / `review: enabled`): a feature that is off has no affordances on the page.
-const feature = (name) => state.model.features[name];
+// The feature switches (`test: enabled` / `review: enabled` on the root item, or on a branch for its subtree) as they set an item's features:
+// a feature that is off for an item has no affordances on it; without an item, the root's.
+const feature = (name, it) => (it && it.features || state.model.features)[name];
 
 const TEST_FILL = { test_passed: "green", test_failed: "red" };
 const TEST_LABEL = { test_passed: "passed", test_failed: "failed", unknown: "not run" };
@@ -710,7 +720,7 @@ const REVIEW_MARK = { reviewed: "👀", not_reviewed: "○", review_violated: "�
 // The common status icon of a tree row and of a content panel: a circle filled by the test status wrapping the review eyes, each axis only while
 // its feature is on; it opens the status popup, so it stays, bare, with both off.
 function decorateLabel(el, it) {
-  const mark = el.querySelector(".status"), test = feature("test") && it.test, review = feature("review") && it.review;
+  const mark = el.querySelector(".status"), test = feature("test", it) && it.test, review = feature("review", it) && it.review;
   mark.className = "status " + (test ? TEST_FILL[test] || "gray" : "bare") + (review ? " " + review : "");
   const axes = [test && "test " + TEST_LABEL[test], review && review.replace(/_/g, " ")].filter(Boolean);
   mark.title = axes.length ? axes.join(" · ") : "run actions";
@@ -1143,13 +1153,13 @@ function fileViewHtml(f, path) {
 }
 
 // The items a run addresses below `uid`: those with own tests, or -- with the test feature off -- the childless ones.
-function leavesUnder(uid) { return [uid, ...descendants(uid)].filter((u) => (feature("test") ? item(u).is_leaf : !item(u).children.length)); }
+function leavesUnder(uid) { return [uid, ...descendants(uid)].filter((u) => (feature("test", item(u)) ? item(u).is_leaf : !item(u).children.length)); }
 const where = (l) => `${l.path}:${l.line}` + (l.name.startsWith(l.path + "::") ? " · " + l.name.slice(l.path.length + 2) : "");
 const unbound = (uid, name) => `no test bound yet — tag one with ${uid}${name ? " · " + name : ""}`;
 
 // The status lines of the popup, the axes whose features are on: a leaf by its bindings, a branch by its leaves, the review, then the problems.
 function statusLines(uid, it) {
-  const line = (state, text) => `<div class="tip-${state}">${esc(text)}</div>`, test = feature("test"), review = feature("review");
+  const line = (state, text) => `<div class="tip-${state}">${esc(text)}</div>`, test = feature("test", it), review = feature("review", it);
   let lines = test ? line(it.test, TEST_LABEL[it.test]) : "";
   if (test && it.is_leaf) {
     lines += it.bindings.map((b) => {
@@ -1166,22 +1176,23 @@ function statusLines(uid, it) {
   return lines + it.problems.map((p) => line("review_violated", p)).join("");
 }
 
-// The popup: the status lines, the binding editor and test runs of a childless item, then the run actions.
+// The popup: the status lines, the binding editor and test runs of a childless item, the setup editor, then the run actions.
 // While git is at hand the review waits for its footprint to be committed, and a commit is offered whenever the project holds changes.
 function popupHtml(uid, it) {
   const n = leavesUnder(uid).length, own = leavesUnder(uid).includes(uid), pending = pendingUnder(uid), below = pending.filter((u) => u !== uid).length;
   const blocked = it.uncommitted || [], held = !pending.length ? "nothing here needs review" : blocked.length ? `commit first: ${blocked.join(", ")}` : "";
-  return `<div class="status-lines">${statusLines(uid, it)}</div>` + (feature("test") && !it.children.length ? testsHtml(uid, it) : "")
+  return `<div class="status-lines">${statusLines(uid, it)}</div>` + (feature("test", it) && !it.children.length ? testsHtml(uid, it) : "")
+    + (feature("test", it) || it.setup ? setupHtml(uid, it) : "")
     + '<div class="section-label">run</div><div class="run-actions">'
     + `<button data-run="test" ${n ? "" : "disabled"}>▶ ${own ? "Run test" : `Run tests of ${plural(n, "leaf item")}`}</button>`
-    + (feature("review") ? `<button data-run="review" ${held ? `disabled title="${esc(held)}"` : ""}>👀 ${below ? `Mark reviewed with ${plural(below, "item")} below` : "Mark reviewed"}</button>` : "")
-    + (feature("review") && it.reviewed ? '<button data-run="clear" class="danger">✕ Clear review</button>' : "")
+    + (feature("review", it) ? `<button data-run="review" ${held ? `disabled title="${esc(held)}"` : ""}>👀 ${below ? `Mark reviewed with ${plural(below, "item")} below` : "Mark reviewed"}</button>` : "")
+    + (feature("review", it) && it.reviewed ? '<button data-run="clear" class="danger">✕ Clear review</button>' : "")
     + (state.model.git && state.model.uncommitted.length ? `<button data-commit title="${esc(plural(state.model.uncommitted.length, "file"))} uncommitted — the AI commits them in this item's chat">⎇ Commit with AI</button>` : "")
-    + (feature("review") && blocked.length ? `<span class="note commit-first" title="${esc(blocked.join("\n"))}">commit first: ${plural(blocked.length, "file")}</span>` : "") + "</div>";
+    + (feature("review", it) && blocked.length ? `<span class="note commit-first" title="${esc(blocked.join("\n"))}">commit first: ${plural(blocked.length, "file")}</span>` : "") + "</div>";
 }
 
 // The items a review of `uid` stamps: itself and those below whose own review does not stand — unstamped, or with a problem of their own.
-function pendingUnder(uid) { return [uid, ...descendants(uid)].filter((u) => !item(u).reviewed || item(u).problems.length); }
+function pendingUnder(uid) { return [uid, ...descendants(uid)].filter((u) => item(u).stampable && (!item(u).reviewed || item(u).problems.length)); }
 
 // A content commit is the AI's: the request goes as a turn of the item's chat.
 const COMMIT_TEXT = "Commit the uncommitted changes of the project.";
@@ -1217,6 +1228,47 @@ function testsHtml(uid, it) {
     '<details class="testrec"><summary><span class="chip st-' + (t.passed ? "test_passed" : "test_failed") + '"><span class="ball"></span>' + (t.passed ? "passed" : "failed")
     + "</span> <span class='mono'>" + esc(t.name) + "</span></summary><pre>" + esc(t.log || "(no captured output)") + "</pre></details>").join("") : "";
   return '<div class="section-label">' + esc(uid) + " tests</div>" + body + runs;
+}
+
+// The setup editor: the item's own test setup, or which item's holds for it, written or removed through the item edit. A refused setup stays
+// typed, its refusal in place, until it is saved or removed.
+let setupDraft = null;  // {uid, value, error}
+function setupHtml(uid, it) {
+  const draft = setupDraft && setupDraft.uid === uid ? setupDraft : null, s = draft ? draft.value : it.setup || {};
+  const origin = it.setup ? "own setup" : it.setup_from ? `setup of ${it.setup_from} holds` : "built-in setup holds";
+  const env = Object.entries(s.env || {}).map(([k, v]) => `${k}=${v}`).join("\n");
+  return `<div class="section-label">${esc(uid)} test setup</div><div class="setup-editor"><div class="note setup-origin">${esc(origin)}</div>`
+    + `<input type="text" id="f-setup-run" class="mono" placeholder="run: command line" spellcheck="false" value="${esc(s.run || "")}">`
+    + `<input type="text" id="f-setup-files" class="mono" placeholder="files: root-relative globs, space-separated" spellcheck="false" value="${esc((s.files || []).join(" "))}">`
+    + `<select id="f-setup-report">${["", "junit", "tap", "ctrf"].map((f) => `<option value="${f}" ${(s.report || "") === f ? "selected" : ""}>${f || "no report"}</option>`).join("")}</select>`
+    + `<textarea id="f-setup-env" class="mono" rows="2" placeholder="env: NAME=value per line" spellcheck="false">${esc(env)}</textarea>`
+    + `<div class="setup-actions"><button id="setup-save">save setup</button>${it.setup ? '<button id="setup-remove" class="danger">remove setup</button>' : ""}</div>`
+    + (draft ? `<div class="block-problems setup-refusal">${esc(draft.error)}</div>` : "") + "</div>";
+}
+
+// The setup the editor holds, as the item edit takes it; a malformed env line is refused here.
+function typedSetup() {
+  const files = $("f-setup-files").value.split(/\s+/).filter(Boolean), report = $("f-setup-report").value, env = {};
+  for (const line of $("f-setup-env").value.split("\n").filter((l) => l.trim())) {
+    const at = line.indexOf("=");
+    if (at < 1) throw new Error(`env lines read NAME=value: '${line}'`);
+    env[line.slice(0, at).trim()] = line.slice(at + 1);
+  }
+  return { run: $("f-setup-run").value, ...(files.length && { files }), ...(report && { report }), ...(Object.keys(env).length && { env }) };
+}
+
+async function saveSetup(uid, remove) {
+  const it = item(uid);
+  let value = null;
+  try {
+    if (!remove) value = typedSetup();
+    await api(`/api/item/${uid}`, { setup: value, base: { setup: it.setup } });
+    setupDraft = null;
+  } catch (err) {
+    setupDraft = { uid, value: value || { run: $("f-setup-run").value }, error: err.message };
+  }
+  await refresh();
+  renderTests();
 }
 
 function renderEditor(body, uid, field, readOnly, why) {
@@ -1334,6 +1386,7 @@ function messageHtml(m, index, busy, last) {
   const from = m.agent ? `<div class="msg-from" title="${esc(m.prompt || "")}">delegated by ${esc(agent)}${turn ? ` (turn ${esc(turn)})` : ""}</div>`
     : m.agent_report ? `<div class="msg-from">report of ${uidLink(m.agent_report)}</div>` : m.statement ? '<div class="msg-from">statement changed</div>' : m.notice ? '<div class="msg-from">harness notice</div>' : "";
   return `<div class="chat-msg ${m.role}${m.agent ? " agent" : ""}${m.agent_report ? " agent-report" : ""}${out ? " dropped" : ""}" data-index="${index}">`
+    + (m.role === "ai" && m.turn != null ? pruneMark(index, "reply", m) : "")
     + `<div class="msg-body">${from}${partsHtml(m, busy)}</div>` + (right ? `<span class="msg-tools right">${right}</span>` : "") + "</div>";
 }
 function foldMark(folded, exchange, frozen) {
@@ -1394,6 +1447,19 @@ function activitySummary(steps) {
   return line.length ? line.join(" · ") : "no steps";
 }
 
+// The prune switch of the step `at` -- or the `reply` -- of the logged message `index`, `on` carrying its `pruned` and `prune_next` marks: it
+// tells what the session holds now and sets what it holds from the chat's next message on.
+function pruneMark(index, at, on) {
+  if (!Number.isInteger(index) || !on) return "";
+  const next = on.prune_next ?? Boolean(on.pruned);
+  const title = next ? "pruned — click to return it to the session with the next message" : "kept — click to prune it out of the session with the next message";
+  return `<button type="button" class="prune-mark${on.pruned ? " now" : ""}${next ? " on" : ""}" data-prune="${index}/${at === "reply" ? at : parseInt(at)}" aria-pressed="${next}" title="${title}" aria-label="${title}"></button>`;
+}
+function togglePrune(chat, mark) {
+  const [index, step] = mark.dataset.prune.split("/"), m = chat.log[Number(index)];
+  if (m?.turn != null) updateChat(chat.uid, { prune: { turn: m.turn, step: step === "reply" ? step : Number(step) + 1, pruned: mark.getAttribute("aria-pressed") !== "true" } });
+}
+
 function foldHtml(key, line, detail) {
   const open = state.unfolded.has(key);
   return `<div class="turn-step"><button type="button" class="step-line" aria-expanded="${open}" data-fold="${esc(key)}">${line}</button>`
@@ -1450,8 +1516,8 @@ function turnHtml(steps, key, reply, index) {
     : step.kind === "message"
     ? `<div class="chat-msg ai interim" data-step="${index}/${at}"><div class="msg-body"><div class="msg-part md">${md(step.text, "")}</div></div>`
       + `<span class="msg-tools right"><button type="button" class="msg-child" title="ask the AI to make the text a child item">${MARK.child}</button>`
-      + `<button type="button" class="msg-sibling" title="ask the AI to make the text the next sibling item">${MARK.sibling}</button></span></div>`
-    : `<div class="chat-step">${stepHtml(step, `${key}/${at}`)}</div>`).join("");
+      + `<button type="button" class="msg-sibling" title="ask the AI to make the text the next sibling item">${MARK.sibling}</button></span>${pruneMark(index, at, steps[parseInt(at)])}</div>`
+    : `<div class="chat-step">${/^\d+(\/0)?$/.test(at) ? pruneMark(index, at, steps[parseInt(at)]) : ""}${stepHtml(step, `${key}/${at}`)}</div>`).join("");
 }
 
 // Every reply closes with its activity line, the tally of what its turn did.
@@ -1985,8 +2051,9 @@ function renderTests() {
   const pop = $("tests-pop");
   if (!pop.matches(":popover-open")) return;
   const uid = pop.dataset.uid, adding = $("f-add-binding");
+  const typing = document.activeElement && document.activeElement.closest("#tests-pop .setup-editor") && document.activeElement.matches("input, textarea, select");
   if (uid !== state.selected || !item(uid)) { pop.hidePopover(); return; }
-  if (!(adding && adding === document.activeElement && adding.value)) setHtml(pop, popupHtml(uid, item(uid)));
+  if (!(adding && adding === document.activeElement && adding.value) && !typing) setHtml(pop, popupHtml(uid, item(uid)));
 }
 
 function placeBy(pop, anchor) {
@@ -2033,7 +2100,7 @@ function openRowMenu(row, anchor) {
 
 function startRun(action, uid) {
   const tested = pendingUnder(uid).filter((u) => leavesUnder(uid).includes(u)).length;
-  if (action === "review" && descendants(uid).size && !confirm(feature("test") ? `Run the tests of the ${plural(tested, "leaf item")} under ${uid} and mark ${uid} and every item below it reviewed?` : `Mark ${uid} and every item below it reviewed?`)) return;
+  if (action === "review" && descendants(uid).size && !confirm(feature("test", item(uid)) ? `Run the tests of the ${plural(tested, "leaf item")} under ${uid} and mark ${uid} and every item below it reviewed?` : `Mark ${uid} and every item below it reviewed?`)) return;
   if (action === "clear" && !confirm(`Clear the review of ${uid}? Its frozen test routines are released as well.`)) return;
   run(action, [uid]);
 }
@@ -2501,7 +2568,8 @@ doc.addEventListener("click", (event) => {
   const path = el.dataset.path;
   if (target.closest(".block-ai, .block-chat")) {
     const row = state.docRows.find((r) => r.path === path), chat = chatAt(row), tool = target.closest(".msg-tools button"), fold = target.closest("[data-fold]");
-    if (fold) toggleFold(fold.dataset.fold);
+    if (target.closest(".prune-mark")) togglePrune(chat, target.closest(".prune-mark"));
+    else if (fold) toggleFold(fold.dataset.fold);
     else if (target.closest(".chat-input")) enterReply(el);
     else if (target.closest(".reply-clear")) clearReply(row);
     else if (target.closest(".chat-show")) showHidden(row, target.closest(".chat-show"));
@@ -2574,6 +2642,7 @@ const testsPop = $("tests-pop");
 testsPop.addEventListener("click", (event) => {
   const uid = state.selected, target = event.target;
   if (target.id === "add-binding-btn") addBinding(uid);
+  if (target.id === "setup-save" || target.id === "setup-remove") saveSetup(uid, target.id === "setup-remove");
   if (target.dataset.run) { testsPop.hidePopover(); startRun(target.dataset.run, uid); }
   if (target.dataset.commit !== undefined) { testsPop.hidePopover(); commitWithAi(uid); }
   if (target.dataset.unbind !== undefined) {

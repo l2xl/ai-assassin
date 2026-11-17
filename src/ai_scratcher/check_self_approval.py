@@ -14,13 +14,17 @@ two commits: the edit (stamp goes stale), then the user-approved
 Binding locations are discovered from tags, not recorded in items, so the
 exact frozen routine's file is unknown per commit; instead, an approval-changing
 commit may not touch any file under the test trees at all — re-stamping a
-routine edited in the same commit would otherwise pass the frozen check.
+routine edited in the same commit would otherwise pass the frozen check. The
+test trees are the built-in ones and the files the `files` globs of the tree's
+test setups match; an item's routine shas are read under the `stamp` of its
+setup as from a plain `test` key, and its setup is part of its substance.
 """
 
+import re
 import subprocess
 import sys
 
-from .syngatelib import SHA_RE, parse_item
+from .syngatelib import SETUP_STAMP, SHA_RE, is_setup, parse_item
 
 SYNGATE_GLOB = "syngate/"
 TEST_TREES = ("scripts/tests/", "test/")
@@ -45,15 +49,52 @@ def _sha(value):
     return value if isinstance(value, str) and SHA_RE.match(value) else None
 
 
-def _test_shas(item):
+def _bindings(item):
+    """The item's own bindings: its `test` key, or the `stamp` of the test setup standing in it."""
     tests = _keyed(item, "test", "tests")
+    return tests.get(SETUP_STAMP) if is_setup(tests) else tests
+
+
+def _setup_of(item):
+    """The item's test setup without its bindings, None where it carries none."""
+    tests = _keyed(item, "test", "tests")
+    return {key: value for key, value in tests.items() if key != SETUP_STAMP} if is_setup(tests) else None
+
+
+def _glob_re(pattern):
+    """Regex of a root-relative glob: `**/` any folders, `*` and `?` within one path segment."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out, i = out + "(?:.*/)?", i + 3
+        elif pattern.startswith("**", i):
+            out, i = out + ".*", i + 2
+        else:
+            out += "[^/]*" if pattern[i] == "*" else "[^/]" if pattern[i] == "?" else re.escape(pattern[i])
+            i += 1
+    return re.compile(out + r"\Z")
+
+
+def setup_globs(commit, cwd):
+    """The `files` globs of the test setups of the items of a commit."""
+    globs = []
+    for path in git(["ls-tree", "-r", "--name-only", commit, "--", SYNGATE_GLOB], cwd).stdout.split():
+        item = show_item(commit, path, cwd) if path.endswith(".yml") else None
+        files = (_setup_of(item) or {}).get("files") if isinstance(item, dict) else None
+        files = [files] if isinstance(files, str) else files if isinstance(files, list) else []
+        globs.extend(glob for glob in files if isinstance(glob, str) and glob.strip())
+    return globs
+
+
+def _test_shas(item):
+    tests = _bindings(item)
     if isinstance(tests, dict):
         return sorted(sha for sha in tests.values() if _sha(sha))
     return [tests] if _sha(tests) else []
 
 
 def _binding_names(item):
-    tests = _keyed(item, "test", "tests")
+    tests = _bindings(item)
     return sorted(tests) if isinstance(tests, dict) else []
 
 
@@ -62,12 +103,13 @@ def approval_of(item):
 
 
 def substance_of(item):
-    return item.get("description") or item.get("text"), item.get("parents"), _binding_names(item)
+    return item.get("description") or item.get("text"), item.get("parents"), _binding_names(item), _setup_of(item)
 
 
 def check_commit(commit, cwd):
     changed = git(["diff-tree", "--no-commit-id", "--name-only", "-r", commit], cwd).stdout.split()
     problems = []
+    watched = [_glob_re(glob) for commit_ in (commit, f"{commit}^") for glob in setup_globs(commit_, cwd)]
     for path in changed:
         if not (path.startswith(SYNGATE_GLOB) and path.endswith(".yml")):
             continue
@@ -81,7 +123,7 @@ def check_commit(commit, cwd):
         if substance_of(old) != substance_of(new):
             problems.append(f"{commit[:12]}: {path}: re-approval and item change in one commit")
         for touched in changed:
-            if touched.startswith(TEST_TREES):
+            if touched.startswith(TEST_TREES) or any(glob.match(touched) for glob in watched):
                 problems.append(f"{commit[:12]}: {path}: re-approval and test-tree change ({touched}) in one commit")
     return problems
 

@@ -225,18 +225,110 @@ def test_the_root_switches_the_test_and_review_features_both_off_when_absent(syn
     make_item(syngate_dir, "STAMPED-1", "approved", parents=["ROOT-1"], reviewed="0" * 64)
     items, load_errors, errors = _errors(syngate_dir)
     assert load_errors == [] and syngatelib.features(items) == {"test": False, "review": False}
-    assert _matching(errors, "LEAF-1: test bindings while the tree's test feature is off")
-    assert _matching(errors, "STAMPED-1: review stamp while the tree's review feature is off")
+    assert not _matching(errors, "feature")
     make_item(syngate_dir, "ROOT-1", "root shall exist", header="root", features=("test",))
     items, load_errors, errors = _errors(syngate_dir)
     assert load_errors == [] and syngatelib.features(items) == {"test": True, "review": False}
-    assert _matching(errors, "feature is off") == ["STAMPED-1: review stamp while the tree's review feature is off (root item: 'review: enabled')"]
+    assert not _matching(errors, "feature")
     make_item(syngate_dir, "ROOT-1", "root shall exist", header="root", tests=None, reviewed="0" * 64)  # the root's own binding and stamp switch both on
     items, load_errors, errors = _errors(syngate_dir)
     assert load_errors == [] and syngatelib.features(items) == {"test": True, "review": True} and not _matching(errors, "feature is off")
-    make_item(syngate_dir, "LEAF-1", "the leaf shall pass", parents=["ROOT-1"], tests="enabled")
-    _items, load_errors, _errs = _errors(syngate_dir)
-    assert _matching(load_errors, "LEAF-1: 'test: enabled' switches the feature on the root item only")
+    make_item(syngate_dir, "LEAF-1", "the leaf shall pass", parents=["ROOT-1"], tests="disabled")  # an item below the root switches its own subtree
+    items, load_errors, _errs = _errors(syngate_dir)
+    assert load_errors == [] and syngatelib.features(items) == {"test": True, "review": True} and syngatelib.features(items, "LEAF-1") == {"test": False, "review": True}
+
+
+@pytest.mark.syngate("SYNGATE-SWITCH-OVERRIDE")
+def test_a_switch_below_the_root_sets_the_feature_for_its_item_and_everything_below_it(syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    on, off, uids = {"test": True, "review": True}, {"test": False, "review": False}, ("ROOT-1", "PLAIN-1", "SUB-1", "MID-1", "LEAF-1")
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root", features=())
+    make_item(syngate_dir, "SUB-1", "sub shall gate", parents=["ROOT-1"], tests="enabled", reviewed="enabled")
+    make_item(syngate_dir, "MID-1", "mid shall group", parents=["SUB-1"])
+    make_item(syngate_dir, "LEAF-1", "the leaf shall pass", parents=["MID-1"], tests=None, reviewed="0" * 64)
+    make_item(syngate_dir, "PLAIN-1", "plain shall stay", parents=["ROOT-1"])
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and not _matching(errors, "feature")
+    assert [syngatelib.features(items, uid) for uid in uids] == [off, off, on, on, on]
+    assert (items["SUB-1"].tests, items["SUB-1"].reviewed) == (None, None)  # the word stands in the key's place
+    assert syngatelib.parse_item(syngatelib.dump_item(items["SUB-1"])) == {"description": "sub shall gate\n", "parents": ["ROOT-1"], "test": "enabled", "review": "enabled"}
+    assert syngatelib.stampable(items) == {"SUB-1", "MID-1", "LEAF-1"}  # the item carrying the switch is stamped like any other
+    items["SUB-1"].reviewed = syngatelib.item_stamp(items, "SUB-1")  # the stamp takes the word's place, and clearing it puts the word back
+    assert syngatelib.parse_item(syngatelib.dump_item(items["SUB-1"]))["review"] == items["SUB-1"].reviewed and syngatelib.features(items, "MID-1")["review"] is True
+    syngatelib.clear_review(items["SUB-1"], items)
+    assert syngatelib.parse_item(syngatelib.dump_item(items["SUB-1"]))["review"] == "enabled"
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root")
+    make_item(syngate_dir, "SUB-1", "sub shall gate", parents=["ROOT-1"], tests="disabled", reviewed="disabled")
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and [syngatelib.features(items, uid) for uid in uids] == [on, on, off, off, on]  # a misplaced switch still reads as set, and is reported
+    assert _matching(errors, "one override per path") == ["LEAF-1: a test binding under an item that already overrides the test feature (one override per path)",
+                                                          "LEAF-1: a review stamp under an item that already overrides the review feature (one override per path)"]
+
+
+@pytest.mark.syngate("SYNGATE-SWITCH-MARK")
+def test_a_binding_or_stamp_under_parents_with_the_feature_off_switches_it_on_for_the_subtree(syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    on, off = {"test": True, "review": True}, {"test": False, "review": False}
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root", features=())
+    make_item(syngate_dir, "SUB-1", "sub shall gate", parents=["ROOT-1"], tests=None, reviewed="0" * 64)
+    make_item(syngate_dir, "LEAF-1", "the leaf shall pass", parents=["SUB-1"])
+    make_item(syngate_dir, "PLAIN-1", "plain shall stay", parents=["ROOT-1"])
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and not _matching(errors, "feature")
+    assert [syngatelib.features(items, uid) for uid in ("ROOT-1", "PLAIN-1", "SUB-1", "LEAF-1")] == [off, off, on, on]
+    assert syngatelib.stampable(items) == {"SUB-1", "LEAF-1"}
+    syngatelib.clear_review(items["SUB-1"], items)  # the dropped stamp leaves the word, so the subtree stays gated
+    assert syngatelib.parse_item(syngatelib.dump_item(items["SUB-1"])) == {"description": "sub shall gate\n", "parents": ["ROOT-1"], "test": None, "review": "enabled"}
+    assert syngatelib.features(items, "LEAF-1") == on
+    syngatelib.edit_item(items, "PLAIN-1", {"tests": [""]})  # bindings given through an edit make the same switch
+    assert syngatelib.features(items, "PLAIN-1") == {"test": True, "review": False}
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root")  # under parents handing the feature on, the key is the item's plain one
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and not _matching(errors, "feature")
+    syngatelib.clear_review(items["SUB-1"], items)
+    assert "review" not in syngatelib.parse_item(syngatelib.dump_item(items["SUB-1"]))
+    make_item(syngate_dir, "OFF-1", "off shall free", parents=["ROOT-1"], tests="disabled", reviewed="disabled")  # an override is never overridden back
+    make_item(syngate_dir, "SUB-1", "sub shall gate", parents=["OFF-1"], tests=None, reviewed="0" * 64)
+    make_item(syngate_dir, "FREE-1", "free shall stay", parents=["OFF-1"])
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and _matching(errors, "one override per path") == ["SUB-1: a test binding under an item that already overrides the test feature (one override per path)",
+                                                                                "SUB-1: a review stamp under an item that already overrides the review feature (one override per path)"]
+    with pytest.raises(syngatelib.tree_error, match="one override per path"):
+        syngatelib.edit_item(items, "FREE-1", {"tests": [""]})
+
+
+@pytest.mark.syngate("SYNGATE-SWITCH-ONCE")
+def test_a_switch_under_an_override_or_repeating_what_it_inherits_is_a_layout_problem(syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root", features=("review",))
+    make_item(syngate_dir, "SUB-1", "sub shall gate", parents=["ROOT-1"], tests="enabled")
+    make_item(syngate_dir, "DEEP-1", "deep shall not switch back", parents=["SUB-1"], tests="disabled")
+    make_item(syngate_dir, "SAME-1", "same shall not repeat", parents=["ROOT-1"], reviewed="enabled")
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and not _matching(errors, "SUB-1")
+    assert _matching(errors, "DEEP-1") == ["DEEP-1: 'test: disabled' under an item that already overrides the test feature (one override per path)"]
+    assert _matching(errors, "SAME-1") == ["SAME-1: 'review: enabled' repeats what the item inherits"]
+    assert set(syngatelib.item_problems(items)) == {"DEEP-1", "SAME-1"}
+
+
+@pytest.mark.syngate("SYNGATE-SWITCH-CONFLICT")
+def test_an_item_whose_parents_hand_it_different_values_of_a_feature_is_red_and_reads_it_as_on(syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "ROOT-1", "root shall exist", header="root", features=("review",))
+    make_item(syngate_dir, "ON-1", "on shall test", parents=["ROOT-1"], tests="enabled")
+    make_item(syngate_dir, "OFF-1", "off shall not", parents=["ROOT-1"])
+    make_item(syngate_dir, "MEET-1", "meet shall be settled", parents=["ON-1", "OFF-1"], tests=None)
+    make_item(syngate_dir, "BELOW-1", "below shall follow", parents=["MEET-1"], tests=None)
+    items, load_errors, errors = _errors(syngate_dir)
+    assert load_errors == [] and _matching(errors, "MEET-1") == ["MEET-1: the test feature is enabled through ON-1 and disabled through OFF-1"]
+    assert syngatelib.features(items, "MEET-1")["test"] is True and not _matching(errors, "BELOW-1")  # reported once, where the paths meet
+    problems = syngatelib.item_problems(items)
+    assert set(problems) == {"MEET-1"}
+    assert syngatelib.compute_status(items, {}, problems)["MEET-1"]["status"] == syngatelib.TEST_FAILED
+    assert syngatelib.compute_axes(items, {}, problems)["MEET-1"]["review"] == syngatelib.REVIEW_VIOLATED
+    make_item(syngate_dir, "MEET-1", "meet shall be settled", parents=["ON-1"], tests=None)  # the user's settlement: one link dropped
+    items, _load_errors, errors = _errors(syngate_dir)
+    assert not _matching(errors, "MEET-1")
 
 
 @pytest.mark.syngate("SYNGATE-KEY-SPELLING")

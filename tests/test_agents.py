@@ -278,11 +278,20 @@ def test_the_scan_agent_answers_a_list_of_findings_each_a_span_a_category_and_a_
 
 
 @pytest.mark.syngate("SYNTHETIC-AGENT-PRUNE")
-def test_the_prune_agent_answers_for_every_ai_text_whether_it_states_something_new():
+def test_the_prune_agent_answers_for_every_ai_text_whether_it_states_something_new_and_for_every_reading_whether_the_turn_rests_on_it():
     agent = _shipped("prune")
-    texts = agent.schema["properties"]["texts"]
+    texts, readings = agent.schema["properties"]["texts"], agent.schema["properties"]["readings"]
     assert synthetic.is_verdict(agent) and texts["items"]["required"] == ["index", "new"]
     assert texts["items"]["properties"]["new"]["type"] == "boolean"
+    assert readings["items"]["required"] == ["index", "used"] and readings["items"]["properties"]["used"]["type"] == "boolean"
+    assert agent.schema["required"] == ["texts", "readings"] and agent.schema["additionalProperties"] is False
+
+
+@pytest.mark.syngate("SYNTHETIC-AGENT-HISTORY")
+def test_the_history_agent_lists_the_log_tool_alone_and_reports_a_summary_over_the_exact_turns_it_rests_on():
+    agent = _shipped("history")
+    assert agent.tools == ("log",) and agent.schema is None and set(synthetic.agent_calls(agent)) == {"log", "grep"} and agent.examples
+    assert all(words in agent.text for words in ("log tool", "summary", "start message", "exact turns it rests on"))
 
 
 def _subagent_tree(syngate_dir, make_item):
@@ -311,6 +320,40 @@ def test_an_off_context_subagent_runs_above_its_agents_prompt_alone_without_seed
     context = heard.heard[0]["context"]
     assert context == synthetic.agent_prompt(agent) and heard.heard[0]["agent"] == "explore"
     assert not any(part in context for part in ("is the root", "carries a tag", "# Tree features", "@LEAF-001"))
+
+
+@pytest.mark.syngate("SYNTHETIC-SUBAGENT-REPORT")
+def test_a_delegating_session_receives_of_its_subagent_the_closing_text_and_the_cumulative_change_alone(tmp_path, syngate_tree):
+    syngate_dir, make_item = syngate_tree
+    _subagent_tree(syngate_dir, make_item)
+    (tmp_path / "notes.txt").write_text("one\n")
+    app = assassin_ui.AssassinApp(root=tmp_path, syngate_dir=syngate_dir)
+    edit, look = {"tool": "edit", "uid": "@", "description": "Tagged release\ncarries a signed tag.\n"}, {"tool": "query", "uid": "@"}
+    add = lambda uid: {"tool": "add", "uid": uid, "parent": "ROOT", "description": "Draft\nis a draft.\n"}
+    first = {**_calls(edit, edit, add("LEAF-002"), add("LEAF-003"), {"tool": "replace", "path": "notes.txt", "old": "one", "new": "two"}, look),
+             "text": "Halfway there."}
+    second = _calls({"tool": "rename", "uid": "LEAF-002", "new_uid": "LEAF-DRAFT"}, {"tool": "remove", "uid": "LEAF-003"},
+                    {"tool": "replace", "path": "notes.txt", "old": "two", "new": "three"}, look)
+    app.connectors = {"heard": (heard := Heard(_calls({"tool": "agent", "uid": "LEAF-001"}), first, second, {"kind": "text", "text": "Leaf delivered."},
+                                               {"kind": "text", "text": "Handed on."}))}
+    outcome = app.chat({"uid": "ROOT", "connector": "heard", "model": "model-a", "effort": "low", "modes": ["tree", "patch"], "text": "Release it."})
+    report = "Leaf delivered.\nChanged items: LEAF-001 changed, LEAF-DRAFT added\nChanged files: notes.txt changed"
+    assert (tmp_path / "notes.txt").read_text() == "three\n" and outcome["reply"] == "Handed on."
+    assert outcome["applied"] == [f"- agent LEAF-001: {report}"]  # every item and file once, as it stands at the end: no LEAF-002, no LEAF-003
+    received = heard.heard[-1]["text"]
+    assert f"- agent LEAF-001: {report}" in received
+    assert not any(part in received for part in ("edited", "added LEAF", "renamed", "removed", "replace", "Halfway", "(×", "signed tag"))
+    assert assassin_ui.delegation_report({"error": "turn stopped", "applied": ["- edited LEAF-001"]}) == "turn stopped"
+    told = synthetic.SKILLS["delegate"].text
+    assert all(phrase in told for phrase in ("all you receive of a delegated turn", "closing text", "cumulative change", "named once"))
+
+
+@pytest.mark.syngate("SYNTHETIC-SUBAGENT-READING")
+def test_the_delegation_skill_prefers_an_item_run_by_the_agent_call_for_work_of_wide_reading_or_many_rounds():
+    skill = synthetic.SKILLS["delegate"]
+    assert skill.default and all(phrase in skill.text for phrase in (
+        "wide reading or many rounds", "state the task as an item", "an existing child", "a new one you `add` under the anchored item",
+        "exact instructions", "agent call", "holds its report alone"))
 
 
 def _stub(tmp_path):

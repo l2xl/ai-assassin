@@ -5,8 +5,11 @@
 """Turn pruning (ORCHESTRATOR-PRUNE-*, SYNTHETIC-AGENT-PRUNE): what of an ended turn the rules and the prune agent -- an injected callable -- cut
 out of the session, when the cut waits for the next session, the stubs it leaves and the switches set by hand."""
 
+import uuid
+
 import pytest
 
+import api_connection
 import synthetic
 from ai_scratcher import pruning
 
@@ -44,10 +47,13 @@ def test_the_prune_input_is_the_numbered_texts_of_the_ended_turn_and_the_stubs_o
     assert "[turn 7 step 2: tool Read — read with log]" in handed.data and "[turn 7 step 1: user message — read with log]" in handed.data
     assert "SECRET RESULT" not in handed.data and "queued by the user" not in handed.data and "step 3" not in handed.data
     assert pruning.prune_input(7, [steps[1]]).data == "" and pruning.prune_input(7, [steps[1]]).indices == {}
+    reading = batch((call("read", path="src/a.py"), "SECRET BODY"), (call("query", uid="LEAF-001"), "- LEAF-001: SECRET"))
+    named = pruning.prune_input(7, [reading, TEXT]).data
+    assert "[1] [turn 7 step 1: read src/a.py, query LEAF-001 — read with log]" in named and "SECRET" not in named  # a reading is named by what it read
 
 
 @pytest.mark.syngate("ORCHESTRATOR-PRUNE-LATE")
-def test_a_verdict_of_the_prune_agent_arriving_after_the_next_message_waits_for_the_next_session():
+def test_a_verdict_of_the_prune_agent_arriving_after_the_next_message_counts_as_one_on_a_turn_ahead_of_the_tail():
     ask = lambda data: answer(False)
     state = pruning.new_state()
     early, late = pruning.judge_texts(ask, 1, [TEXT]), pruning.judge_texts(ask, 2, [TEXT])
@@ -57,7 +63,8 @@ def test_a_verdict_of_the_prune_agent_arriving_after_the_next_message_waits_for_
     pruning.deliver(state, 2, late)
     assert list(state["applied"]) == ["1:1"] and list(state["waiting"]) == ["2:1"]
     assert pruning.take_stubs(state) == [early["1:1"]["stub"]]  # nothing of the late one reaches the running session
-    pruning.new_session(state)
+    assert pruning.changed_turn(state) == 2  # turn 2 is ahead of the tail now: its verdict is brought in under the pruning worth
+    pruning.settle(state)
     assert list(state["applied"]) == ["1:1", "2:1"] and state["waiting"] == {} and pruning.take_stubs(state) == [late["2:1"]["stub"]]
 
 
@@ -106,6 +113,8 @@ def test_an_ai_text_is_pruned_when_the_prune_agent_finds_it_states_nothing_new()
     assert pruning.judge_texts(lambda data: json_text(answer(False, False)), 4, steps).keys() == {"4:1", "4:2"}  # an answer as JSON text reads too
     assert pruning.judge_texts(lambda data: 1 / 0, 4, steps) == {} and pruning.judge_texts(lambda data: {"texts": "no"}, 4, steps) == {}
     assert pruning.judge_texts(lambda data: heard.append("called"), 4, [TREE]) == {} and heard[-1] != "called"  # no text, no call
+    told = " ".join(synthetic.read_library()[pruning.AGENT].text.split())
+    assert "superseded by a later text of the turn" in told and "its closing reply above all" in told  # such a text states nothing new either
 
 
 def json_text(value):
@@ -124,30 +133,6 @@ def test_a_user_message_is_never_pruned():
         pruning.switch(pruning.new_state(), 1, 1, user, True)
 
 
-@pytest.mark.syngate("ORCHESTRATOR-PRUNE-TAIL")
-def test_the_pruned_tail_is_the_ended_turn_alone_and_earlier_turns_stay_as_they_were_sent():
-    state = pruning.new_state()
-    pruning.end_turn(state, 1, [TREE])
-    before = dict(state["applied"])
-    pruning.end_turn(state, 2, [TEXT, TREE])
-    assert state["applied"] == {**before, "2:2": state["applied"]["2:2"]} and state["applied"]["1:1"] is before["1:1"]
-    with pytest.raises(ValueError):
-        pruning.put(state, "applied", 3, before)  # a verdict naming a step of another turn is refused
-    assert list(state["applied"]) == ["1:1", "2:2"]
-
-
-@pytest.mark.syngate("ORCHESTRATOR-PRUNE-READ")
-def test_the_first_read_of_a_file_in_the_session_is_never_pruned():
-    first, again = batch((call("read", path="src/b.py"), "body")), batch((call("read", path="src/b.py"), "body"))
-    mixed = batch((call("edit", uid="A"), "- edited A"), (call("read", path="src/c.py"), "body"))
-    assert verdict_of([first, mixed, again], held=("src/a.py",)) == {}  # no rule prunes a first read, nor the batch holding one
-    state = pruning.new_state()
-    pruning.end_turn(state, 1, [first])
-    assert state["read"] == ["src/b.py"] and state["applied"] == {}
-    held_first = batch((call("read", path="src/a.py"), "body"))
-    assert list(verdict_of([held_first], held=("src/a.py",))) == ["1:1"]  # a file the prompt holds whole is a re-read at once
-
-
 @pytest.mark.syngate("ORCHESTRATOR-PRUNE-STUB", "unit")
 def test_a_pruned_step_leaves_one_stub_line_carried_in_the_next_message_of_the_harness():
     assert pruning.stub_line(7, 3, "test run, 12 passed") == "[turn 7 step 3: test run, 12 passed — read with log]"
@@ -161,14 +146,17 @@ def test_a_pruned_step_leaves_one_stub_line_carried_in_the_next_message_of_the_h
 
 
 @pytest.mark.syngate("ORCHESTRATOR-PRUNE-OWNED", "unit")
-def test_an_owned_session_is_pruned_only_when_a_new_session_starts_the_verdicts_waiting_until_then():
+def test_the_verdicts_of_an_owned_session_wait_for_its_connections_replay_which_brings_them_in_without_a_new_session():
     state = pruning.new_state()
     pruning.end_turn(state, 1, [TEXT, TREE], owned=True)
     pruning.deliver(state, 1, pruning.judge_texts(lambda data: answer(False), 1, [TEXT, TREE]), owned=True)
     assert state["applied"] == {} and list(state["waiting"]) == ["1:2", "1:1"] and pruning.take_stubs(state) == []
     assert pruning.pruned_now(state) == {}
-    pruning.new_session(state)
+    pruning.note_span(state, 1, {"session": "s", "first": "a", "last": "b", "tokens": 700})
+    assert pruning.changed_turn(state) == 1  # where its connection's replay starts
+    pruning.settle(state)  # the replay brought them in: the session is not restarted, its spans and size stay
     assert sorted(state["applied"]) == ["1:1", "1:2"] and state["waiting"] == {} and len(pruning.take_stubs(state)) == 2
+    assert list(state["spans"]) == ["1"] and state["size"] == 700 and pruning.changed_turn(state) is None
 
 
 @pytest.mark.syngate("ORCHESTRATOR-PRUNE-STATE", "unit")
@@ -183,13 +171,13 @@ def test_the_shipped_prune_agent_schema_is_the_shape_of_the_answer_the_library_r
     agent = synthetic.load_agents()[pruning.AGENT]
     assert synthetic.is_verdict(agent)
     texts = agent.schema["properties"]["texts"]
-    assert agent.schema["required"] == ["texts"] and texts["type"] == "array" and texts["items"]["required"] == ["index", "new"]
+    assert agent.schema["required"] == ["texts", "readings"] and texts["type"] == "array" and texts["items"]["required"] == ["index", "new"]
     assert texts["items"]["properties"]["index"]["type"] == "integer" and texts["items"]["properties"]["new"]["type"] == "boolean"
     assert list(pruning.judge_texts(lambda data: answer(False, True), 1, [TEXT, TEXT])) == ["1:1"]  # an answer of that shape is what the library reads
 
 
 @pytest.mark.syngate("ORCHESTRATOR-PRUNE-SWITCH", "unit")
-def test_the_prune_switch_returns_a_pruned_message_or_cuts_a_kept_one_with_the_next_session_alone():
+def test_the_prune_switch_returns_a_pruned_message_or_cuts_a_kept_one_with_the_next_message_the_running_session_kept():
     state = pruning.new_state()
     pruning.end_turn(state, 1, [TEXT, TREE])
     pruning.take_stubs(state)
@@ -197,5 +185,119 @@ def test_the_prune_switch_returns_a_pruned_message_or_cuts_a_kept_one_with_the_n
     pruning.switch(state, 1, 1, TEXT, True)  # out of it
     assert list(pruning.pruned_now(state)) == ["1:2"]  # the running session is not ended
     assert list(pruning.pruned_next(state)) == ["1:1"] and pruning.pruned_next(state)["1:1"]["stub"] == "[turn 1 step 1: AI text — read with log]"
-    pruning.new_session(state)
+    assert pruning.changed_turn(state) == 1
+    pruning.settle(state)  # what the next message brings in
     assert list(state["applied"]) == ["1:1"] and state["switches"] == {} and pruning.take_stubs(state) == ["[turn 1 step 1: AI text — read with log]"]
+
+
+def usage(tokens):
+    return {"kind": "usage", "seconds": 1.0, "cost_usd": None, "input_tokens": tokens, "output_tokens": 10}
+
+
+@pytest.mark.syngate("ORCHESTRATOR-PRUNE-CONTINUITY", "unit")
+def test_no_token_bound_stands_in_the_pruning_and_a_session_of_any_size_shrinks_by_its_verdicts_alone():
+    assert not any(hasattr(pruning, name) for name in ("renew_bound", "due", "RENEW_TOKENS"))
+    state = pruning.new_state()
+    pruning.note_size(state, [usage(900000)])
+    pruning.end_turn(state, 1, [TREE])
+    pruning.message_sent(state, 2)
+    assert state["size"] == 900000 and list(state["applied"]) == ["1:1"] and state["spans"] == {}  # the size is told, nothing is ended by it
+    pruning.note_size(state, [TREE])  # a turn without a counted request leaves the size as it was
+    assert state["size"] == 900000 and pruning.session_size([usage(120), TREE, usage(900)]) == 900
+
+
+@pytest.mark.syngate("ORCHESTRATOR-PRUNE-WORTH")
+def test_a_verdict_ahead_of_the_tail_waits_for_an_expired_cache_or_a_cut_of_at_least_what_is_resent_and_one_on_the_tail_goes_in_at_once(tmp_path):
+    now = 10000.0
+    assert pruning.worth(cut=0, sent=500, last=now - pruning.CACHE_TTL, now=now) and pruning.worth(cut=0, sent=1, last=None, now=now)
+    assert pruning.worth(cut=500, sent=500, last=now - 1, now=now) and not pruning.worth(cut=499, sent=500, last=now - 1, now=now)
+    assert not pruning.worth(cut=-100, sent=10, last=now - 1, now=now)
+    state = pruning.new_state()
+    pruning.end_turn(state, 1, [TREE])
+    assert list(state["applied"]) == ["1:1"] and state["waiting"] == {}  # a verdict on the tail is brought in at once
+    pruning.message_sent(state, 2)
+    pruning.deliver(state, 1, {"1:reply": {"rule": "text", "stub": "[r]"}})
+    assert list(state["waiting"]) == ["1:reply"] and list(state["applied"]) == ["1:1"] and pruning.changed_turn(state) == 1  # ahead of the tail: it waits
+
+    connection, session = api_connection.api_connection("local", config=lambda: {}, sessions_dir=tmp_path), uuid.uuid4().hex
+    body = "- src/b.py lines 1-2 of 2"
+    step = batch((call("read", path="src/b.py"), body))
+    messages = [{"role": "user", "content": "Look"}, {"role": "assistant", "content": "{}"}, {"role": "user", "content": "Results:\n" + body},
+                {"role": "assistant", "content": "Read."}, {"role": "user", "content": "Next " + "y" * 4000}, {"role": "assistant", "content": "Done."}]
+    connection.write_session(session, messages)
+    assert connection.turn_span(session, 1) == {"session": session, "start": 4, "rounds": 1, "tokens": None} and connection.turn_span(session, 4) is None
+    turns = [{"turn": 1, "span": {"start": 0, "rounds": 2}, "steps": [step], "reply": "Read.", "verdicts": {"1:1": {"rule": "unused", "stub": "[s]"}}, "was": {}},
+             {"turn": 2, "span": {"start": 4, "rounds": 1}, "steps": [], "reply": "Done.", "verdicts": {}, "was": {}}]
+    written = connection.session_path(session).stat().st_mtime
+    assert connection.replay_session(session, turns, now=written + 1) is None and connection.read_session(session) == messages  # a small cut of a cached session waits
+    assert connection.replay_session(session, turns, now=written + pruning.CACHE_TTL) == ("rewritten", session)  # the cache expired
+    cut = connection.read_session(session)
+    assert cut[2]["content"] == "Results:\n[s]" and [cut[at] for at in (0, 1, 3, 4, 5)] == [messages[at] for at in (0, 1, 3, 4, 5)]
+    back = [{**turns[0], "verdicts": {}, "was": turns[0]["verdicts"]}, turns[1]]
+    assert connection.replay_session(session, back, now=0, force=True) == ("rewritten", session) and connection.read_session(session) == messages  # a switch asks no worth
+    heavy = "- " + "x" * 40000
+    connection.write_session(session, [{**messages[2], "content": heavy} if at == 2 else m for at, m in enumerate(messages)])
+    turns[0]["steps"] = [batch((call("read", path="src/b.py"), heavy))]
+    assert connection.replay_session(session, turns, now=connection.session_path(session).stat().st_mtime + 1) == ("rewritten", session)  # the cut outweighs what is resent
+
+
+@pytest.mark.syngate("ORCHESTRATOR-PRUNE-UNUSED")
+def test_a_reading_the_prune_agent_finds_the_turn_did_not_rest_on_is_pruned_to_its_stub():
+    steps = [batch((call("read", path="src/a.py"), "body")), TEXT, batch((call("edit", uid="A"), "- edited A")),
+             batch((call("grep", command="-n foo src"), "src/b.py:1:foo")), batch((call("read", path="src/x.py"), "read src/x.py refused: no file"))]
+    handed = pruning.prune_input(3, steps, "Done.")
+    assert handed.readings == {1: "3:1", 2: "3:4"}  # a change and a refused call are no readings
+    assert "[1] [turn 3 step 1: read src/a.py — read with log]" in handed.data and "[2] [turn 3 step 4: grep -n foo src — read with log]" in handed.data
+    assert "body" not in handed.data and "1:foo" not in handed.data  # the agent tells from the stubs, never from the results
+    told = {"texts": [{"index": 1, "new": True}, {"index": 2, "new": True}],
+            "readings": [{"index": 1, "used": True}, {"index": 2, "used": False}, {"index": 9, "used": False}, "no"]}
+    verdicts = pruning.judge_texts(lambda data: told, 3, steps, "Done.")
+    assert verdicts == {"3:4": {"rule": "unused", "stub": "[turn 3 step 4: unused reading, grep -n foo src — read with log]"}}
+    state = pruning.new_state()
+    pruning.end_turn(state, 3, steps)
+    pruning.deliver(state, 3, verdicts)
+    assert sorted(state["applied"]) == ["3:3", "3:4"] and pruning.form(state["applied"]["3:4"]) == [verdicts["3:4"]["stub"]]
+    assert pruning.judge_texts(lambda data: {"texts": [], "readings": "no"}, 3, steps, "Done.") == {}
+
+
+@pytest.mark.syngate("ORCHESTRATOR-PRUNE-RULE-SUPERSEDED")
+def test_a_reading_is_pruned_by_rule_in_whatever_turn_it_stands_once_a_later_one_of_the_same_item_or_file_or_a_change_of_it_follows():
+    first, again = batch((call("read", path="src/b.py"), "old body")), batch((call("read", path="./src/b.py"), "new body"))
+    state = pruning.new_state()
+    pruning.end_turn(state, 1, [first])
+    assert state["applied"] == {} and state["waiting"] == {}  # the latest reading stays
+    pruning.end_turn(state, 2, [TEXT, again])
+    assert state["waiting"] == {"1:1": {"rule": "superseded", "stub": "[turn 1 step 1: superseded reading of src/b.py — read with log]"}}
+    assert state["applied"] == {} and pruning.changed_turn(state) == 1  # a verdict on a turn ahead of the tail
+    pruning.end_turn(state, 3, [batch((call("replace", path="src/b.py", old="a", new="b"), "- replace changed src/b.py"))])
+    assert sorted(state["waiting"]) == ["1:1", "2:2"]  # a call of the session changed the file since
+
+    same = pruning.new_state()
+    pruning.end_turn(same, 1, [first, again])
+    assert list(same["applied"]) == ["1:1"] and same["waiting"] == {}  # within the ended turn it is of the tail
+
+    two = pruning.new_state()
+    pruning.end_turn(two, 1, [batch((call("read", path="src/b.py"), "b"), (call("read", path="src/c.py"), "c"))])
+    pruning.end_turn(two, 2, [again])
+    assert two["waiting"] == {}  # the step still holds the latest reading of src/c.py
+    pruning.end_turn(two, 3, [{"kind": "context", "text": "Context update\n\nFile brought in whole:\n# Source src/c.py\n````\nc\n````\n"}])
+    assert list(two["waiting"]) == ["1:1"] and "src/b.py, src/c.py" in two["waiting"]["1:1"]["stub"]  # a file of a context update is a later reading
+
+    mixed = pruning.new_state()
+    pruning.end_turn(mixed, 1, [batch((call("read", path="src/b.py"), "b"), (call("git", command="status"), "clean"))])
+    pruning.end_turn(mixed, 2, [again])
+    assert mixed["waiting"] == {}  # a step that did more than read is not a reading to supersede
+
+
+@pytest.mark.syngate("ORCHESTRATOR-PRUNE-SESSION-HEAD", "unit")
+def test_the_head_of_a_new_session_holds_a_turn_as_the_pruning_holds_it_not_its_message_texts_alone():
+    kept = batch((call("read", path="src/b.py"), "body"))
+    steps = [{"kind": "user", "text": "queued"}, TEXT, TREE, kept, usage(10), {"kind": "tool", "name": "Read", "input": {"file_path": "x.py"}, "result": "R"},
+             {"kind": "agent", "uid": "LEAF-002", "prompt": "p", "report": "Reported."}]
+    head = pruning.head(2, steps, "Done.", {"2:3": {"rule": "tree", "stub": "[stub]"}})
+    assert head == [{"role": "user", "text": "queued"}, {"role": "ai", "text": "I will edit the item."}, {"role": "harness", "text": "[stub]"},
+                    {"role": "harness", "text": "body"}, {"role": "harness", "text": "tool Read x.py\nR"},
+                    {"role": "harness", "text": "agent @LEAF-002: Reported."}, {"role": "ai", "text": "Done."}]
+    assert pruning.head(2, [], "Done.", {"2:reply": {"rule": "text", "stub": "[r]"}}) == [{"role": "harness", "text": "[r]"}]
+    sent = synthetic.transcript(head, "Next")
+    assert "user: queued\nassistant: I will edit the item.\nharness: [stub]\nharness: body\n" in sent and sent.endswith("assistant: Done.\n\nNext")

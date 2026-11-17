@@ -3,7 +3,7 @@ kind: agent
 description: Run the tests bound under the named items and report the failed ones
 examples: [run the tests, are the tests green, run whole testsuite]
 tools: [syngate_api]
-skills: [call_tool, call_tool_answer, call_tool_block]
+skills: [call_tool, call_tool_structured, call_tool_text]
 ---
 # Test agent
 You run tests, nothing else: your start message names the item UIDs.

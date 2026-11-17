@@ -14,6 +14,7 @@ of attributes over a markdown body, the body being the item's statement (its
     order: 10                  # optional presentation-only sibling sort key
     sources: [src/a.py, ...]   # optional root-relative key source files, read into the seed context
     test: ~ | <sha> | {name: sha|~, ...}   # test bindings; absent on items without own tests
+    test: {stamp: <bindings>, run: CMD, files: [GLOB], report: FORMAT, env: {K: V}}   # or a setup, bindings under `stamp`
     review: <sha256 hex>       # user-only approval stamp, or absent; a malformed stamp reads as absent
     ---
     One-line title
@@ -26,7 +27,9 @@ takes the front-matter shape when written back. The old spellings `tests` /
 `reviewed` are read as the same keys. On the root item (empty parents)
 `test: enabled|disabled` and `review: enabled|disabled` switch the tree's test
 and review features; both are off when absent, and a root's own binding or stamp
-switches its feature on as well.
+switches its feature on as well. The same words on an item below the root
+override the feature for that item and its subtree, once per path, and so does
+a binding or a stamp of an item whose parents all hand it the feature off.
 
 A binding is identified purely by tags: the default binding is the `[UID]` tag
 alone, a named binding is the `[UID][name]` tag pair (binding name immediately
@@ -34,13 +37,14 @@ after the UID tag; item tags go last in the tag list). Test locations are
 discovered from tags at check time, never declared in items.
 
 The reviewed stamp is transparent: sha256 hex over the canonical JSON
-    {"children": [UID, ...], "description": ..., "header": ..., "parents": [...], "tests": {name: sha} | null}
+    {"children": [UID, ...], "description": ..., "header": ..., "parents": [...], "setup": {...}, "tests": {name: sha} | null}
 serialized with sort_keys=True, separators=(",", ":"), ensure_ascii=False,
 UTF-8 encoded (default binding name is ""; unstamped shas are ""). "header" is
 the body's first line and "description" the rest past one blank line -- the split
 the body carried as two fields before -- so the stamps of that time stand.
 "children" holds the immediate child UIDs and is present only for an item that
-has any, so adding or removing a child moves its parent's stamp. Verify with:
+has any, so adding or removing a child moves its parent's stamp. "setup" holds the item's own test setup (run, files, report, env,
+absent keys left out) and is present only on an item carrying one. Verify with:
     python3 -c 'import syngatelib,sys; items,_=syngatelib.load_tree(); print(syngatelib.item_stamp(items, sys.argv[1]))' <UID>
 
 Coverage joins `syngate_coverage.jsonl` records `{"tags": [...], "passed": bool}`
@@ -97,6 +101,8 @@ BODY_FIELDS = ("header", "description")  # the legacy spelling of the body; refu
 FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)^---[ \t]*(?:\n|\Z)", re.DOTALL | re.MULTILINE)
 FEATURES = ("test", "review")
 SWITCH = {"enabled": True, "disabled": False}
+SETUP_KEYS = ("run", "files", "report", "env")
+SETUP_STAMP = "stamp"  # the key of a setup holding the item's own bindings; refused as a binding name
 LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
 SCHEME_RE = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
 
@@ -127,7 +133,9 @@ class Item:
     tests: dict = None  # None = branch (no tests key); {name|None: sha|None} otherwise
     reviewed: str = None
     folder: str = ""
-    features: dict = field(default_factory=lambda: dict.fromkeys(FEATURES, False))  # the tree's switches, read off the root item only
+    features: dict = field(default_factory=lambda: dict.fromkeys(FEATURES))  # the switch each feature key carries on this item, None where it carries none
+    setup: dict = None  # the item's own test setup -- run, files, report, env, absent keys left out -- or None
+    setup_extra: dict = field(default_factory=dict)  # the unknown keys of the setup, kept to be written back and reported as layout problems
 
     @property
     def is_leaf(self):
@@ -138,13 +146,113 @@ class Item:
         return self.description.partition("\n")[0].strip()
 
 
-def features(items):
-    """{"test": bool, "review": bool} -- the tree's feature switches declared on its root item, both off when absent."""
+def features(items, uid=None):
+    """{"test": bool, "review": bool} -- the feature switches declared on the tree's root item, both off when absent; with `uid`, the
+    features of that item as the switches above it set them."""
+    if uid is not None:
+        return feature_scopes(items)[0].get(uid, dict.fromkeys(FEATURES, False))
     switches = dict.fromkeys(FEATURES, False)
     for item in items.values():
         if not item.parents:
-            switches.update((feature, switches[feature] or on) for feature, on in item.features.items())
+            switches.update((feature, switches[feature] or bool(on)) for feature, on in item.features.items())
     return switches
+
+
+def holds_key(item, feature):
+    """Whether the item holds a binding, a test setup or a stamp of its own in the feature's key."""
+    return (item.tests is not None or item.setup is not None) if feature == "test" else bool(item.reviewed)
+
+
+def carries_switch(item, feature):
+    """Whether an item below the root holds a switch word in the feature's key, no binding or stamp of its own having taken its place."""
+    return bool(item.parents) and item.features.get(feature) is not None and not holds_key(item, feature)
+
+
+def enable_mark(items, uid, feature):
+    """Whether the item's own binding or stamp is what switches the feature on for its subtree: it holds one while every parent hands it the feature off."""
+    item, scopes = items[uid], feature_scopes(items)[0]
+    parents = [parent for parent in item.parents if parent in items and parent != uid]
+    return holds_key(item, feature) and bool(parents) and not any(scopes[parent][feature] for parent in parents)
+
+
+def feature_scopes(items):
+    """({uid: {"test": bool, "review": bool}}, [(uid, message)]) -- every item's features and the misplaced switches. The root sets
+    the value of the tree, off when absent; an item below it carrying a switch sets it for itself and everything below, once per
+    path: a switch under an override, or repeating what the item inherits, is a problem of the item carrying it. A binding or a
+    stamp of an item whose parents all hand it the feature off is such a switch, reading 'enabled'; elsewhere it is the item's plain
+    key. An item whose parents hand it different values is a problem of its own and reads the feature as on, so nothing below it is
+    reported twice."""
+    scopes, overridden, problems = {}, {}, []
+
+    def scope(uid):
+        if uid in scopes:
+            return
+        item = items[uid]
+        scopes[uid], overridden[uid] = dict.fromkeys(FEATURES, False), dict.fromkeys(FEATURES, False)  # cycle guard
+        parents = [parent for parent in dict.fromkeys(item.parents) if parent in items and parent != uid]
+        for parent in parents:
+            scope(parent)
+        for feature in FEATURES:
+            own, keyed = item.features.get(feature), holds_key(item, feature)
+            if not item.parents:
+                scopes[uid][feature] = bool(own)
+                continue
+            on, off = ([parent for parent in parents if scopes[parent][feature] is value] for value in (True, False))
+            nested = any(overridden[parent][feature] for parent in parents)
+            if on and off:
+                problems.append((uid, f"{uid}: the {feature} feature is enabled through {', '.join(on)} and disabled through {', '.join(off)}"))
+            if keyed:  # the key holds no word: it switches the feature on where every parent hands it off, and is the item's plain key elsewhere
+                own = True if parents and not on else None
+            if own is None:
+                scopes[uid][feature], overridden[uid][feature] = bool(on), nested
+                continue
+            switch = f"a {'review stamp' if feature == 'review' else 'test setup' if item.setup is not None else 'test binding'}" if keyed else f"'{feature}: {'enabled' if own else 'disabled'}'"
+            if nested:
+                problems.append((uid, f"{uid}: {switch} under an item that already overrides the {feature} feature (one override per path)"))
+            elif parents and not (off if own else on):
+                problems.append((uid, f"{uid}: {switch} repeats what the item inherits"))
+            scopes[uid][feature], overridden[uid][feature] = bool(own), True
+
+    for uid in sorted(items):
+        scope(uid)
+    return scopes, problems
+
+
+def setup_scopes(items):
+    """{uid: the UID of the item whose test setup holds for it, None for the built-in one} -- a setup holds for its item and
+    everything below up to the next setup, the nearest one whole; an item carrying none takes the setup of its first parent."""
+    scopes = {}
+
+    def scope(uid):
+        if uid not in scopes:
+            scopes[uid] = uid if items[uid].setup is not None else None  # cycle guard
+            if items[uid].setup is None:
+                known = [parent for parent in items[uid].parents if parent in items and parent != uid]
+                scopes[uid] = scope(known[0]) if known else None
+        return scopes[uid]
+
+    for uid in sorted(items):
+        scope(uid)
+    return scopes
+
+
+def stampable(items):
+    """The UIDs a review stamps: the items whose review feature is on, the one holding the switch of its subtree among them."""
+    scopes = feature_scopes(items)[0]
+    return {uid for uid in items if scopes[uid]["review"]}
+
+
+def _silent(children, problems, own):
+    """silent(uid) -- whether an item stands outside a status rollup: no state of its `own`, no problem, and nothing but such items below."""
+    memo = {}
+
+    def silent(uid):
+        if uid not in memo:
+            memo[uid] = True  # cycle guard
+            memo[uid] = not (own(uid) or problems.get(uid)) and all(silent(child) for child in children[uid])
+        return memo[uid]
+
+    return silent
 
 
 @dataclass
@@ -153,18 +261,29 @@ class Location:
     line: int  # 1-based first line of the routine
     name: str  # test routine / case identifier
     span: str  # raw source span hashed for the freeze
+    routine: str = ""  # bare name of the routine, as a runner selects it; "" where discovery tells none
 
 
 def _parse_tests(value, errors, uid):
     if isinstance(value, dict):
         tests = {}
         for name, sha in value.items():
-            if not isinstance(name, str) or not BINDING_NAME_RE.match(name):
+            if not isinstance(name, str) or not BINDING_NAME_RE.match(name) or name == SETUP_STAMP:
                 errors.append(f"{uid}: invalid binding name {name!r}")
                 continue
             tests[name] = _parse_sha(sha, errors, uid)
         return tests
     return {None: _parse_sha(value, errors, uid)}
+
+
+def _binding_value(value):
+    """Whether a value is one a binding takes: `~` or a sha256 hex."""
+    return value is None or isinstance(value, str) and bool(SHA_RE.match(value))
+
+
+def is_setup(value):
+    """Whether a `test` value is a setup rather than a mapping of bindings: it holds `stamp`, or a setup key with no binding value."""
+    return isinstance(value, dict) and (SETUP_STAMP in value or any(key in value and not _binding_value(value[key]) for key in SETUP_KEYS))
 
 
 def _parse_sha(sha, errors, uid):
@@ -193,16 +312,19 @@ def _keyed(data, key, legacy, errors, uid):
 
 
 def _read_feature(item, data, key, legacy, parse, errors):
-    """A switch word on the root item sets the feature; any other present value is the item's own binding or stamp, which on the root switches its feature on."""
+    """A switch word sets the feature -- on the root item for the tree, below it for the item's subtree; any other present value is the item's own binding or stamp, which on the root switches its feature on."""
     present, value = _keyed(data, key, legacy, errors, item.uid)
     if not present:
         return None
     if isinstance(value, str) and value in SWITCH:
-        if item.parents:
-            errors.append(f"{item.uid}: '{key}: {value}' switches the feature on the root item only")
-        else:
-            item.features[key] = SWITCH[value]
+        item.features[key] = SWITCH[value]
         return None
+    if key == "test" and is_setup(value):  # the setup stands where 'enabled' would, its bindings under `stamp`
+        item.setup = {name: value[name] for name in SETUP_KEYS if name in value}
+        item.setup_extra = {name: setting for name, setting in value.items() if name not in SETUP_KEYS and name != SETUP_STAMP}
+        if not item.parents:
+            item.features[key] = True
+        return parse(value[SETUP_STAMP], errors, item.uid) if SETUP_STAMP in value else None
     if not item.parents:
         item.features[key] = True
     return parse(value, errors, item.uid)
@@ -340,6 +462,9 @@ def stamp_payload(item, children=()):
     # always was; it is what makes a child added or removed move its parent's stamp.
     if children:
         payload["children"] = sorted(children)
+    # Likewise only on an item carrying a test setup, so every stamp of an item without one stands and a changed setup moves its item's.
+    if item.setup is not None:
+        payload["setup"] = dict(item.setup)
     return payload
 
 
@@ -364,14 +489,10 @@ def layout_problems(items):
     problems = []
     children = children_map(items)
     roots = []
-    switches = features(items)
+    misplaced = feature_scopes(items)[1]  # a binding or a stamp where the feature is off is a switch of its own, misplaced or not
     for uid, item in sorted(items.items()):
         if not UID_RE.match(uid):
             problems.append((uid, f"{uid}: file stem is not a valid UID"))
-        if item.is_leaf and not switches["test"]:
-            problems.append((uid, f"{uid}: test bindings while the tree's test feature is off (root item: 'test: enabled')"))
-        if item.reviewed and not switches["review"]:
-            problems.append((uid, f"{uid}: review stamp while the tree's review feature is off (root item: 'review: enabled')"))
         for parent in item.parents:
             if parent == uid:
                 problems.append((uid, f"{uid}: links to itself"))
@@ -383,6 +504,8 @@ def layout_problems(items):
             roots.append(uid)
         if not item.description.strip():
             problems.append((uid, f"{uid}: empty description"))
+        problems.extend((uid, f"{uid}: unknown key {key!r} in the test setup") for key in item.setup_extra)
+    problems.extend(misplaced)
     if len(roots) != 1:
         problems.append((None, f"tree: expected exactly one root item with empty parents, found {len(roots)}: {sorted(roots)}"))
     problems.extend((None, message) for message in _cycle_errors(items, children))
@@ -463,24 +586,28 @@ def bindings_from_tags(tags):
     return out
 
 
+def _python_file(path, rel, found):
+    """Adds to `found` the routines of one Python file bound by the pytest mark."""
+    source = path.read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return
+    lines = source.splitlines(keepends=True)
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for binding in _syngate_marks(node):
+            first = min([node.lineno] + [d.lineno for d in node.decorator_list])
+            span = "".join(lines[first - 1:node.end_lineno])
+            found.setdefault(binding, []).append(Location(rel, first, f"{rel}::{node.name}", span, node.name))
+
+
 def _python_locations(root):
     found = {}
     for base in PY_TEST_DIRS:
         for path in sorted((root / base).rglob("*.py")):
-            source = path.read_text(encoding="utf-8")
-            try:
-                tree = ast.parse(source)
-            except SyntaxError:
-                continue
-            lines = source.splitlines(keepends=True)
-            for node in ast.walk(tree):
-                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                for binding in _syngate_marks(node):
-                    first = min([node.lineno] + [d.lineno for d in node.decorator_list])
-                    span = "".join(lines[first - 1:node.end_lineno])
-                    rel = str(path.relative_to(root))
-                    found.setdefault(binding, []).append(Location(rel, first, f"{rel}::{node.name}", span))
+            _python_file(path, str(path.relative_to(root)), found)
     return found
 
 
@@ -495,25 +622,33 @@ def _syngate_marks(node):
 
 CPP_TEST_MACRO_RE = re.compile(r"^\s*(TEST_CASE|SCENARIO|TEMPLATE_TEST_CASE|TEST_CASE_METHOD)\s*\(", re.MULTILINE)
 CPP_TAGS_RE = re.compile(r'"((?:\[[^\]"]+\])+)"')
+CPP_STRING_RE = re.compile(r'"((?:\\.|[^"\\])*)"')
+CPP_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx")
+
+
+def _cpp_file(path, rel, found):
+    """Adds to `found` the Catch2 cases of one C or C++ source bound by their tags, each named by the string its macro opens with."""
+    source = path.read_text(encoding="utf-8", errors="replace")
+    starts = [m.start() for m in CPP_TEST_MACRO_RE.finditer(source)]
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(source)
+        span = source[start:end]
+        tags_match = CPP_TAGS_RE.search(span)
+        if not tags_match:
+            continue
+        tags = re.findall(r"\[([^\]]+)\]", tags_match.group(1))
+        line = source[:start].count("\n") + 1
+        named = CPP_STRING_RE.search(span)
+        routine = named.group(1) if named and named.start() < tags_match.start() else ""
+        for binding in bindings_from_tags(tags):
+            found.setdefault(binding, []).append(Location(rel, line, f"{rel}:{line}", span, routine))
 
 
 def _cpp_locations(root):
     found = {}
     for base in CPP_TEST_DIRS:
         for path in sorted((root / base).rglob("*.cpp")):
-            source = path.read_text(encoding="utf-8", errors="replace")
-            starts = [m.start() for m in CPP_TEST_MACRO_RE.finditer(source)]
-            for i, start in enumerate(starts):
-                end = starts[i + 1] if i + 1 < len(starts) else len(source)
-                span = source[start:end]
-                tags_match = CPP_TAGS_RE.search(span)
-                if not tags_match:
-                    continue
-                tags = re.findall(r"\[([^\]]+)\]", tags_match.group(1))
-                line = source[:start].count("\n") + 1
-                rel = str(path.relative_to(root))
-                for binding in bindings_from_tags(tags):
-                    found.setdefault(binding, []).append(Location(rel, line, f"{rel}:{line}", span))
+            _cpp_file(path, str(path.relative_to(root)), found)
     return found
 
 
@@ -524,6 +659,46 @@ def discover_bindings(root=None):
     for binding, locations in _cpp_locations(root).items():
         found.setdefault(binding, []).extend(locations)
     return found
+
+
+def _setup_globs(items):
+    """The `files` globs of the tree's test setups, each once: root-relative patterns, an empty or an absolute one matching nothing."""
+    globs = []
+    for uid in sorted(items):
+        files = (items[uid].setup or {}).get("files") or []
+        files = [files] if isinstance(files, str) else files if isinstance(files, list) else []
+        globs.extend(pattern for pattern in files if isinstance(pattern, str) and pattern.strip() and not Path(pattern).is_absolute())
+    return list(dict.fromkeys(globs))
+
+
+def discover_setups(items, found=None, root=None):
+    """({(uid, binding_name|None): [Location]}, [(uid, message)]) -- `found`, the routines of the built-in test trees, joined by those
+    tagged in the `files` of the tree's test setups: pytest marks in `*.py`, Catch2 tags in C and C++ sources, comment tags in any text
+    file. A routine found twice -- a file of two setups, or of a setup and a built-in tree -- is kept once, so *exactly one routine
+    per binding* is judged over the files of all setups together. The problems are those of comment tags binding no routine."""
+    from . import testtags  # which imports this module
+    root = Path(root) if root else ROOT
+    found = {binding: list(locations) for binding, locations in (found or {}).items()}
+    globs, files, marked = _setup_globs(items), {}, {}
+    if not globs:
+        return found, []
+    for pattern in globs:
+        for path in root.glob(pattern):
+            if path.is_file() and path.resolve().is_relative_to(root.resolve()):
+                files[path.resolve().relative_to(root.resolve()).as_posix()] = path
+    for rel in sorted(files):
+        read = _python_file if rel.endswith(".py") else _cpp_file if rel.endswith(CPP_SUFFIXES) else None
+        try:
+            if read:
+                read(files[rel], rel, marked)
+        except (OSError, ValueError):  # unreadable or no text: it binds nothing
+            continue
+    tagged, problems = testtags.comment_locations(root, globs)
+    problems = [(uid, message) for uid, message in problems if uid in items]  # a tag naming no item of the tree binds nothing and is no problem
+    for binding, locations in [*marked.items(), *tagged.items()]:
+        known = found.setdefault(binding, [])
+        known.extend(location for location in locations if not any((k.path, k.line) == (location.path, location.line) for k in known))
+    return found, problems
 
 
 def routine_sha(location):
@@ -666,7 +841,9 @@ def compute_status(items, records, problems=None):
     tooling detected it."""
     problems = problems or {}
     children = children_map(items)
-    memo = {}
+    memo, scopes = {}, feature_scopes(items)[0]
+    # An item whose test feature is off awaits no test, so it and a branch of such items stand outside their parents' rollup.
+    silent = _silent(children, problems, lambda uid: items[uid].is_leaf or (scopes[uid]["test"] and not children[uid]))
 
     def status_of(uid):
         if uid in memo:
@@ -677,7 +854,7 @@ def compute_status(items, records, problems=None):
             return memo[uid]
         kids = children[uid]
         own = [leaf_status(items[uid], records)] if items[uid].is_leaf or not kids else []
-        memo[uid] = aggregate([status_of(k) for k in kids] + own) if kids else own[0]
+        memo[uid] = aggregate([status_of(k) for k in kids if not silent(k)] + own) if kids else own[0]
         return memo[uid]
 
     report = {}
@@ -725,19 +902,26 @@ def compute_axes(items, records, problems=None):
     stamped routine changed or gone -- is a violated review and never touches
     the test axis; violated outranks not reviewed, which outranks reviewed;
     every item's own stamp joins its rollup, so a branch is reviewed when it
-    and all its children are."""
+    and all its children are. An item whose feature is off has no state of its own on that
+    axis and, with nothing but such items below, stands outside its parents'."""
     problems = problems or {}
     children = children_map(items)
-    memo = {}
+    memo, scopes, stamped = {}, feature_scopes(items)[0], stampable(items)
+    untested = _silent(children, {}, lambda uid: items[uid].is_leaf or (scopes[uid]["test"] and not children[uid]))
+    unstamped = _silent(children, problems, lambda uid: uid in stamped or bool(items[uid].reviewed))
 
     def axes(uid):
         if uid in memo:
             return memo[uid]
         memo[uid] = (UNKNOWN, NOT_REVIEWED)  # cycle guard
-        item, states = items[uid], [axes(k) for k in children[uid]]
-        own = leaf_test_status(item, records) if item.is_leaf else TEST_PASSED if states else UNKNOWN
-        states.append((own, REVIEWED if item.reviewed else NOT_REVIEWED))
-        test, review = _worst([t for t, _ in states], TEST_RANK), _worst([r for _, r in states], REVIEW_RANK)
+        item, below = items[uid], {k: axes(k) for k in children[uid]}
+        tests = [state[0] for k, state in below.items() if not untested(k)]
+        reviews = [state[1] for k, state in below.items() if not unstamped(k)]
+        if item.is_leaf:
+            tests.append(leaf_test_status(item, records))
+        if uid in stamped or item.reviewed:
+            reviews.append(REVIEWED if item.reviewed else NOT_REVIEWED)
+        test, review = _worst(tests or [UNKNOWN], TEST_RANK), _worst(reviews or [NOT_REVIEWED], REVIEW_RANK)
         memo[uid] = (test, REVIEW_VIOLATED if problems.get(uid) else review)
         return memo[uid]
 
@@ -757,20 +941,27 @@ def dump_item(item):
         data["order"] = item.order
     if item.sources:
         data["sources"] = list(item.sources)
-    if item.tests is not None:
-        data["test"] = item.tests[None] if set(item.tests) == {None} else dict(item.tests)
-    elif not item.parents:
+    bindings = None if item.tests is None else item.tests[None] if set(item.tests) == {None} else dict(item.tests)
+    if item.setup is not None:
+        data["test"] = ({SETUP_STAMP: bindings} if item.tests is not None else {}) | item.setup | item.setup_extra
+    elif item.tests is not None:
+        data["test"] = bindings
+    elif not item.parents or carries_switch(item, "test"):
         data["test"] = "enabled" if item.features["test"] else "disabled"
     if item.reviewed:
         data["review"] = item.reviewed
-    elif not item.parents:
+    elif not item.parents or carries_switch(item, "review"):
         data["review"] = "enabled" if item.features["review"] else "disabled"
     front = yaml.dump(data, Dumper=_ItemDumper, sort_keys=False, default_flow_style=None, allow_unicode=True, width=120)
     body = item.description if item.description.endswith("\n") else item.description + "\n"
     return f"---\n{front}---\n{body}"
 
 
-def clear_review(item):
+def clear_review(item, items=None):
+    """Drop the item's stamp and routine shas. With the tree given, a stamp that switched the review feature on for the subtree
+    leaves `review: enabled` in its place, so a cleared item stays gated rather than falling out of the review."""
+    if items is not None and item.parents and item.reviewed:
+        item.features["review"] = True if enable_mark(items, item.uid, "review") else None
     item.reviewed = None
     if item.tests is not None:
         item.tests = {name: None for name in item.tests}
@@ -787,7 +978,8 @@ def write_item(item):
 
 DEFAULT_DESCRIPTION = "TODO: The component shall ...\n"
 # Fields under the review stamp: an edit of any of them clears the item's review.
-STAMPED_FIELDS = ("description", "parents", "tests")
+STAMPED_FIELDS = ("description", "parents", "tests", "setup")
+REPORT_FORMATS = ("junit", "tap", "ctrf")
 
 
 class tree_error(ValueError):
@@ -807,7 +999,7 @@ class stale_edit(tree_error):
 
 
 def feature_off(feature):
-    return tree_error(f"the tree's {feature} feature is off (root item: '{feature}: enabled')")
+    return tree_error(f"the {feature} feature is off for the item (switch it on with '{feature}: enabled' on the root item or on an item above it)")
 
 
 def _addressed(items, uid):
@@ -827,7 +1019,7 @@ def _settle(items, uids, clear):
     for uid in sorted(set(uids)):
         item = items.get(uid)
         if item is not None and item.reviewed:
-            clear_review(item)
+            clear_review(item, items)
             write_item(item)
 
 
@@ -878,11 +1070,11 @@ def parse_sources(value):
 
 
 def parse_bindings(items, item, names):
-    """{name|None: kept sha} for a wire list of binding names, None for a branch."""
+    """{name|None: kept sha} for a wire list of binding names, None for a branch. Bindings given to an item whose parents hand it the
+    test feature off make it the switch of its subtree; refused on the root, on an item switched off by its own word and where that
+    switch would be misplaced."""
     if names is None:
         return None
-    if not features(items)["test"]:
-        raise feature_off("test")
     if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
         raise tree_error("'tests' must be null or a list of binding names")
     if len(set(names)) != len(names):
@@ -892,14 +1084,66 @@ def parse_bindings(items, item, names):
     for name in names:
         if name and not BINDING_NAME_RE.match(name):
             raise tree_error(f"invalid binding name '{name}': lowercase letters, digits and underscores only")
+        if name == SETUP_STAMP:
+            raise tree_error(f"invalid binding name '{name}': it is the key of a test setup holding the bindings")
     old = item.tests or {}
-    return {(name or None): old.get(name or None) for name in names}
+    bindings = {(name or None): old.get(name or None) for name in names}
+    if not features(items, item.uid)["test"]:
+        if not item.parents or item.features.get("test") is False:
+            raise feature_off("test")
+        held, item.tests = item.tests, bindings
+        misplaced = [message for uid, message in feature_scopes(items)[1] if uid == item.uid and "the test feature" in message]
+        item.tests = held
+        if misplaced:
+            raise tree_error(misplaced[0])
+    return bindings
+
+
+def parse_setup(items, item, value):
+    """The item's own test setup for a wire value -- a mapping of `run` and optionally `files`, `report`, `env` -- or None removing it. A
+    setup given to an item whose parents hand it the test feature off makes it the switch of its subtree; refused on an item switched
+    off by its own word and where that switch would be misplaced."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise tree_error("'setup' must be null or a mapping of run, files, report and env")
+    unknown = sorted(set(value) - set(SETUP_KEYS))
+    if unknown:
+        raise tree_error(f"unknown key {unknown[0]!r} in the test setup: {', '.join(SETUP_KEYS)} only")
+    run = value.get("run")
+    if not isinstance(run, str) or not run.strip():
+        raise tree_error("a test setup needs its 'run' command line")
+    setup = {"run": run.strip()}
+    if value.get("files") is not None:
+        files = value["files"]
+        if not isinstance(files, list) or not files or not all(isinstance(glob, str) and glob.strip() for glob in files):
+            raise tree_error("'files' of a test setup must be a list of root-relative globs")
+        setup["files"] = list(dict.fromkeys(files))
+    if value.get("report") is not None:
+        if value["report"] not in REPORT_FORMATS:
+            raise tree_error(f"'report' of a test setup must be one of {', '.join(REPORT_FORMATS)}")
+        setup["report"] = value["report"]
+    if value.get("env") is not None:
+        env = value["env"]
+        if not isinstance(env, dict) or not all(isinstance(k, str) and k and isinstance(v, str) for k, v in env.items()):
+            raise tree_error("'env' of a test setup must map variable names to text values")
+        setup["env"] = dict(env)
+    if item.features.get("test") is False:
+        raise feature_off("test")
+    if item.parents and not features(items, item.uid)["test"]:
+        held, item.setup = item.setup, setup
+        misplaced = [message for uid, message in feature_scopes(items)[1] if uid == item.uid and "the test feature" in message]
+        item.setup = held
+        if misplaced:
+            raise tree_error(misplaced[0])
+    return setup
 
 
 def item_fields(item):
-    """The editable fields in their wire form (bindings as a name list)."""
+    """The editable fields in their wire form (bindings as a name list, the setup as its mapping or None)."""
     return {"description": item.description, "parents": list(item.parents), "order": item.order, "sources": list(item.sources),
-            "tests": None if item.tests is None else [name or "" for name in item.tests]}
+            "tests": None if item.tests is None else [name or "" for name in item.tests],
+            "setup": None if item.setup is None else dict(item.setup)}
 
 
 def add_item(items, uid, parents, description=None, kind="leaf", folder=None, order=0, sources=None, syngate_dir=None, clear=False):
@@ -923,7 +1167,7 @@ def add_item(items, uid, parents, description=None, kind="leaf", folder=None, or
     item = Item(uid=uid, path=directory / f"{uid}.yml",
                 description=description if description.endswith("\n") else description + "\n",
                 parents=parents, order=parse_order(order), sources=parse_sources(sources),
-                tests={None: None} if kind != "branch" and features(items)["test"] else None,
+                tests={None: None} if kind != "branch" and any(features(items, parent)["test"] for parent in parents) else None,
                 folder=str(directory.relative_to(syngate_dir.parent.resolve())))
     write_item(item)
     items[uid] = item
@@ -951,6 +1195,12 @@ def edit_item(items, uid, changes, base=None, clear=False):
         item.sources = parse_sources(changes["sources"])
     if "tests" in changes:
         item.tests = parse_bindings(items, item, changes["tests"])
+    if "setup" in changes:
+        setup = parse_setup(items, item, changes["setup"])
+        if setup is None and item.setup is not None and item.tests is None and item.parents and enable_mark(items, uid, "test"):
+            item.features["test"] = True  # the setup switched the feature on for the subtree: `test: enabled` takes its place
+        if setup != item.setup:
+            item.setup, item.setup_extra = setup, {}
     after = item_fields(item)
     base = base if isinstance(base, dict) else {}
     clashed = sorted(f for f in base if f in before and before[f] != base[f] and before[f] != after[f])
@@ -959,7 +1209,7 @@ def edit_item(items, uid, changes, base=None, clear=False):
                          {f: before[f] for f in clashed})
     if after != before:
         if clear and item.reviewed and any(after[f] != before[f] for f in STAMPED_FIELDS):
-            clear_review(item)
+            clear_review(item, items)
         write_item(item)
         _settle(items, set(before["parents"]) ^ set(after["parents"]), clear)
     return after
@@ -1006,7 +1256,7 @@ def move_item(items, uid, to, before=None, source=None, link=False, clear=False)
     relinked, was = parents != item.parents, list(item.parents)
     item.parents = parents
     if clear and relinked and item.reviewed:
-        clear_review(item)
+        clear_review(item, items)
     family = sorted_children(items, children_map(items), to)
     siblings = [c for c in family if c != uid]
     if before is None:
@@ -1044,7 +1294,7 @@ def rename_item(items, uid, new_uid, clear=False):
     for kid in kids:
         kid.parents = [new_uid if parent == uid else parent for parent in kid.parents]
         if clear and kid.reviewed:
-            clear_review(kid)
+            clear_review(kid, items)
         write_item(kid)
     _settle(items, item.parents, clear)
     return [new_uid, *(kid.uid for kid in kids)]
@@ -1069,8 +1319,8 @@ def leaves_under(items, uid):
     of the items it matches, as the test command selects them. An unknown UID and
     a pattern matching nothing pass through untouched, for the addressed command
     to judge."""
-    children, tests_on = children_map(items), features(items)["test"]
-    addressable = lambda node: items[node].is_leaf if tests_on else not children[node]
+    children, scopes = children_map(items), feature_scopes(items)[0]
+    addressable = lambda node: items[node].is_leaf if scopes[node]["test"] else not children[node]
     if any(ch in uid for ch in "*?["):
         return [node for node in sorted(items) if fnmatch.fnmatchcase(node, uid) and addressable(node)] or [uid]
     if uid not in items:

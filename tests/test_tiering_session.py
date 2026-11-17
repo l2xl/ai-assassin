@@ -91,7 +91,7 @@ def test_a_file_changed_by_someone_else_is_named_in_the_update_and_not_resent(se
     lay(app, 1000, {"a.py": "a-old\n", "b.py": "b-old\n"})
     leaf(app, "LEAF-001", ["src/a.py", "src/b.py"])
     replace = {"tool": "replace", "path": "src/b.py", "old": "b-old", "new": "b-mine"}
-    app.connectors = {"echo": (echo := Hearing({"kind": "text", "text": "ok"}, calls(replace)))}  # a batch without a query ends its turn
+    app.connectors = {"echo": (echo := Hearing({"kind": "text", "text": "ok"}, calls(replace)))}  # the patch's result goes back, then the scripted `done` ends the turn
     turn(base, app, "LEAF-001", "First", modes=["tree"])
     (app.root / "src" / "a.py").write_text("a-theirs-NEW\n")
     turn(base, app, "LEAF-001", "Second", modes=["tree", "patch"])
@@ -100,7 +100,7 @@ def test_a_file_changed_by_someone_else_is_named_in_the_update_and_not_resent(se
     assert "a-theirs-NEW" not in heard and "src/b.py" not in heard
     assert (app.root / "src" / "b.py").read_text() == "b-mine\n"
     turn(base, app, "LEAF-001", "Third", modes=["tree"])
-    assert echo.heard[2]["text"] == "Third"  # the session's own patch is no news, the other change was told once
+    assert echo.heard[3]["text"] == "Third"  # the session's own patch is no news, the other change was told once
 
 
 def two_leaves(app, budget=120):

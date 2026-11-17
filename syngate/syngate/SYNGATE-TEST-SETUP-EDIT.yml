@@ -1,0 +1,8 @@
+---
+parents: [SYNGATE-TEST-SETUP]
+order: 30
+sources: [src/ai_scratcher/synthetic.py, src/ai_scratcher/prompts/syngate_api.md]
+test: ~
+---
+Setup edit
+is `syngate edit` with `--run`, `--files`, `--report` and `--env K=V`, `--no-setup` removing it, and the `setup` field of the tree call `edit`: both write the item's setup, its bindings moving under `stamp`.

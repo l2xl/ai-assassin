@@ -17,7 +17,10 @@ TREE_READS = ("query", "context")
 LINE_LIMIT = 120  # characters of the line one call of a pruned batch keeps
 REFUSED_RE = re.compile(r"\brefused: |\Aanswer refused")
 PASS_RE, FAIL_RE = re.compile(r": pass\b"), re.compile(r": fail\b")
-RENEW_TOKENS = 100_000  # the input tokens of a session's last request past which its conversation starts its next session
+CACHE_TTL = 300  # seconds a provider keeps the cache of a request's prefix: a session last asked longer ago is sent uncached anyway
+READING = ("query", "context", "read", "list", "grep", "log")  # the calls of the harness that only read: a step of them alone is a reading
+TREE_CHANGES = ("edit", "remove", "move", "rename")
+UPDATE_ITEM_RE, UPDATE_FILE_RE = re.compile(r"^@([A-Z][A-Z0-9_-]*)", re.M), re.compile(r"^# (?:Source|Design) (\S+)", re.M)
 REPLY = "reply"  # the step part of the key of the turn's closing text, which is no step
 
 
@@ -33,9 +36,10 @@ def key(turn, number):
 def new_state():
     """The pruning state of one conversation, kept with its chat log and dropped with its reset: the turn last sent, the files read in the
     session, the verdicts applied to the running session and those waiting for the next one, the switches set by hand and the stubs not
-    yet carried, the size of the running session -- the input tokens of its last request -- and, by turn, the span each of its turns left in
-    a transcript its connection keeps. Every value is JSON."""
-    return {"sent": 0, "read": [], "applied": {}, "waiting": {}, "switches": {}, "stubs": [], "size": 0, "spans": {}}
+    yet carried, the size of the running session -- the input tokens of its last request --, by turn, the span each of its turns left in
+    the session its connection keeps and, for the superseded readings, the step holding the `latest` reading of every item and file and the
+    readings of each step still `live`. Every value is JSON."""
+    return {"sent": 0, "read": [], "applied": {}, "waiting": {}, "switches": {}, "stubs": [], "size": 0, "spans": {}, "latest": {}, "live": {}}
 
 
 def prunable(step):
@@ -58,12 +62,81 @@ def describe(step):
     """What a step was, in a few words: the stub of one pruned by hand, and the stubs handed to the prune agent."""
     kind = step.get("kind") or "step"
     if kind == "tool":
-        return f"tool {step.get('name')}"
+        given = step.get("input") if isinstance(step.get("input"), dict) else {}
+        what = next((given[field] for field in ("file_path", "path", "pattern", "query", "url", "command") if isinstance(given.get(field), str)), "")
+        return first_line(f"tool {step.get('name')} {what}")
     if kind == "calls":
-        return f"calls {', '.join(step.get('tools') or ())}".strip()
+        told = [named(call) for given in step.get("inputs") or () for call in given_calls(given)]
+        return first_line(", ".join(told)) if told else f"calls {', '.join(step.get('tools') or ())}".strip()
     if kind == "agent":
         return "agent" + (f" @{step['uid']}" if step.get("uid") else "")
     return {"user": "user message", "message": "AI text", "diff": "file changes"}.get(kind, kind)
+
+
+def named(call):
+    """A call by what it reads or does: its tool and the item, file or pattern it names."""
+    tool = str(call.get("tool"))
+    what = next((call[field] for field in ("uid", "path", "command", "search", "name") if isinstance(call.get(field), str) and call[field].strip()), "")
+    return f"{tool} {what}".strip()
+
+
+def is_reading(step):
+    """Whether the step is a reading: a calls step every call of which only read -- an item, a file, a listing, a search -- and was not refused."""
+    lines, inputs = [str(line) for line in step.get("lines") or ()], list(step.get("inputs") or ())
+    if step.get("kind") != "calls" or not lines or len(inputs) < len(lines):
+        return False
+    return all(given_calls(given) and all(call.get("tool") in READING for call in given_calls(given)) and not REFUSED_RE.search(line)
+               for given, line in zip(inputs, lines))
+
+
+def read_targets(call):
+    """The items and files a call reads, an item as `@UID`, a file as its path."""
+    if call.get("tool") in TREE_READS and isinstance(call.get("uid"), str):
+        return [f"@{call['uid']}"]
+    return paths_of(call)
+
+
+def changed_targets(call):
+    """The items and files a call changes, an item as `@UID`, a file as its path."""
+    tool = call.get("tool")
+    if tool in TREE_CHANGES and isinstance(call.get("uid"), str):
+        return [f"@{call['uid']}"]
+    if tool == "replace" and isinstance(call.get("path"), str):
+        return [posixpath.normpath(call["path"])]
+    if tool == "patch":
+        return [posixpath.normpath(path) for path in re.findall(r"^\+\+\+ b/(\S+)", str(call.get("diff") or ""), re.M)]
+    return []
+
+
+def supersede(state, turn, steps):
+    """The verdicts on the readings the ended `turn` superseded, by key, in whatever turn they stand: a step of readings alone is pruned once
+    every item and file it read was read again later -- by a call or in a context update -- or changed by a call of the session since; the
+    latest reading of each stays, and so does a step that also did something else."""
+    latest, live, verdicts = state["latest"], state["live"], {}
+    for number, step in enumerate(steps, 1):
+        here, reads, changes = key(turn, number), [], []
+        if step.get("kind") == "calls":
+            for given, line in zip(step.get("inputs") or (), [str(line) for line in step.get("lines") or ()]):
+                if not REFUSED_RE.search(line):
+                    reads += [target for call in given_calls(given) for target in read_targets(call)]
+                    changes += [target for call in given_calls(given) for target in changed_targets(call)]
+        elif step.get("kind") == "context":
+            text = str(step.get("text") or "")
+            reads = [f"@{uid}" for uid in UPDATE_ITEM_RE.findall(text)] + [posixpath.normpath(path) for path in UPDATE_FILE_RE.findall(text)]
+        for target in dict.fromkeys([*reads, *changes]):
+            old = latest.get(target)
+            if old and old != here and target in (live.get(old) or {}).get("left", ()):
+                live[old]["left"].remove(target)
+                if not live[old]["left"]:
+                    was_turn, _, was_step = old.partition(":")
+                    verdicts[old] = {"rule": "superseded", "stub": stub_line(int(was_turn), int(was_step), f"superseded reading of {live.pop(old)['what']}")}
+        for target in changes:
+            latest.pop(target, None)
+        for target in reads:
+            latest[target] = here
+        if reads and is_reading(step) and not changes:
+            live[here] = {"left": list(dict.fromkeys(reads)), "what": first_line(", ".join(target.removeprefix("@") for target in dict.fromkeys(reads)))}
+    return verdicts
 
 
 def given_calls(given):
@@ -132,26 +205,32 @@ def texts_of(turn, steps, reply=""):
 
 
 class prune_input:
-    """What the prune agent is handed: the AI texts of the ended turn, numbered, and the stubs of its steps -- never the session. `data` is
-    the text for the agent, "" with no text to judge; `indices` the key each number stands for."""
+    """What the prune agent is handed: the AI texts of the ended turn, numbered, the stubs of its steps and, numbered apart, those of its
+    readings, each named by what it read -- never the session nor a result. `data` is the text for the agent, "" with no text to judge;
+    `indices` the key each text's number stands for, `readings` the key each reading's and `stubs` the stub of each reading by key."""
 
     def __init__(self, turn, steps, reply=""):
         texts = texts_of(turn, steps, reply)
         stubs = [stub_line(turn, number, describe(step)) for number, step in enumerate(steps, 1) if step.get("kind") != "message"]
+        read = [(key(turn, number), stub_line(turn, number, describe(step))) for number, step in enumerate(steps, 1) if is_reading(step)] if texts else []
         self.indices = {index: found_key for index, found_key, _ in texts}
-        self.data = "\n".join(["Steps of the turn:", *(stubs or ["none"]), "", "AI texts of the turn:", *(f"\n[{index}]\n{text}" for index, _, text in texts)]) if texts else ""
+        self.readings, self.stubs = {index: found_key for index, (found_key, _) in enumerate(read, 1)}, dict(read)
+        self.data = "\n".join(["Steps of the turn:", *(stubs or ["none"]), "", "Readings of the turn:",
+                               *([f"[{index}] {stub}" for index, (_, stub) in enumerate(read, 1)] or ["none"]), "", "AI texts of the turn:", *(f"\n[{index}]\n{text}" for index, _, text in texts)]) if texts else ""
 
 
 def judge_texts(ask, turn, steps, reply=""):
-    """The verdicts of the prune agent on the AI texts of the ended turn, by key: of every text it finds states nothing new. `ask` is the
-    injected callable taking the handed text and returning the agent's JSON answer -- `{"texts": [{"index", "new"}]}` -- so no connection is
-    bound here. No text means no call; a number not handed, a malformed entry or an `ask` that fails prunes nothing."""
+    """The verdicts of the prune agent on the ended turn, by key: of every AI text it finds states nothing new -- restating, or superseded by
+    a later text of the turn -- and of every reading it finds the turn's conclusions do not rest on, pruned to its stub. `ask` is the injected
+    callable taking the handed text and returning the agent's JSON answer -- `{"texts": [{"index", "new"}], "readings": [{"index", "used"}]}`
+    -- so no connection is bound here. No text means no call; a number not handed, a malformed entry or an `ask` that fails prunes nothing."""
     handed = prune_input(turn, steps, reply)
     if not handed.indices:
         return {}
     try:
         answer = ask(handed.data)
-        entries = (answer if isinstance(answer, dict) else json.loads(answer)).get("texts")
+        answer = answer if isinstance(answer, dict) else json.loads(answer)
+        entries, unused = answer.get("texts"), answer.get("readings")
     except Exception:  # pruning is best effort: an agent that cannot answer leaves the session whole
         return {}
     verdicts = {}
@@ -160,6 +239,10 @@ def judge_texts(ask, turn, steps, reply=""):
         if found and entry.get("new") is False:
             number = found.partition(":")[2]
             verdicts[found] = {"rule": "text", "stub": stub_line(turn, number if number == REPLY else int(number), "AI text")}
+    for entry in unused if isinstance(unused, list) else ():
+        found = handed.readings.get(entry.get("index")) if isinstance(entry, dict) else None
+        if found and entry.get("used") is False:
+            verdicts[found] = {"rule": "unused", "stub": handed.stubs[found].replace(": ", ": unused reading, ", 1)}
     return verdicts
 
 
@@ -187,16 +270,26 @@ def message_sent(state, turn):
 
 
 def end_turn(state, turn, steps, held=(), owned=False):
-    """Prune the ended `turn` by rule: its verdicts join the running session -- or, with an `owned` session of a connection the harness
-    cannot rewrite, wait for the next one -- and the files it read join those read in the session."""
+    """Prune the ended `turn` by rule: its verdicts, on the tail, join the running session at once -- or, with an `owned` session of a
+    connection the harness cannot rewrite in place, wait for its replay -- the files it read join those read in the session, and the
+    readings it superseded in earlier turns wait as verdicts ahead of the tail."""
     verdicts, read = rule_verdicts(turn, steps, held, state["read"])
     state["read"] = sorted(read)
+    for found, verdict in supersede(state, turn, steps).items():
+        if found in verdicts or found in state["applied"] or found in state["waiting"]:
+            continue
+        if found.startswith(f"{turn}:"):
+            verdicts[found] = verdict
+        else:
+            state["waiting"][found] = verdict
     return put(state, "waiting" if owned else "applied", turn, verdicts)
 
 
 def deliver(state, turn, verdicts, owned=False):
-    """The verdicts of the prune agent on the ended `turn`: they join the running session, unless it is `owned`, or the next message was
-    sent before they arrived -- then they wait for the conversation's next session."""
+    """The verdicts of the prune agent on the ended `turn`: on the tail they join the running session at once; with an `owned` session, or
+    late -- the next message sent before they arrived -- they are verdicts on a turn ahead of the tail and wait for the pruning worth. A
+    step already pruned keeps its verdict."""
+    verdicts = {found: verdict for found, verdict in verdicts.items() if found not in state["applied"] and found not in state["waiting"]}
     return put(state, "waiting" if owned or state["sent"] > turn else "applied", turn, verdicts)
 
 
@@ -254,10 +347,39 @@ def note_span(state, turn, span):
     return state
 
 
-def renew_bound(section):
-    """The renewal bound of the `orchestrator` settings: its `renew_tokens`, an integer of zero or more -- 0 never renewing -- else `RENEW_TOKENS`."""
-    value = section.get("renew_tokens") if isinstance(section, dict) else None
-    return value if type(value) is int and value >= 0 else RENEW_TOKENS
+def worth(cut, sent, last, now):
+    """Whether bringing a verdict on a turn ahead of the tail into the running session pays: the provider's cache of the session expired --
+    its last request `CACHE_TTL` seconds ago or more, or not known -- or the tokens it `cut` are at least those it `sent` again uncached."""
+    return last is None or now - last >= CACHE_TTL or (cut > 0 and cut >= sent)
+
+
+def tokens(messages):
+    """The tokens the session `messages` cost, at four characters to a token."""
+    return sum(len(content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)) for content in (m.get("content") for m in messages)) // 4
+
+
+def head(turn, steps, reply, verdicts):
+    """The answered `turn` as a new session's head holds it, {role, text} each in order: the user's messages queued into it, its AI texts, the
+    result of every step no verdict cut -- a batch of calls, a tool of the connection's own, a subagent's report -- as the harness's, the
+    form of every cut one in its place, and its reply or the reply's stub."""
+    said = []
+    for number, step in enumerate(steps, 1):
+        kind, verdict = step.get("kind"), verdicts.get(key(turn, number))
+        if kind == "user":
+            said.append({"role": "user", "text": str(step.get("text") or "")})
+        elif verdict:
+            said.append({"role": "harness", "text": "\n".join(form(verdict))})
+        elif kind == "message":
+            said.append({"role": "ai", "text": str(step.get("text") or "")})
+        elif kind == "calls":
+            said.append({"role": "harness", "text": "\n".join(str(line) for line in step.get("lines") or ())})
+        elif kind == "tool":
+            said.append({"role": "harness", "text": f"{describe(step)}\n{step.get('result') or ''}"})
+        elif kind == "agent":
+            said.append({"role": "harness", "text": f"{describe(step)}: {step.get('report') or ''}"})
+    stub = verdicts.get(key(turn, REPLY))
+    said.append({"role": "harness", "text": stub["stub"]} if stub else {"role": "ai", "text": str(reply or "")})
+    return [entry for entry in said if entry["text"].strip()]
 
 
 def session_size(steps):
@@ -271,11 +393,6 @@ def note_size(state, steps):
     if size is not None:
         state["size"] = size
     return state
-
-
-def due(state, bound):
-    """Whether the running session grew to the renewal `bound`, its conversation then starting its next session at the next message."""
-    return bound > 0 and state.get("size", 0) >= bound
 
 
 def take_stubs(state):
@@ -342,23 +459,26 @@ def _unsaid(message, text=None):
     return {**message, "content": "" if text is None else content.replace(text, "", 1)}
 
 
-def rewrite(messages, turn, steps, verdicts, rounds):
-    """The messages of a session the harness writes with the `verdicts` on the ended `turn` cut out of it: the turn is its last `rounds`
-    exchanges -- a user message and the answer to it each -- the results of a pruned batch made its `form` in the prompt that carried them,
-    a pruned AI text taken out of the answer that said it, the closing reply out of the last answer. The messages before the turn stay as
-    they were sent; a session holding fewer messages than the turn's rounds is left whole."""
-    start, out = len(messages) - 2 * rounds, list(messages)
-    if rounds < 1 or start < 0:
+def rewrite(messages, turn, steps, verdicts, rounds, start=None, was=None):
+    """The messages of a session the harness writes with the `verdicts` on `turn` cut out of it: the turn is the `rounds` exchanges -- a user
+    message and the answer to it each -- from message `start` on, the session's last ones without it; the results of a pruned batch made its
+    `form` in the prompt that carried them, a pruned AI text taken out of the answer that said it, the closing reply out of the last answer.
+    `was` being the verdicts the session holds the turn under, a batch pruned then and no longer is made whole again. The messages of the
+    other turns stay as they were sent; a session not holding the turn's rounds there is left whole."""
+    start, out = len(messages) - 2 * rounds if start is None else start, list(messages)
+    end = start + 2 * rounds
+    if rounds < 1 or start < 0 or end > len(out):
         return out
-    held = 0  # the round whose answer the next AI text was said in
+    was, held = was or {}, 0  # the round whose answer the next AI text was said in
     for number, step in enumerate(steps, 1):
-        verdict = verdicts.get(key(turn, number))
+        verdict, before = verdicts.get(key(turn, number)), was.get(key(turn, number))
         if step.get("kind") == "calls":
             prompt, held = start + 2 * (held + 1), held + 1
-            if verdict and prompt < len(out) and step.get("lines"):
-                out[prompt] = _replaced(out[prompt], "\n".join(step["lines"]), "\n".join(form(verdict)))
-        elif step.get("kind") == "message" and verdict and start + 2 * held + 1 < len(out):
+            if (verdict or before) and prompt < end and step.get("lines"):
+                whole = "\n".join(step["lines"])
+                out[prompt] = _replaced(out[prompt], "\n".join(form(before)) if before else whole, "\n".join(form(verdict)) if verdict else whole)
+        elif step.get("kind") == "message" and verdict and not before and start + 2 * held + 1 < end:
             out[start + 2 * held + 1] = _unsaid(out[start + 2 * held + 1], step.get("text"))
-    if key(turn, REPLY) in verdicts:
-        out[-1] = _unsaid(out[-1])
+    if key(turn, REPLY) in verdicts and key(turn, REPLY) not in was:
+        out[end - 1] = _unsaid(out[end - 1])
     return out

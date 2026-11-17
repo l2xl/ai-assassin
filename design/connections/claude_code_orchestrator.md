@@ -8,8 +8,8 @@ prototype phase of the project; where it cannot do what the design says, it does
 - **Pruning.** Its transcript is never rewritten in place. A change of what the session holds
   pruned — a verdict that waited, a switch set by hand — is brought in before the next message,
   from the earliest turn it touches (see *Pruning by replay* below); where that is not worth it the
-  change waits, and the session renewal still starts a fresh session once the transcript's last
-  request took the renewal bound of input tokens.
+  change waits. No size of the transcript ends the session or starts a fresh one: it shrinks by
+  the replays alone.
 - **Its own tools.** `Agent` and `Task` are denied in every mode, as its edit tools are, so
   subagents and file changes go through the harness. Its reads, its web tools (Internet) and its
   `Bash` (Raw command) stay its own and reach the turn as steps; the CLI is named exactly these as
@@ -46,7 +46,8 @@ a whole call, a session counted once for each request it made.
   back whole again.
 - **Worth.** A replay sends every turn from the changed one on uncached. It is done when the cache
   has expired — the session's last request five minutes ago or more — or when it cuts at least as
-  many tokens as it resends; otherwise the change waits.
+  many tokens as it resends; otherwise the change waits. A switch set by hand asks no worth: it is
+  the user's act and is replayed with the chat's next message.
 - **Forked rollback.** A transcript of a version the replay does not know is not written: the next
   call resumes the session at the answer ahead of the earliest changed turn with
   `--resume-session-at … --fork-session`, and its message is headed by the replayed history block

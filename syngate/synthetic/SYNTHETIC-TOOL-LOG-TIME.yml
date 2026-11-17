@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-TOOL-LOG]
+order: 20
+test: ~
+---
+Log time range
+keeps a listing or a search to the turns answered within `since` and `until` — a date, a date-time or a span back from now — every turn told with the time it was answered.

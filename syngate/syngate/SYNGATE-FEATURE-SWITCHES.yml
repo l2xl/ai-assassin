@@ -4,6 +4,5 @@ order: 40
 test: 74c1e1215dbcb0af23f6ffc84fc2200346c9ab9be4805b1a600c8a14f1295165
 review: 6128f099ac0f7b661adca77d35063f8eda2214d61d1dc0aa5e327b9e9d37ea03
 ---
-Feature switches
-
-The root item shall switch the tree's test and review features, both being off when absent.
+Feature keys
+`test` and `review` of an item switch the tree's test and review features and hold what the item carries under them: the root sets either for the tree, both off when absent, and an item below it for its own subtree, by a switch word or by the bindings, the test setup or the review stamp standing in the key.

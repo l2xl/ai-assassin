@@ -1,0 +1,7 @@
+---
+parents: [ASSASSIN-UI-STATUS-POPUP]
+order: 30
+test: ~
+---
+Setup editor
+in the status popup of an item shows the test setup it carries or, where none, the item whose setup holds for it, and writes or removes the item's own — `run`, `files`, `report`, `env` — through the item edit, a refusal shown in place.

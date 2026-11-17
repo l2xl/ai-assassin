@@ -729,7 +729,7 @@ def test_the_turns_the_holder_delegated_directly_or_not_open_and_close_its_tab(s
                                        calls(surf("open", url="https://example.com/next"), surf("close")), text("Grandchild done."),
                                        calls(surf("open", url="https://example.com/third")), text("Child done."), text("Done."))}
     outcome = turn(base, app, "ROOT", "Open and delegate.", modes=ON)
-    assert (outcome["applied"], outcome["reply"]) == (["- agent LEAF-001: - agent LEAF-002: Grandchild done.\nChild done."], "Done.")
+    assert (outcome["applied"], outcome["reply"]) == (["- agent LEAF-001: Child done."], "Done.")
     assert [frame.get("url", frame["action"]) for frame in browser.heard] == [NEWS, "https://example.com/next", "close", "https://example.com/third"]
     assert app.websurf.holder.id == "LEAF-001:1"  # the last turn whose open passed
     browser.close()
@@ -800,7 +800,7 @@ def test_fill_and_mouse_are_refused_while_the_switch_is_off_and_a_child_cannot_s
     denied = f"- websurf fill #q refused: {assassin_ui.SURF_OFF}"
     fill = surf("fill", origin=ORIGIN, selector="#q", value="x")
     app.connectors = {"echo": (scripted := Scripted(calls(child), calls(fill), text("Could not."), text("Reported.")))}
-    assert turn(base, app, "ROOT", "Delegate.", modes=["tree", "edit"])["reply"] == "Reported." and app.chats["ROOT"].log[-1]["applied"] == [f"- agent LEAF-001: {denied}\nCould not."]
+    assert turn(base, app, "ROOT", "Delegate.", modes=["tree", "edit"])["reply"] == "Reported." and app.chats["ROOT"].log[-1]["applied"] == ["- agent LEAF-001: Could not."]
     assert scripted.heard[1]["modes"] == ["edit"] and [frame["action"] for frame in browser.heard] == ["open", "screenshot"]
     app.connectors = {"echo": Scripted(calls(child), calls(fill), text("Filled."), text("Reported."))}
     assert turn(base, app, "ROOT", "Delegate.", modes=ON)["reply"] == "Reported." and app.chats["ROOT"].log[-1]["applied"] == ["- agent LEAF-001: Filled."]  # a parent with the switch on passes it down

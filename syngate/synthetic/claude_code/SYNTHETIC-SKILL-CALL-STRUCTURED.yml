@@ -1,9 +1,11 @@
 ---
 parents: [CLAUDE_CODE-060, SYNTHETIC-SKILLS]
 order: 330
-sources: [src/ai_scratcher/prompts/call_tool_answer.md]
+sources: [src/ai_scratcher/prompts/call_tool_structured.md]
 test: 4a96c6a878aab18fedec31724c568dea78ff9137a38b5f2ae65910bb2665ebbf
 review: 8574d2bf8954e892684dd0e1eec22396bbc2264ea0b1bb0e06f5d378c1790d0b
 ---
-Answer tool skill
+Structured answer skill
 is a default skill of native delivery telling the model to write its reply as text and to close the round with the answer tool, which takes the kind and the calls and no text.
+
+It also tells what the CLI alone does: a workflow launched is awaited, a background shell killed at the turn's end.

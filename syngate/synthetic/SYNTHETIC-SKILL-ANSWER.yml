@@ -1,9 +1,0 @@
----
-parents: [SYNTHETIC-SKILLS]
-order: 50
-sources: [src/ai_scratcher/prompts/answer.md]
-test: eea40d28f0eebaa50db1ad3f4faa99720982d184e53dd1ef0144fa4ce82efe3e
-review: a25f7d55660e253bebe15bbe1bdec58f7e77b725b58d6ef38baf8259cdf8812f
----
-Answer format skill
-is a default skill telling the AI not to repeat in its answer what the log of the turn already shows — the calls made, the files edited, the items changed, a line said twice — to lead with what the user needs and to write a long list, or one that only backs the lead up, as a collapsed section the user expands.

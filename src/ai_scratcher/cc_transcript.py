@@ -14,7 +14,7 @@ from datetime import datetime
 
 from . import pruning, security, websurf
 
-CACHE_TTL = 300  # seconds a provider keeps the cache of a request's prefix: a session last asked longer ago is sent uncached anyway
+CACHE_TTL = pruning.CACHE_TTL  # seconds a provider keeps the cache of a request's prefix: the pruning worth's own
 REPLAY_VERSIONS = ("2.",)  # the CLI versions whose transcript the replay writes; any other is rolled back forked instead
 # The CLI's own records beside the messages -- the request cache, cost, queue and prompt marks: a replayed turn carries none of them.
 BOOKKEEPING = ("last-prompt", "api-request", "api-request-shape", "api-request-blob", "cost-state", "queue-operation", "tools-used", "mode",
@@ -215,7 +215,7 @@ def last_at(rows):
 def worth(cut, sent, last, now):
     """Whether a replay pays: the cache expired -- the last request `CACHE_TTL` seconds ago or more, or not known -- or the tokens it `cut` are
     at least those it `sent` again uncached."""
-    return last is None or now - last >= CACHE_TTL or (cut > 0 and cut >= sent)
+    return pruning.worth(cut, sent, last, now)
 
 
 def anchor(rows, first):

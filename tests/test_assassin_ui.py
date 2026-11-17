@@ -737,7 +737,7 @@ def test_the_status_icon_on_the_block_label_opens_the_popup_listing_status_bindi
     icon = "document.querySelector('#doc .block[data-uid=\"%s\"] legend .status')"
     page.eval(f"{icon % 'LEAF-002'}.click()")
     opened, uid, label, lines, runs, sections, bindings = page.eval(POPUP)
-    assert (opened, uid, label, sections, bindings) == (True, "LEAF-002", "status, tests and review of LEAF-002", ["LEAF-002 tests", "run"], ["(default)"])
+    assert (opened, uid, label, sections, bindings) == (True, "LEAF-002", "status, tests and review of LEAF-002", ["LEAF-002 tests", "LEAF-002 test setup", "run"], ["(default)"])
     assert lines[0] == ["tip-unknown", "not run"] and lines[1][0] == "tip-unknown" and lines[1][1].startswith("(default) · not run · no test bound yet — tag one with LEAF-002")
     assert lines[2] == ["tip-review_violated", "⚠ review violated"] and lines[-1][0] == "tip-review_violated" and "no test routine tagged [LEAF-002] found" in lines[-1][1]
     assert runs == ["test:▶ Run test:false", "review:👀 Mark reviewed:false", "clear:✕ Clear review:false"]
@@ -746,7 +746,7 @@ def test_the_status_icon_on_the_block_label_opens_the_popup_listing_status_bindi
     assert page.eval("[document.querySelector('#tests-pop #f-isleaf').checked, Boolean(document.querySelector('#tests-pop #f-add-binding')), document.querySelector('#tests-pop .binding-row .sha').textContent]") == [True, True, "frozen by review"]
     page.eval(f"{icon % 'ROOT'}.click()")
     opened, uid, label, lines, runs, sections, bindings = page.eval(POPUP)
-    assert (opened, uid, sections, bindings) == (True, "ROOT", ["run"], [])  # a branch: its tally, no binding editor
+    assert (opened, uid, sections, bindings) == (True, "ROOT", ["ROOT test setup", "run"], [])  # a branch: its tally and setup, no binding editor
     assert lines[:2] == [["tip-unknown", "not run"], ["tip-unknown", "2 items below not run"]] and runs[0] == "test:▶ Run tests of 2 leaf items:false" and runs[1] == "review:👀 Mark reviewed with 2 items below:false"
     assert page.eval("document.querySelectorAll(':popover-open').length") == 1
     page.eval("window.asked = []; window.confirm = (text) => { window.asked.push(text); return false; }")
@@ -1560,7 +1560,7 @@ def test_the_chat_window_opens_under_the_item_and_sends_through_the_chosen_setup
     page.wait("document.querySelector('.chat-msg.ai')")
     user, ai = page.eval("[...document.querySelectorAll('.chat-msg')].map((el) => el.textContent.trim())")
     assert user == "What is missing?"
-    assert ai.startswith("Answer format") and ai.endswith("@ROOT Root branch@LEAF-001 (active item) It shall leaf.|What is missing?|model-b|high|edit,internet|None")  # the default prompt heads the seed
+    assert ai.startswith(synthetic.PROMPTS[synthetic.DEFAULT_PROMPT].split("\n", 1)[0].lstrip("# ")) and ai.endswith("@ROOT Root branch@LEAF-001 (active item) It shall leaf.|What is missing?|model-b|high|edit,internet|None")  # the default prompt heads the seed
     send(page, "LEAF-001", "And next?")
     page.wait("document.querySelectorAll('.chat-msg.ai').length === 2")
     assert page.eval("document.querySelectorAll('.chat-msg.ai')[1].textContent").endswith("|And next?|model-b|high|edit,internet|session-1")
@@ -1888,17 +1888,17 @@ def test_a_tree_call_answer_is_applied_to_the_tree_with_or_without_text_beside_i
              {"tool": "add", "uid": "NEW-002", "parent": "NEW-001", "description": "New leaf\n\nIt shall be new.\n"},
              {"tool": "move", "uid": "LEAF-001", "to": "NEW-001", "before": "NEW-002"},
              {"tool": "remove", "uid": "NEW-002"}]
-    status, result = _chat(server, "```syngate\n" + json.dumps(calls) + "\n```")
+    status, result = _chat(server, "```syngate\n" + json.dumps(calls) + "\n```", "Applied.")
     assert status == 200 and result["session"] == "session-2" and result["calls"] == calls
-    assert result["reply"] == "" and result["applied"] == ["- added NEW-001 under ROOT", "- added NEW-002 under NEW-001", "- moved LEAF-001 under NEW-001", "- removed NEW-002"]  # the reply is the AI's own text: none
+    assert result["reply"] == "Applied." and result["applied"] == ["- added NEW-001 under ROOT", "- added NEW-002 under NEW-001", "- moved LEAF-001 under NEW-001", "- removed NEW-002"]  # the reply is the AI's own text alone
     items, errors = syngatelib.load_tree(syngate_dir)
     assert errors == [] and sorted(items) == ["LEAF-001", "NEW-001", "ROOT"]
     assert (items["NEW-001"].title, items["NEW-001"].description, items["NEW-001"].parents, items["NEW-001"].tests) == ("New branch", "New branch\n\nIt groups.\n", ["ROOT"], None)
     assert items["LEAF-001"].parents == ["NEW-001"] and items["LEAF-001"].tests == {None: None}
     status, result = _chat(server, "Just talking.")
     assert (status, result["reply"]) == (200, "Just talking.")
-    status, result = _chat(server, "Applying:\n```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-004", "description": "D"}]) + "\n```\nDone.")
-    assert (status, result["reply"], result["applied"]) == (200, "", ["- added NEW-004 under ROOT"])  # the text beside the calls is a message of the turn, the calls apply
+    status, result = _chat(server, "Applying:\n```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-004", "description": "D"}]) + "\n```\nDone.", "Added.")
+    assert (status, result["reply"], result["applied"]) == (200, "Added.", ["- added NEW-004 under ROOT"])  # the text beside the calls is a message of the turn, the calls apply
     status, result = _chat(server, "```syngate\n" + json.dumps([{"tool": "add", "uid": "NEW-003", "description": "D"}, {"tool": "remove", "uid": "@"}]) + "\n```", "Root stays.")
     assert status == 200 and result["reply"] == "Root stays." and result["applied"][0] == "- added NEW-003 under ROOT" and result["applied"][1].startswith("- remove ROOT refused: ROOT still has children")
     assert sorted(syngatelib.load_tree(syngate_dir)[0]) == ["LEAF-001", "NEW-001", "NEW-003", "NEW-004", "ROOT"]  # the refusal ended the batch and came back as the next prompt
@@ -2532,7 +2532,7 @@ def test_every_control_is_a_button_with_a_focus_ring_operable_by_keyboard(server
     ring = "(() => { const s = getComputedStyle(document.activeElement); return [document.activeElement.className, s.outlineStyle, s.outlineColor]; })()"
     assert page.eval(ring) == ["pill chat-hide", "solid", css_color(page, "--accent")]  # reached by Tab: the focus ring
     assert tab(page, back=True) == "block-text" and page.eval("document.activeElement.classList.contains('chat-input')")
-    for mark in ("msg-sibling", "msg-child", "msg-fold", "step-line"):  # the reply's marks precede its line, the turn's steps come before them
+    for mark in ("msg-sibling", "msg-child", "msg-fold", "prune-mark", "step-line"):  # the reply's marks precede its line, its prune switch and the turn's steps come before them
         assert tab(page, back=True) == mark
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-fold').focus()")
     assert page.eval(f"[{FOCUS}, getComputedStyle(document.activeElement.parentElement).opacity]") == ["msg-fold", "1"]  # the marks of a message take the focus, and show with it
@@ -2661,6 +2661,49 @@ def test_the_binding_editor_switches_the_test_key_and_adds_or_removes_named_bind
     page.eval("document.querySelector('#tests-pop .unbind').click()")
     assert page.eval("window.asked") == ["Binding '(default)' was frozen by a review; removing it releases that. Remove?"]
     assert page.eval(names) == ["(default)"] and syngatelib.parse_item((syngate_dir / "LEAF-002.yml").read_text())["test"] == "a" * 64  # declined: the frozen binding stays
+
+
+@pytest.mark.syngate("ASSASSIN-UI-TEST-SETUP")
+def test_the_setup_editor_shows_whose_setup_holds_and_writes_or_removes_the_items_own_a_refusal_shown_in_place(violated_page, server, syngate_tree):
+    page, (base, app), (syngate_dir, _) = violated_page, server, syngate_tree
+    on_disk = lambda: syngatelib.parse_item((syngate_dir / "LEAF-001.yml").read_text()).get("test", "absent")
+    origin = "document.querySelector('#tests-pop .setup-origin')?.textContent"
+    fill = lambda field, value: page.eval(f"document.getElementById('f-setup-{field}').value = {json.dumps(value)}")
+    page.eval("document.querySelector('#doc .block[data-uid=\"LEAF-001\"] legend .status').click()")
+    assert page.eval(origin) == "built-in setup holds" and not page.eval("!!document.getElementById('setup-remove')")
+    fill("run", "forge test --match-test ^({names:|})$")
+    fill("files", "test/**/*.t.sol  test/*.sol")
+    fill("report", "junit")
+    fill("env", "SEED=0x01\nKEY=$KEY")
+    page.eval("document.getElementById('setup-save').click()")
+    page.wait(f"{origin} === 'own setup' && !!document.getElementById('setup-remove')")
+    setup = {"run": "forge test --match-test ^({names:|})$", "files": ["test/**/*.t.sol", "test/*.sol"], "report": "junit", "env": {"SEED": "0x01", "KEY": "$KEY"}}
+    stored = on_disk()
+    assert {key: stored[key] for key in setup} == setup and "stamp" in stored  # the whole setup, the item's binding under `stamp`
+    assert tree_item(server, "LEAF-001")["setup"] == setup
+    assert page.eval("document.getElementById('f-setup-run').value") == setup["run"] and page.eval("document.getElementById('f-setup-env').value") == "SEED=0x01\nKEY=$KEY"
+    with pytest.raises(urllib.error.HTTPError) as stale:
+        call(base, app, "/api/item/LEAF-001", {"setup": {"run": "go test"}, "base": {"setup": None}})
+    assert stale.value.code == 409 and on_disk()["run"] == setup["run"]  # a compare-and-swap of the setup
+
+    fill("run", "  ")
+    page.eval("document.getElementById('setup-save').click()")
+    page.wait("!!document.querySelector('#tests-pop .setup-refusal')")
+    assert "'run'" in page.eval("document.querySelector('#tests-pop .setup-refusal').textContent") and on_disk()["run"] == setup["run"]  # refused in place, nothing written
+    fill("run", "forge test")
+    fill("env", "no equals sign")
+    page.eval("document.getElementById('setup-save').click()")
+    page.wait("(document.querySelector('#tests-pop .setup-refusal')?.textContent || '').includes('NAME=value')")
+    assert on_disk()["run"] == setup["run"]
+
+    page.eval("document.getElementById('setup-remove').click()")
+    page.wait(f"{origin} === 'built-in setup holds' && !document.querySelector('#tests-pop .setup-refusal')")
+    assert on_disk() is None and "setup" not in {key for key, value in tree_item(server, "LEAF-001").items() if value}  # removed, the binding kept
+
+    call(base, app, "/api/item/ROOT", {"setup": {"run": "go test ./..."}})
+    assert tree_item(server, "LEAF-001")["setup_from"] == "ROOT" and tree_item(server, "ROOT")["setup_from"] == "ROOT"
+    page.eval("refresh().then(() => renderTests())")
+    page.wait(f"{origin} === 'setup of ROOT holds'")
 
 
 @pytest.mark.syngate("AI_CHAT-CONTROLS")

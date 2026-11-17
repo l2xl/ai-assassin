@@ -49,7 +49,8 @@ Both directions of the loop are what the toolkit implements:
 - **Gate.** Two optional disciplines turn a DAG into a gate: *review* stamps an item as approved by
   the user, so the DAG cannot drift from what was agreed, and *test* binds an item to executable
   routines, so the DAG cannot drift from what the code does (*Process Rules* in
-  [design/syngate/model.md](design/syngate/model.md)). Both are switched on the root item and are off by default.
+  [design/syngate/model.md](design/syngate/model.md)). Both are switched on the root item, off by default, and
+  an item below it may switch either for its own subtree.
 
 Product architecture definition through AI dialog analysis and synthesis is one use case of this loop:
 with `test` and `review` on, the DAG of a software project is its architecture and contract tree,

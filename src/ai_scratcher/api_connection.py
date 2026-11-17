@@ -19,6 +19,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from . import pruning
 from . import synthetic
 from .synthetic import connection_error
 
@@ -457,6 +458,36 @@ class api_connection:
         """Store the messages of `session` as `rewrite` makes them of those it holds: the session is the harness's own, so turn pruning cuts
         it in place."""
         self.write_session(session, rewrite(self.read_session(session)))
+
+    def turn_span(self, session, rounds):
+        """{session, start, rounds, tokens}: where the turn that ended `session` after `rounds` rounds stands among its messages -- the index of
+        its first one -- None where the session holds fewer; the tokens of its last request are the usage step's to tell."""
+        start = len(self.read_session(session)) - 2 * rounds
+        return {"session": session, "start": start, "rounds": rounds, "tokens": None} if rounds > 0 and start >= 0 else None
+
+    def replay_session(self, session, turns, block=None, now=None, force=False):
+        """Bring the pruning settled for `turns` -- {turn, span, steps, reply, verdicts, was} each, from the earliest changed turn on -- into the
+        stored session in place, where the pruning worth has it: its cache expired -- the session file last written `pruning.CACHE_TTL` seconds
+        ago -- or the cut at least what the messages from that turn on resend, or `force`d by a switch set by hand. -> ("rewritten", session),
+        None while the change waits."""
+        messages = self.read_session(session)
+        first = turns[0]["span"].get("start") if turns else None
+        if type(first) is not int or not 0 <= first <= len(messages):
+            return None
+        out = messages
+        for record in turns:
+            span = record["span"]
+            if type(span.get("start")) is int and type(span.get("rounds")) is int:
+                out = pruning.rewrite(out, record["turn"], record["steps"], record["verdicts"], span["rounds"], start=span["start"], was=record.get("was"))
+        held, sent = pruning.tokens(messages[first:]), pruning.tokens(out[first:])
+        try:
+            last = self.session_path(session).stat().st_mtime
+        except OSError:
+            last = None
+        if not force and not pruning.worth(held - sent, sent, last, time.time() if now is None else now):
+            return None
+        self.write_session(session, out)
+        return "rewritten", session
 
     # -- turn -------------------------------------------------------------
 

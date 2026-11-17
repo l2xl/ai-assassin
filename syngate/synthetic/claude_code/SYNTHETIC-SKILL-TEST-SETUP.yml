@@ -1,0 +1,8 @@
+---
+parents: [SYNTHETIC-SKILLS]
+order: 340
+sources: [src/ai_scratcher/prompts/test_setup.md, src/ai_scratcher/prompts/deliver.md]
+test: ~
+---
+Test setup skill
+is a skill on request telling a turn how to put a project's own test suite under the tree: the `setup` of the `edit` call, the tag forms its `files` carry, the selection placeholders of its `run` line and the reports a run is read from; the Syngate API tool and the delivery skill name it where a suite is not pytest's.

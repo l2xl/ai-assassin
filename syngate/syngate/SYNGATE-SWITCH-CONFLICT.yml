@@ -1,0 +1,7 @@
+---
+parents: [SYNGATE-FEATURE-SWITCHES]
+order: 20
+test: ~
+---
+Conflicting switch inheritance
+of an item whose parents hand it different values of a feature is a layout problem of that item, reddening it until the user settles the links or the switches above; meanwhile the feature reads as on for it.

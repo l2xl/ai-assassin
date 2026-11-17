@@ -18,10 +18,29 @@ context, was an off-context agent nobody had defined.
 The task of a DAG-bound subagent is its item's statement and the briefing is the item's seed
 context, so its start message stays as short as the tree allows — none at all for a delegation, the
 standing instruction to carry out the statement standing in, and bounded where one is given. Work
-that no item states yet gets its item first: the task routing skill adds it, with a semantic UID and
+that no item states yet gets its item first: the delegation skill adds it, with a semantic UID and
 the request condensed into its statement, and the subagent is started there — the request thus
 enters the session as part of the seed context rather than as a prompt, and stays in the tree
 after the session.
+
+## What a delegation reports
+
+The session that starts a DAG-bound subagent receives its **delegation report** and nothing else
+of it: the subagent's closing text — or the error its turn ended with — and its cumulative change,
+one line `Changed items: …` and one `Changed files: …`. Every item and project file the turn
+changed is named once, as it stands at the turn's end — `added`, `changed` or `removed`: an item
+edited five times is one entry, one renamed goes by its new UID with the old one beside it, one
+added and removed again leaves nothing — and what a turn the subagent delegated in its own right
+changed is part of its change. The files are those its patch and replace calls changed; what a
+shell command wrote is not followed. None of the subagent's calls, their results or its
+intermediate texts reach the starting session: they stay in the item's own chat, which the log
+tool reads. A background subagent's report, reaching the starting chat when it ends, is the same.
+
+This is what makes delegation the way to keep reading out of a session. The delegation skill tells
+a turn to prefer it for work needing wide reading or many rounds: the task is stated as an item —
+an existing child, or a new one under the anchored item holding the exact instructions — and run
+there by the agent call, so the starting session holds the report alone while everything read on
+the way stays in the item's chat.
 
 ## Start points
 

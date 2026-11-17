@@ -5,4 +5,4 @@ test: a850372628d91dacb27c13b5cda32e5057761f28c1eddd7539cce4c79f344f8f
 review: 9178f9376752fe9d6ccb471be3b3de4aa84ec75d29e4d8546318b808bd4df095
 ---
 Test option
-on the root item, off when absent: while off the tree awaits no tests and `review` stamps an item without running any.
+of an item, as the switches above it set it: while off the item awaits no tests, stands outside the test status of the items above it, and `review` stamps it without running any.

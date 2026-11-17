@@ -131,5 +131,5 @@ def test_the_closing_prompt_asks_one_text_answer_that_is_the_reply_and_calls_or_
     outcome = turn(base, app, "ROOT", "Delegate.", modes=["tree"])  # the delegated turn stalls and reports what it was asked to
     assert outcome["reply"] == "Parent done." and len(outcome["applied"]) == 1
     report = headed(synthetic.CLOSED_STALL, "Child report.")
-    assert outcome["applied"][0].startswith("- agent LEAF-001: ") and outcome["applied"][0].endswith("\n" + report)  # the delegating turn reads why it was closed
+    assert outcome["applied"][0] == "- agent LEAF-001: " + report  # the delegating turn reads why it was closed
     assert app.chats["LEAF-001"].log[-1]["role"] == "ai" and app.chats["LEAF-001"].log[-1]["text"] == report

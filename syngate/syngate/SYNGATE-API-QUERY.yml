@@ -5,4 +5,4 @@ test: f8a8d5bf4314becf025aee38b50aef756b67c2e4426ac0164866ae5e1188b5ac
 review: bc097ded12c6a407bed786f9835b2255b95000ce40d3e013f90c1d1606db9f49
 ---
 Syngate query 
-returns an item's header, description, parents, children in sibling order, kind and, for a leaf, the names of its test bindings.
+returns an item's header, description, parents, children in sibling order, kind, for a leaf the names of its test bindings and, for an item carrying one, its test setup.

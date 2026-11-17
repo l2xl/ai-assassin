@@ -5,4 +5,4 @@ test: 64453cadb16d534484cc01cc81fa2347204da7bd9474eb1a42034ef9f4d708cd
 review: 149543908c4130524b471ad89fe6f3735981ef4b2362998e591e082d87cbcfd9
 ---
 Result rounds
-The results of the query, context, test and agent calls of an applied answer shall go back into the same session as the next prompt, the exchange continuing until an answer carries no read, no run and no delegation.
+The results of every call of an applied answer, the changing calls included, shall go back into the same session as the next prompt, the exchange continuing until a text answer ends the turn as its reply.

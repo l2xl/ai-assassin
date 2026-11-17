@@ -224,7 +224,7 @@ def test_review_is_closed_by_its_own_switch_and_stamps_where_the_test_switch_is_
     monkeypatch.setattr(syngatelib, "discover_bindings", lambda: {})
     args = argparse.Namespace(uid=["LEAF-001"], build_dir=str(tmp_path), coverage_out=None)
     assert syngate.cmd_review(args) == 1 and syngate.cmd_clear(argparse.Namespace(uid=["LEAF-001"])) == 1
-    assert capsys.readouterr().err.count("the tree's review feature is off") == 2
+    assert capsys.readouterr().err.count("the review feature is off for the item") == 2
 
     make_item(syngate_dir, "ROOT", "Root branch\n", parents=(), features=("review",))
     items = load_tree(syngate_dir)[0]

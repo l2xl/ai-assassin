@@ -147,8 +147,8 @@ SURF_OFF = ("Interactive WebSurf is off for this chat: fill and mouse are refuse
 # The message heading a turn whose anchored item's statement changed since the conversation's previous turn, or sent from the editor.
 STATEMENT_NOTE = "The statement of @{uid} now reads:\n\n{statement}"
 # How the messages the user queued while a turn ran reach the model at the turn's next round, after the results it asked for.
-# The context step of a turn whose message starts the conversation's next session, the running one having grown past the renewal bound.
-RENEWED = "session renewed: its last request took {tokens} input tokens, past the renewal bound of {bound} -- the verdicts that waited apply and the kept messages head a fresh session"
+# The context step of a turn whose message brings a change of the pruning into a session the harness writes, in place.
+REWRITTEN = "pruning brought in from turn {turn}: the messages of the session since are rewritten under the pruning now settled"
 # The context steps of a turn whose message brings a change of its Claude Code session's pruning in: replayed into a new transcript, or rolled back.
 REPLAYED = "pruning replayed from turn {turn}: the session goes on in a new transcript, the turns since rebuilt under the pruning now settled"
 FORKED = "pruning rolled back to before turn {turn}: the session is resumed forked there and the turns since go with this message as replayed history"
@@ -266,9 +266,72 @@ def tallied(lines):
 
 
 def told(outcome):
-    """A turn's outcome as a model reads it where it never saw the turn's log -- a delegating turn's report, the history of a new session:
+    """A turn's outcome as a model reads it where it never saw the turn's log -- the history of a new session, an off-context agent's report:
     the lines of what the turn applied, then its reply or error. The chat shows the reply alone, the applied calls being blocks of the log."""
     return "\n".join([*outcome.get("applied", ()), outcome.get("reply", outcome.get("error")) or ""]).strip("\n")
+
+
+class Change:
+    """The cumulative change of a turn: every item and project file it changed, each named once, as it stands when the change is read."""
+
+    def __init__(self, root):
+        self.root, self.items, self.files = Path(root), {}, {}  # uid -> (state, its UID before the turn); path -> whether it was there before
+
+    def item(self, call, uid):
+        """Note the applied tree call of the item `uid`: an item added and removed in the turn leaves nothing, a renamed one goes by its new UID."""
+        tool = call["tool"]
+        if tool == "add":
+            self.items[uid] = ("changed", uid) if uid in self.items else ("added", uid)
+        elif tool == "rename":
+            self.items[call["new_uid"]] = self.items.pop(uid, ("changed", uid))
+        elif tool == "remove":
+            state, was = self.items.pop(uid, ("changed", uid))
+            if state != "added":
+                self.items[was] = ("removed", was)
+        else:
+            self.items.setdefault(uid, ("changed", uid))
+
+    def paths(self, call):
+        """The project files a patch or replace call names, each with whether it is there now -- read before the call is applied."""
+        removed = re.findall(r"^--- a/(\S+)", str(call.get("diff") or ""), re.M) if call.get("tool") == "patch" else []
+        return {path: (self.root / path).is_file() for path in dict.fromkeys([*tiering.patched_paths(call), *(os.path.normpath(path) for path in removed)])}
+
+    def note(self, touched):
+        """Note the files of an applied patch, `touched` being what `paths` read before it."""
+        for path, there in touched.items():
+            self.files.setdefault(path, there)
+
+    def merge(self, view):
+        """Take in the change of a turn this one delegated and awaited, as its `view`."""
+        for uid, state, was in (view or {}).get("items", ()):
+            if state == "removed":
+                self.item({"tool": "remove"}, uid)
+            elif was != uid:
+                self.items[uid] = self.items.pop(was, (state, was))
+            else:
+                self.items.setdefault(uid, (state, was))
+        for path, state in (view or {}).get("files", ()):
+            self.files.setdefault(path, state != "added")
+
+    def view(self):
+        """{items: [[uid, added|changed|removed, its UID before the turn]], files: [[path, added|changed|removed]]}, an empty part left out."""
+        files = [[path, "changed" if was and there else "added" if there else "removed"] for path, was in self.files.items()
+                 if (there := (self.root / path).is_file()) or was]
+        items = [[uid, state, was] for uid, (state, was) in self.items.items()]
+        return {**({"items": items} if items else {}), **({"files": files} if files else {})}
+
+
+def changed_lines(view):
+    """The cumulative change of a turn as the lines a delegating turn reads: its items in one, its project files in another."""
+    items = ", ".join(f"{uid} {state}" + (f" (was {was})" if was != uid and state != "added" else "") for uid, state, was in (view or {}).get("items", ()))
+    files = ", ".join(f"{path} {state}" for path, state in (view or {}).get("files", ()))
+    return [*([f"Changed items: {items}"] if items else []), *([f"Changed files: {files}"] if files else [])]
+
+
+def delegation_report(outcome):
+    """All a starting session receives of a DAG-bound subagent: its closing text -- or error -- and its cumulative change, none of its calls,
+    results or intermediate texts."""
+    return "\n".join([outcome.get("reply", outcome.get("error")) or "", *changed_lines(outcome.get("changed"))]).strip("\n")
 
 
 class Turn:
@@ -435,26 +498,55 @@ class Chat:
                 kept.append({"role": m["role"], "text": text})
         return kept
 
+    def head(self, upto=None):
+        """The exchange as a new session's head holds it -- of the log ahead of index `upto`, where given: every answered turn as the pruning
+        holds it -- its AI texts, the results of its steps no verdict cut, the stubs of the cut ones and its reply -- the user's messages, and
+        a message logged without steps as it travels; a failed or stopped turn's is left out."""
+        said = []
+        for m in self.log[:upto]:
+            reply = kept_text(m["text"], m.get("cuts")) if m.get("text") else ""
+            if m["role"] == "ai" and isinstance(m.get("turn"), int) and isinstance(m.get("steps"), list):
+                said += pruning.head(m["turn"], m["steps"], reply, self.prune["applied"])
+            elif m["role"] not in ("error", "stopped") and (text := "\n".join([*m.get("applied", ()), reply]).strip("\n")).strip():
+                said.append({"role": m["role"], "text": text})
+        return said
+
+    @staticmethod
+    def _entry(log, at, uid=None):
+        """{uid, turn, time, user, steps, reply} of the turn answered by `log[at]`: the user's messages ahead of it, its steps and its reply."""
+        start = at
+        while start > 0 and log[start - 1]["role"] == "user":
+            start -= 1
+        m = log[at]
+        return {"uid": uid, "turn": m["turn"], "time": m.get("time"), "user": [str(u.get("text") or "") for u in log[start:at]],
+                "steps": list(m.get("steps") or ()), "reply": str(m.get("text") or "")}
+
     def turn_record(self, number):
         """{turn, user, steps, reply} of the answered turn `number` as the log keeps it: the user's messages ahead of its answer, its steps and
         its reply; None for a turn the log holds no answer of."""
         at = next((index for index, m in enumerate(self.log) if m.get("turn") == number and m["role"] == "ai"), None)
         if at is None:
             return None
-        start = at
-        while start > 0 and self.log[start - 1]["role"] == "user":
-            start -= 1
-        return {"turn": number, "user": [str(m.get("text") or "") for m in self.log[start:at]], "steps": list(self.log[at].get("steps") or ()),
-                "reply": str(self.log[at].get("text") or "")}
+        entry = self._entry(self.log, at)
+        return {key: entry[key] for key in ("turn", "user", "steps", "reply")}
 
-    def turn_steps(self):
-        """The steps kept of every turn of the chat -- of the live conversation and the filed ones -- by turn number, the turn in flight or
-        last run with them; what the log tool reads."""
-        record = {m["turn"]: m["steps"] for log in [self.log, *(stored["log"] for stored in self.archive)] for m in log
-                  if isinstance(m.get("turn"), int) and isinstance(m.get("steps"), list)}
-        if self.turn is not None and self.turn.steps:
-            record[int(self.turn.id.rpartition(":")[2])] = list(self.turn.steps)
-        return record
+    def turn_entries(self):
+        """The turns kept of the chat -- of the live conversation and the filed ones, the turn in flight with its steps so far --
+        as {uid, turn, time, user, steps, reply}, by turn number, the later record of a number replacing the earlier; what the log tool reads."""
+        found = {}
+        for log in [*(stored["log"] for stored in self.archive), self.log]:
+            for at, m in enumerate(log):
+                if isinstance(m.get("turn"), int) and isinstance(m.get("steps"), list):
+                    found[m["turn"]] = self._entry(log, at, self.uid)
+        if self.running and self.turn.steps:  # a finished turn is read from its logged answer, with its time and reply
+            number = int(self.turn.id.rpartition(":")[2])
+            ahead = []
+            for m in reversed(self.log):
+                if m["role"] != "user":
+                    break
+                ahead.insert(0, str(m.get("text") or ""))
+            found[number] = {"uid": self.uid, "turn": number, "time": None, "user": ahead, "steps": list(self.turn.steps), "reply": ""}
+        return [found[number] for number in sorted(found)]
 
     def folded_texts(self):
         """The spans of text the user folded out of the messages of the chat, the live conversation's and the filed ones'."""
@@ -917,7 +1009,7 @@ class AssassinApp:
 
     def build_model(self):
         items, load_errors = syngatelib.load_tree(self.syngate_dir)
-        discovered = syngatelib.discover_bindings(self.root)
+        discovered = syngatelib.discover_setups(items, syngatelib.discover_bindings(self.root), self.root)[0]
         records, coverage_errors = syngatelib.load_coverage(self._coverage_files())
         problems = syngatelib.item_problems(items, discovered)
         report = syngatelib.compute_status(items, records, problems)
@@ -928,7 +1020,7 @@ class AssassinApp:
         content = gitlib.content_uncommitted(self.root, uncommitted) if uncommitted else set()  # review marks never block a review
         dirty = {uid: syngatelib.review_footprint(items, uid, discovered, self.root) & content for uid in pending} if content else {}
 
-        payload = {}
+        payload, scopes, stampable, setups = {}, syngatelib.feature_scopes(items)[0], syngatelib.stampable(items), syngatelib.setup_scopes(items)
         for uid, entry in report.items():
             item = items[uid]
             bindings = None
@@ -942,10 +1034,14 @@ class AssassinApp:
                 } for name, sha in item.tests.items()]
             payload[uid] = dict(entry, **axes[uid],
                                 is_leaf=item.is_leaf,
+                                features=scopes[uid],
+                                stampable=uid in stampable,
                                 description_raw=item.description,
                                 path=str(item.path.relative_to(self.root)) if item.path.is_relative_to(self.root) else str(item.path),
                                 stamp_fresh=(syngatelib.item_stamp(items, uid) == item.reviewed) if item.reviewed else None,
                                 bindings=bindings,
+                                setup=None if item.setup is None else dict(item.setup),
+                                setup_from=setups[uid],
                                 uncommitted=sorted(set().union(*(dirty[under] for under in syngatelib.items_under(items, uid) if under in dirty))))
 
         roots = sorted(uid for uid, item in items.items() if not item.parents)
@@ -983,8 +1079,9 @@ class AssassinApp:
 
     @staticmethod
     def _pending(items, problems):
-        """The items whose own review does not stand: unstamped, or with a validation problem of their own."""
-        return {uid for uid, item in items.items() if not item.reviewed or problems.get(uid)}
+        """The items whose own review does not stand: unstamped, or with a validation problem of their own -- those a review stamps alone."""
+        stampable = syngatelib.stampable(items)
+        return {uid for uid, item in items.items() if uid in stampable and (not item.reviewed or problems.get(uid))}
 
     # -- mutations --------------------------------------------------------
 
@@ -1249,8 +1346,8 @@ class AssassinApp:
 
     @staticmethod
     def _switch_prune(chat, asked):
-        """Set by hand whether the step `step` -- or the reply, `reply` -- of the logged turn `turn` is pruned, for the conversation's next session;
-        the running session goes on as it is, a running turn included."""
+        """Set by hand whether the step `step` -- or the reply, `reply` -- of the logged turn `turn` is pruned: it takes effect with the chat's
+        next message, brought into the running session by its connection, which goes on -- a running turn included."""
         number, step = asked.get("turn"), asked.get("step")
         logged = next((m for m in chat.log if isinstance(number, int) and m.get("turn") == number), None)
         steps = (logged or {}).get("steps") or []
@@ -1336,7 +1433,6 @@ class AssassinApp:
         them -- the notices heading them inserted at `at`; -> `{"turn": "<UID>:<n>", "chat": …}`."""
         uid = chat.uid
         table, defaults = self.mode_table(), self.chat_defaults()  # read outside the lock: a connector may answer slowly
-        bound = pruning.renew_bound(self.settings("orchestrator"))
         item = self._load().get(uid)
         current = item.description.strip() if item else None
         with self._chat_lock:
@@ -1357,17 +1453,15 @@ class AssassinApp:
                 problems.append(self.modes_problem(chat.setup["modes"], table))
                 chat.setup["modes"] = defaults["modes"]
             reset_note = MODES_RESET.format(why="; ".join(problems), modes=", ".join(chat.setup.get("modes") or ()) or "none") if problems else None
-            renewed = chat.prune["size"] if chat.session and not data.get("retry") and pruning.due(chat.prune, bound) else None
-            if renewed is not None:  # the running session grew past the renewal bound: this message starts the conversation's next one
-                chat.session = chat.session_connector = None
-            replayed = None if renewed is not None or data.get("retry") else self._replay(chat)
+            replayed = None if data.get("retry") else self._replay(chat)  # no size ends a session: it shrinks by the verdicts brought in alone
             if replayed and replayed[0] == "forked":  # the turns since go with this message as their history, the block carrying their stubs
                 text = f"{replayed[2]}\n\n{text}"
                 pruning.take_stubs(chat.prune)
             if chat.session is None and not new:  # the conversation's next session: the verdicts that waited and the switches set by hand apply
                 pruning.new_session(chat.prune)
-            kept = chat.kept(at)
-            history = [] if chat.session else kept[:-1] if data.get("retry") else kept
+                pruning.take_stubs(chat.prune)  # the head of the new session holds every stub in the place of what was cut
+            kept, head = chat.kept(at), [] if chat.session else chat.head(at)
+            history = head[:-1] if data.get("retry") else head
             changed = chat.statement is not None and current is not None and current != chat.statement
             heads = []  # the notices heading this turn's messages in the log
             if reset_note:
@@ -1383,10 +1477,9 @@ class AssassinApp:
             if current is not None:
                 chat.statement = current
             turn = chat.next_turn(chat.setup.get("connector"), self._notify, parent)
-            if renewed is not None:
-                turn.add_step({"kind": "context", "text": RENEWED.format(tokens=renewed, bound=bound), "at": turn.elapsed()})
             if replayed:
-                turn.add_step({"kind": "context", "text": (REPLAYED if replayed[0] == "replayed" else FORKED).format(turn=replayed[1]), "at": turn.elapsed()})
+                how = {"replayed": REPLAYED, "rewritten": REWRITTEN}.get(replayed[0], FORKED)
+                turn.add_step({"kind": "context", "text": how.format(turn=replayed[1]), "at": turn.elapsed()})
             sent = "".join(chat.reports) + text if chat.session else text  # without a session the kept history carries the reports
             pruning.message_sent(chat.prune, int(turn.id.rpartition(":")[2]))  # a prune verdict on an earlier turn arriving now is late
             sent = pruning.carry(sent, pruning.take_stubs(chat.prune))
@@ -1415,7 +1508,7 @@ class AssassinApp:
                             chat.reports = [*reports, *chat.reports, matching.matched_report(name, asked, told(outcome))]
                         chat.log.append({"role": role, "text": outcome.get("error", outcome.get("reply")), **({"matched": name} if name else {}),
                                          **({"applied": outcome["applied"]} if outcome.get("applied") else {}),
-                                         **({"turn": int(turn.id.rpartition(":")[2]), "steps": list(turn.steps)} if turn.steps else {})})
+                                         **({"turn": int(turn.id.rpartition(":")[2]), "time": time.time(), "steps": list(turn.steps)} if turn.steps else {})})
                         self._mirror(turn, chat.uid)
                         if role == "ai" and not name:  # an off-context agent's turn is never pruned
                             self._prune_turn(chat, turn, outcome)
@@ -1601,7 +1694,7 @@ class AssassinApp:
         """One exchange anchored at `uid`: the item's seed context plus the user's text go to the chosen connector.
         A plain answer comes back as the reply; an answer of tool calls is applied to the tree -- its test calls joined
         into one awaited run through the page's runner after the rest, its agent calls then run as parallel turns of their items' chats
-        -- and while it carries queries, runs or delegations their results go back into the same session for the next answer.
+        -- and the results of every call, the changing ones included, go back into the same session for the next answer, until a text answer ends the turn.
         A refused call ends its batch and goes back the same way, with the results of the calls applied before it, for the next
         answer to correct it or to explain. The reply is the AI's own text alone: what was applied, ran or was reported is in the steps,
         and goes as `applied` -- each repeated line once, with its count -- to where a model reads the outcome without the log (`told`).
@@ -1632,7 +1725,8 @@ class AssassinApp:
         fuse, stalled, closed, last, repeats = self.turn_rounds(), False, False, None, 0
         changes, handover, restarted = 0, None, False  # the setup calls of this message; the first text and the start of the session an accepted model takes the turn over in
         bound = lambda: rounds if events.surfed else fuse
-        applied_lines = lambda lines: {"applied": tallied(lines)} if lines else {}
+        change = Change(self.root)  # what the turn changed, for the report a delegating turn receives
+        applied_lines = lambda lines: {**({"applied": tallied(lines)} if lines else {}), **({"changed": view} if (view := change.view()) else {})}
 
         def delivered(text):
             """The next prompt with the messages the user queued meanwhile, taken from the turn's chat and recorded as a step in place."""
@@ -1738,7 +1832,9 @@ class AssassinApp:
                             break
                         patch = True
                     try:
+                        touched = change.paths(call)
                         line = self._patch(call)
+                        change.note(touched)
                         synthetic.refresh_keep(keep, self.root, tiering.patched_paths(call))
                     except ApiError as err:
                         refusal, refused = denied(call["tool"], err), call
@@ -1758,7 +1854,7 @@ class AssassinApp:
                     inputs.append(call)
                     continue
                 if synthetic.is_log(call):
-                    label = f"log turn {call['turn']}" if call.get("turn") is not None else "log"
+                    label = loglib.label(call)
                     try:
                         results.append(self._log(uid, call))
                     except ApiError as err:
@@ -1834,6 +1930,7 @@ class AssassinApp:
                                                      measure=lambda target, purpose: self._measure(items, target, purpose or message).heavy)))
                     if call["tool"] in tiering.TREE_EDITS:
                         synthetic.absorb(keep, items, [named(call), call.get("new_uid")])  # the session's own edits are no news to it
+                        change.item(call, named(call))
                     inputs.append(call)
                 except ApiError as err:
                     refusal, refused = denied(f"{call['tool']} {named(call)}", err), call
@@ -1853,7 +1950,7 @@ class AssassinApp:
                     refusal, refused = denied(f"test {' '.join(dict.fromkeys(named(call) for call in runs))}", err), runs[0] if len(runs) == 1 else runs
             if delegations and refusal is None:
                 reported = len(results)
-                delegated = self._delegate(items, uid, data, delegations, turn, results)
+                delegated = self._delegate(items, uid, data, delegations, turn, results, change)
                 shown += results[reported:]
                 by_line = lambda line: next((call for call in delegations if line.startswith(f"- agent {named(call)}:") or line == f"agent {named(call)}"), None)
                 inputs += [by_line(line) for line in results[reported:]]
@@ -1869,9 +1966,6 @@ class AssassinApp:
             batch_step(results, payload, inputs)
             applied += shown
             calls += payload
-            if (refusal is None and not any(synthetic.is_query(call) or synthetic.is_git(call) or synthetic.is_grep(call) or synthetic.is_surf(call) or synthetic.is_shell(call) or synthetic.is_file(call) or synthetic.is_log(call) or synthetic.is_setup(call) for call in payload)
-                    and not runs and not delegations):
-                return {"ok": True, "reply": "", **applied_lines(applied), "session": session, "calls": calls}
             mark = json.dumps([payload, results], sort_keys=True, default=str)
             repeats, last = (repeats + 1 if mark == last else 0), mark
             stalled = repeats >= 2
@@ -1956,31 +2050,34 @@ class AssassinApp:
         return self.chat({**data, "agent_name": name}, turn)
 
     def _replay(self, chat):
-        """Bring a change of the pruning of the chat's Claude Code session into it before its next message, under the chats lock: the turns from
-        the earliest changed one on, each with its span, replayed into a new transcript or rolled back forked by the connection, the pruning then
-        settled. -> (how, the earliest changed turn, the replayed history block), None where the change waits or there is none."""
+        """Bring a change of the pruning of the chat's session -- a verdict on a turn ahead of the tail, a switch set by hand -- into it before
+        its next message, under the chats lock: the turns from the earliest changed one on, each with its span, are handed to the connection,
+        which rewrites its stored messages, replays its transcript into a new one or rolls it back forked, where the pruning worth has it -- a
+        switch set by hand asking no worth -- the pruning then settled. -> (how, the earliest changed turn, the replayed history block), None
+        where the change waits or there is none."""
         connection = self.sync_connections().get(chat.setup.get("connector"))
         number = pruning.changed_turn(chat.prune) if chat.session else None
         spans = chat.prune.get("spans") or {}
         if number is None or str(number) not in spans or not callable(getattr(connection, "replay_session", None)):
             return None
-        settled, turns = pruning.pruned_next(chat.prune), []
+        settled, was, turns = pruning.pruned_next(chat.prune), chat.prune["applied"], []
         for found in sorted((int(key) for key in spans if int(key) >= number)):
             record = chat.turn_record(found)
             if record is not None:
                 turns.append({**record, "span": spans[str(found)],
-                              "verdicts": {key: verdict for key, verdict in settled.items() if key.startswith(f"{found}:")}})
+                              "verdicts": {key: verdict for key, verdict in settled.items() if key.startswith(f"{found}:")},
+                              "was": {key: verdict for key, verdict in was.items() if key.startswith(f"{found}:")}})
         if not turns:
             return None
         block = cc_transcript.history_block(turns)
         try:
-            outcome = connection.replay_session(chat.session, turns, block)
-        except (OSError, ValueError) as err:
+            outcome = connection.replay_session(chat.session, turns, block, **({"force": True} if chat.prune["switches"] else {}))
+        except (synthetic.connection_error, OSError, ValueError) as err:
             print(f"assassin: session {chat.session} not replayed: {err}", file=sys.stderr)
             return None
         if not outcome:
             return None
-        if outcome[0] == "replayed":
+        if outcome[0] in ("replayed", "rewritten"):
             chat.session = outcome[1]
         pruning.settle(chat.prune)
         return outcome[0], number, block
@@ -1988,7 +2085,7 @@ class AssassinApp:
     def _prune_turn(self, chat, turn, outcome):
         """Prune the ended `turn` of `chat`, its message logged, under the chats lock: its steps by rule at once and its AI texts by the prune
         agent on a thread of its own where the settings route one. A session its connection lets the harness rewrite has the verdicts cut out
-        of it in place; any other is owned, its verdicts waiting for the conversation's next session."""
+        of it in place; any other is owned, its verdicts waiting for its connection's replay under the pruning worth."""
         number, steps, session, state = int(turn.id.rpartition(":")[2]), list(turn.steps), chat.session, chat.prune
         connection = self.sync_connections().get(turn.connector)
         owned = session is None or not callable(getattr(connection, "rewrite_session", None))
@@ -2000,7 +2097,7 @@ class AssassinApp:
         if session and callable(getattr(connection, "turn_span", None)):  # a transcript the connection keeps: the span the replay starts from
             try:
                 pruning.note_span(state, number, connection.turn_span(session, turn.rounds))
-            except (OSError, ValueError) as err:
+            except (synthetic.connection_error, OSError, ValueError) as err:
                 print(f"assassin: no span of turn {turn.id} in session {session}: {err}", file=sys.stderr)
         self._cut(connection, session, number, steps, {found: v for found, v in state["applied"].items() if found not in before}, turn.rounds)
         if synthetic.agent_locator(self.settings("orchestrator"), pruning.AGENT):
@@ -2070,17 +2167,17 @@ class AssassinApp:
             raise ApiError(403, str(err)) from None
 
     def _log(self, uid, call):
-        """Answer a log call of an answer from the record of the chat `uid` the turn runs in: the steps of a turn one line each, or one in full,
-        the text the user folded out and the results a security finding dropped left out of them. -> the line telling them; a refusal is an `ApiError`."""
+        """Answer a log call of an answer from the record of every chat -- `uid` the chat the turn runs in -- the turns, the parts of a turn or the
+        search the call asks for, the text the user folded out and the results a security finding dropped left out of them. -> the line telling
+        them; a refusal is an `ApiError`."""
         with self._chat_lock:
-            chat = self.chats.get(uid)
-            record, folded = (chat.turn_steps(), chat.folded_texts()) if chat else ({}, [])
+            chats = {key: chat.turn_entries() for key, chat in self.chats.items()}
+            folded = [text for chat in self.chats.values() for text in chat.folded_texts()]
         try:
-            text = loglib.read(record, folded, call)
+            text = loglib.read(chats, folded, call, uid)
         except loglib.refused as err:
             raise ApiError(400, str(err)) from None
-        where = f" step {call['step']}" if call.get("step") is not None else ""
-        return f"- log turn {call['turn']}{where}:\n{text}"
+        return f"- {loglib.label(call)}:\n{text}"
 
     def _models(self, connector, model):
         """Answer a models call: every model of every connector the page offers, the chat's own `connector` and `model` marked. -> the line
@@ -2258,11 +2355,12 @@ class AssassinApp:
             if turn:
                 turn.add_step(step)
 
-    def _delegate(self, items, anchor, data, calls, turn, results):
+    def _delegate(self, items, anchor, data, calls, turn, results, change=None):
         """Every agent call of a batch as a turn of its item's chat with the call's prompt -- the standing instruction to carry out the
         item's statement without one, a prompt past `DELEGATION_PROMPT_LIMIT` refused -- in the setup of `data` the call may override,
         all running in parallel and awaited -- a stop of the parent `turn` starts none more and stops the running ones. Each child's
-        report joins `results` and its transcript the parent's steps as an agent step; a call marked `background` is answered at once
+        report -- its closing text and cumulative change (`delegation_report`), the latter joining the parent's `change` --
+        joins `results` and its transcript the parent's steps as an agent step; a call marked `background` is answered at once
         instead and not awaited -- see `_watch`; a child switches a harness mode -- `tree`, `websurf` -- on only when the parent has it;
         -> (error, line) of the call refused, which starts none after it."""
         started, refusal = [], None
@@ -2319,7 +2417,9 @@ class AssassinApp:
             step.update(report=outcome.get("reply", outcome.get("error")), steps=outcome.get("steps", []))
             if turn:
                 turn.add_step(step, shift)
-            results.append(f"- agent {step['uid']}: {told(outcome)}")
+            if change is not None:
+                change.merge(outcome.get("changed"))
+            results.append(f"- agent {step['uid']}: {delegation_report(outcome)}")
         for thread, box, step, shift in offs:
             while thread.is_alive():
                 thread.join(0.2)
@@ -2329,6 +2429,8 @@ class AssassinApp:
             step.update(report=outcome.get("reply", outcome.get("error")), steps=list(box["turn"].steps))
             if turn:
                 turn.add_step(step, shift)
+            if change is not None:
+                change.merge(outcome.get("changed"))
             results.append(f"- agent {step['name']}: {told(outcome)}")
         return refusal
 
@@ -2393,7 +2495,7 @@ class AssassinApp:
             with self._chat_lock:
                 parent.background.remove(child)
                 parent.log.append({"role": "ai", "agent_report": uid, "text": text, "steps": list(child.steps)})
-                parent.reports.append(f"Report of the background subagent @{uid}:\n{told(outcome)}\n\n")
+                parent.reports.append(f"Report of the background subagent @{uid}:\n{delegation_report(outcome)}\n\n")
                 self._bump()
 
         threading.Thread(target=report, daemon=True).start()
@@ -2424,7 +2526,8 @@ class AssassinApp:
         if self.engine["restarting"]:
             raise ApiError(503, RESTARTING)
         items = self._load()
-        if action != "test" and not syngatelib.features(items)["review"]:
+        scopes = syngatelib.feature_scopes(items)[0]
+        if action != "test" and not any(scopes[uid]["review"] for uid in uids if uid in scopes) and any(uid in scopes for uid in uids):
             raise ApiError(400, str(syngatelib.feature_off("review")))
         argv, then = [*self.cli_prefix, action], None
         if action == "clear":
@@ -2445,7 +2548,7 @@ class AssassinApp:
         what closes the run: the review commit while git is at hand); refused when none needs review or, with git, while their review
         footprints hold uncommitted content -- review marks left uncommitted in them block nothing and join the review commit, so a
         review mark never shares a commit with content."""
-        discovered = syngatelib.discover_bindings(self.root)
+        discovered = syngatelib.discover_setups(items, syngatelib.discover_bindings(self.root), self.root)[0]
         pending = self._pending(items, syngatelib.item_problems(items, discovered))
         targets = [target for target in targets if target not in items or target in pending]
         if not targets:

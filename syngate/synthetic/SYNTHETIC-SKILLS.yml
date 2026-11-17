@@ -4,4 +4,4 @@ order: 10
 review: 7791b4840fe1bcf1e59b3f56b372c9cb1af67bd678fb3c0a007135f85daf3d39
 ---
 Skill
-A skill shall be a named description the harness adds to the context, a default skill as part of the default prompt and any other on request through the skill tool.
+is a named description the harness adds to the context: a default skill as part of the default prompt, any other on request through the skill tool.

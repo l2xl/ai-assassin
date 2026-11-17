@@ -1,0 +1,8 @@
+---
+parents: [SYNGATE-FEATURE-SWITCHES]
+test: ~
+---
+Subtree switch override
+is `test: enabled|disabled` or `review: enabled|disabled` on an item below the root, setting the feature for that item and everything below it against the value it inherits.
+
+The word stands in the key's place until a binding or a stamp of the item takes it: `review` stamps an item holding `review: enabled` like any other, and clearing that stamp puts the word back.

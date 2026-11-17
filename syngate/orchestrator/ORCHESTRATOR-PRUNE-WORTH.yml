@@ -1,0 +1,8 @@
+---
+parents: [ORCHESTRATOR-PRUNE]
+order: 180
+test: f82154e163cd5ebfb852aafd73db04ede2e2cb3662d09e2d569b8bd535ad3a97
+review: dd855e9475079458c4407855f50686077b61bc94b66c0566cdd4a9955147adbb
+---
+Pruning worth
+decides when a verdict on a turn ahead of the session's tail is brought into the running session: with the next message once the provider's cache of the session expired or the cut takes out at least as many tokens as the request then resends uncached, the verdict waiting until then; a verdict on the tail is brought in at once.

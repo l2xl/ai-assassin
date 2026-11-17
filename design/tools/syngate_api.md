@@ -7,7 +7,8 @@ every mode, a shell command reading there refused the same way.
 `{"tool": "add", "uid", "parent" (default "@"), "description", "sources", "kind": "leaf"|"branch"}`
 adds a statement last among its parent's children, in the folder of its last sibling (else the
 parent's); `{"tool": "edit", "uid", "description", "sources"}` changes one, a given `sources` list
-replacing the item's; `{"tool": "remove", "uid"}` drops a childless statement;
+replacing the item's and a given `setup` — `run`, `files`, `report`, `env`, or `null` removing it — its
+test setup, refused like every edit while Tree edit is off; `{"tool": "remove", "uid"}` drops a childless statement;
 `{"tool": "move", "uid", "to", "before" (default last), "from"}` re-points the parent link and
 places the item, `from` naming the link when the item has several parents. The harness runs the
 calls in order through `add_item`, `edit_item`, `delete_item` and `move_item` and stops at the

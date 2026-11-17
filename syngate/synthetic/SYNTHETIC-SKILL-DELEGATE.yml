@@ -6,4 +6,6 @@ test: d78a45d0d137d9da77e43189361460a61925544b7ff9a955807ae9640140cf15
 review: 7654cf8cae2bbb363e8946d22a3896825e042208050491cefba50974dffa495e
 ---
 Delegation skill
-The delegation skill shall be a default skill stating how a turn on an item with children delegates the separable ones through the agent tool, reviews their reports and, on one closed by a limit, delegates anew with a corrected prompt.
+is a default skill telling a turn to hand a request for a change to the item whose statement it details — adding that item first where none states it yet — and on to that item's separable children through the agent call, reviewing their reports and delegating anew, narrower, one closed by a limit.
+
+[design/synthetic/delegation.md](design/synthetic/delegation.md)

@@ -71,7 +71,7 @@ def test_the_edit_files_switch_gates_the_patch_calls_of_a_turn(repo_server):
     assert outcome["applied"][0].startswith("- patch refused: ") and outcome["reply"] == "Could not."
     assert app.root.joinpath("GUIDE.md").read_text() == "# Guide\n"
     outcome = turn(base, app, "ROOT", "Edit the guide.", modes=["patch"])
-    assert (outcome["applied"], outcome["reply"]) == (["- patch changed GUIDE.md"], "")
+    assert (outcome["applied"], outcome["reply"]) == (["- patch changed GUIDE.md"], "done")
     assert app.root.joinpath("GUIDE.md").read_text() == "# Guide\nRead it.\n"
     assert [mode["id"] for mode in app.build_model()["connectors"]["echo"]["modes"]][:2] == ["tree", "patch"]
 
@@ -104,10 +104,10 @@ def test_a_replace_call_changes_the_one_occurrence_of_an_exact_text_under_the_pa
     app.root.joinpath("paper.md").write_text("# Paper\n" + paragraph + "Twice. Twice.\n")
     replace = {"tool": "replace", "path": "paper.md", "old": "at 313% of the stake, bounds the staking; end.", "new": "at 308% of the stake, bounds the staking; end."}
     assert synthetic.parse_reply(calls(replace)) == ("calls", [replace]) and synthetic.is_patch(replace)
-    app.connectors = {"echo": (scripted := Scripted(calls(replace), calls({**replace, "old": "Twice."}), {"kind": "text", "text": "Unique needed."},
+    app.connectors = {"echo": (scripted := Scripted(calls(replace), {"kind": "text", "text": "Fixed."}, calls({**replace, "old": "Twice."}), {"kind": "text", "text": "Unique needed."},
                                                     calls({**replace, "old": "absent"}), {"kind": "text", "text": "Not there."},
                                                     calls({**replace, "path": "syngate/ROOT.yml", "old": "Root"}), {"kind": "text", "text": "Tree."},
-                                                    calls({"tool": "replace", "path": "paper.md", "old": "Twice. Twice.\n"}), calls(replace)))}
+                                                    calls({"tool": "replace", "path": "paper.md", "old": "Twice. Twice.\n"}), {"kind": "text", "text": "Dropped."}, calls(replace)))}
     assert turn(base, app, "ROOT", "Fix the number.", modes=["patch"])["applied"] == ["- replace changed paper.md"]
     text = app.root.joinpath("paper.md").read_text()
     assert text == "# Paper\n" + paragraph.replace("at 313% of the stake, bounds the staking; end.", "at 308% of the stake, bounds the staking; end.") + "Twice. Twice.\n"

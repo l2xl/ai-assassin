@@ -163,13 +163,15 @@ def test_the_default_prompt_is_composed_of_the_default_skills_the_skills_on_requ
 
 
 @pytest.mark.syngate("SYNTHETIC-SKILL-CALL-TOOL")
-def test_the_tool_call_skill_is_a_default_skill_stating_the_answer_format_and_the_result_round_trip():
+def test_the_tool_call_skill_is_a_default_skill_of_every_delivery_stating_the_round_and_no_carrier_of_the_answer():
     skill = synthetic.SKILLS["call_tool"]
-    assert skill.default and skill.text.startswith("# Tool calls\n")
-    for phrase in ('{"kind": "text", "text": "…"}', '{"kind": "calls", "calls": [...]', "text said beside tool calls", "ends the turn and is your reply",
-                   "applied in order", "first refused one stops the batch", "next prompt"):
+    assert skill.default and skill.delivery is None and skill.text.startswith("# Tool calls\n")
+    for phrase in ("text answer is your reply and ends the turn", "calls answer", "text said beside them", "applied in order",
+                   "first refused one stops the batch", "next prompt", "bounded number of rounds"):
         assert phrase in skill.text
-    assert skill.delivery is None and "```syngate" not in skill.text and "plain" not in skill.text  # what one carrier alone needs is a skill of its delivery
+    for carrier in ("```syngate", "plain", '"text":', synthetic.ANSWER_TOOL, "awaited", "background"):  # what one carrier alone needs is a skill of its delivery
+        assert carrier not in skill.text
+    assert all(skill.text in synthetic.agent_prompt(agent, delivery=delivery) for agent in synthetic.load_agents().values() if not synthetic.is_verdict(agent) for delivery in synthetic.DELIVERIES)
 
 
 @pytest.mark.syngate("SYNTHETIC-SKILL-SYNGATE")
@@ -183,23 +185,20 @@ def test_the_syngate_rules_skill_is_a_default_skill_stating_the_dag_rules():
 
 
 @pytest.mark.syngate("SYNTHETIC-SKILL-DELEGATE")
-def test_the_delegation_skill_is_a_default_skill_stating_how_separable_children_are_delegated_and_subagents_anchored():
+def test_the_delegation_skill_is_a_default_skill_handing_a_change_to_the_best_fitting_item_and_on_to_its_separable_children_through_the_agent_call():
     skill = synthetic.SKILLS["delegate"]
-    assert skill.default and skill.text.startswith("# Delegation\n")
-    for phrase in ("with children", "`query`", "separable", '{"tool": "agent"', "next prompt", "first line", "`@UID`"):
-        assert phrase in skill.text
+    assert skill.default and skill.delivery is None and skill.text.startswith("# Delegation\n")
     shipped = synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
     assert skill.text in shipped and synthetic.LIBRARY["agent"].kind == "tool" and synthetic.LIBRARY["agent"].text in shipped
-
-
-@pytest.mark.syngate("SYNTHETIC-SKILL-ROUTE")
-def test_the_task_routing_skill_is_a_default_skill_carrying_a_request_to_the_best_fitting_item_new_or_found_through_an_agent_call():
-    skill = synthetic.SKILLS["route"]
-    assert skill.default and skill.text.startswith("# Task routing\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
     for phrase in ("change of the project", "fits it best", "the anchored item, the items of its seed context and those the exchange names by `@UID`",
                    "asking for no change stays in the anchored chat", "already states", "becomes a new item first", "`add`", "UID semantic",
-                   '{"tool": "agent"', "own chat and context", "Only when the fit is the anchored item itself"):
+                   '{"tool": "agent"', "own chat and context", "Only when the fit is the anchored item itself",
+                   "with children", "`query`", "separable", "stays with you", "evidence to review", "[turn closed by the harness",
+                   "Never send the same prompt again"):
         assert phrase in skill.text
+    assert "route" not in synthetic.SKILLS and "first line" not in skill.text  # one skill, and no subagent of the connector's own to anchor
+    for told in ("300 characters", "in parallel", "(active item)"):  # the agent tool and the seed context skill tell these
+        assert told not in skill.text
 
 
 @pytest.mark.syngate("SYNTHETIC-SKILL-SEED")
@@ -226,6 +225,20 @@ def test_the_delivery_skill_is_a_default_skill_carrying_reworked_items_into_test
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     items, _ = syngatelib.load_tree(syngate_dir)
     assert synthetic.seed_context(items, "LEAF-001").startswith(synthetic.PROMPTS["default"] + TESTS_ON + "\n@ROOT\n")
+
+
+@pytest.mark.syngate("SYNTHETIC-SKILL-TEST-SETUP")
+def test_the_test_setup_skill_is_a_skill_on_request_stating_the_setup_tags_placeholders_and_reports_and_the_api_and_delivery_name_it():
+    skill = synthetic.SKILLS["test_setup"]
+    assert not skill.default and skill.delivery is None and skill.text.startswith("# Test setup\n")
+    shipped = synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    assert skill.text not in shipped and "- `test_setup`: " in shipped
+    for phrase in ('"setup": {"run"', '"setup": null', "nearest one wins whole", "`syngate:`", "// syngate: VAULT-DEPOSIT", "@custom:syngate",
+                   "exactly one tagged routine", "without a shell", "`{ids}`", "`{names}`", "`{tags}`", "`{uids}`", "`{paths}`", "{names:|}",
+                   "`{report}`", "SYNGATE_COVERAGE_FILE", "SYNGATE_SELECT_FILE", "JUnit", "TAP", "CTRF", "exit status", "no result"):
+        assert phrase in skill.text
+    assert "design/" not in skill.text and ".md" not in skill.text  # self-contained for any project
+    assert "`test_setup` skill" in synthetic.LIBRARY["syngate_api"].text and "`test_setup` skill" in synthetic.SKILLS["deliver"].text
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-SKILL")
@@ -358,7 +371,8 @@ def _mode_argv(tmp_path, modes):
     stub = tmp_path / "claude_stub.py"
     stub.write_text(STUB_CLAUDE)
     connector = synthetic.claude_code_connector(cli=(sys.executable, str(stub)), cwd=tmp_path)
-    return json.loads(connector.dispatch("", "Go.", modes=modes)[0])["argv"]
+    library = {name: entry for name, entry in synthetic.LIBRARY.items() if entry.kind != "skill" or entry.default}  # no skill on request, so no `Skill` tool beside the modes'
+    return json.loads(connector.dispatch("", "Go.", modes=modes, library=library)[0])["argv"]
 
 
 @pytest.mark.syngate("CLAUDE_CODE-020")
@@ -505,7 +519,7 @@ class ScriptedConnection:
 
 
 @pytest.mark.syngate("SYNTHETIC-021")
-def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries_no_query(tmp_path, syngate_tree):
+def test_the_results_of_every_call_go_back_into_the_session_until_a_text_answer_ends_the_turn(tmp_path, syngate_tree):
     syngate_dir, make_item = syngate_tree
     make_item(syngate_dir, "ROOT", "Root.\n", parents=())
     make_item(syngate_dir, "LEAF-001", "It shall leaf.\n", parents=("ROOT",), tests=None)
@@ -526,6 +540,11 @@ def test_what_a_batch_queried_goes_back_into_the_session_until_an_answer_carries
     assert scripted.prompts[2][0].split("\n")[1] == "- added LEAF-002 under ROOT"
     assert result["session"] == "session-5" and result["calls"] == [query, add, query, agent]
     assert (result["applied"], result["reply"]) == (["- added LEAF-002 under ROOT", "- agent LEAF-002: Checked."], "Done.")  # what was read stays out of the reply
+
+    app.connectors = {"scripted": (changing := ScriptedConnection(calls(dict(add, uid="LEAF-003")), {"kind": "text", "text": "Added."}))}
+    result = ask(changing)  # an answer of changing calls alone does not end the turn: its results go back too
+    assert changing.prompts[1] == (synthetic.RESULTS_PREAMBLE + "- added LEAF-003 under ROOT", "session-1") and len(changing.prompts) == 2
+    assert (result["applied"], result["reply"], result["session"]) == (["- added LEAF-003 under ROOT"], "Added.", "session-2")
 
     app.connectors = {"scripted": (looping := ScriptedConnection(calls(query)))}  # the same read every round: the stall breaker closes it after three, and the closing prompt is answered with calls again
     with pytest.raises(assassin_ui.ApiError, match="kept querying") as refused:
@@ -1142,10 +1161,11 @@ def test_an_agent_call_without_a_prompt_starts_the_items_chat_on_its_statement_a
     assert connection.prompts[-1][0].startswith(synthetic.RESULTS_PREAMBLE + "- agent LEAF-001 refused: ")  # the refusal comes back to the model
 
 
-@pytest.mark.syngate("SYNTHETIC-SKILL-ANSWER")
-def test_the_answer_format_skill_is_a_default_skill_asking_long_or_secondary_lists_to_go_collapsed():
-    skill = synthetic.SKILLS["answer"]
-    assert skill.default and skill.text.startswith("# Answer format\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+@pytest.mark.syngate("SYNTHETIC-SKILL-REPLY")
+def test_the_reply_format_skill_is_a_default_skill_asking_long_or_secondary_lists_to_go_collapsed():
+    skill = synthetic.SKILLS["reply"]
+    assert skill.default and skill.delivery is None and skill.text.startswith("# Reply format\n") and skill.text in synthetic.PROMPTS[synthetic.DEFAULT_PROMPT]
+    assert "answer" not in synthetic.SKILLS and skill.text in synthetic.native_prompt(synthetic.read_library())
     for phrase in ("Do not repeat that log", "never list the calls, tools or commands you ran", "never write the same line twice",
                    "the same file edited several times", "Lead with what the user needs", "more than about five entries", "the tests run",
                    "<details>\n<summary>14 tests passed</summary>\n\n- test_one", "</details>", "<details open>", "never collapse the whole answer"):

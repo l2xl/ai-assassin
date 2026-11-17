@@ -1,10 +1,11 @@
 ---
 parents: [ORCHESTRATOR-PRUNE, SYNTHETIC-EXECUTION, SYNTHETIC-TOOLS]
 order: 440
+sources: [src/ai_scratcher/loglib.py, src/ai_scratcher/prompts/log.md]
 test: 7256edfcc45c48de91881a2c78f5f338763e31346a7c27389fe8d11a160f524a
 review: e186fd696224bf2ffe2e2c18adacfd1de879983f771c8e072fc5aa48737bbb8e
 ---
 Log tool
-returns the steps of a turn of the chat one line each, or one step in full.
+reads back the record of every item's chat, the filed conversations included: the turns of the chats a UID or glob names one line each, and the parts of one turn — its user messages, steps and reply — one line each or one in full.
 
 [design/tools/log.md](design/tools/log.md)

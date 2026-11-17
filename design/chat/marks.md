@@ -15,7 +15,7 @@ full width of the pane at the row's height, past the border — or the focus is 
   of the anchored item's chat, headed by the request to make it that child or sibling and to
   carry the new item's task on in its own chat. The AI words the statement by the DAG rules,
   names it with a semantic UID — never a numbered suggestion of the page — adds it and hands the
-  task on through an `agent` call, the task routing skill of the prompt library telling it how; the new item's chat then shows the delegated
+  task on through an `agent` call, the delegation skill of the prompt library telling it how; the new item's chat then shows the delegated
   turn. While a turn of the chat runs the send is refused with a notice, as a typed message is.
   A message folded whole carries no extraction marks.
 

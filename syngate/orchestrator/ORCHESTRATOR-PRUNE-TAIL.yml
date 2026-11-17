@@ -1,8 +1,0 @@
----
-parents: [ORCHESTRATOR-PRUNE]
-order: 180
-test: f82154e163cd5ebfb852aafd73db04ede2e2cb3662d09e2d569b8bd535ad3a97
-review: dd855e9475079458c4407855f50686077b61bc94b66c0566cdd4a9955147adbb
----
-Pruned tail
-is the ended turn alone: the messages of earlier turns stay as they were sent for as long as the session lives.

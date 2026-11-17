@@ -14,7 +14,6 @@ locator** — the connection, model and, for an agent, effort of a model of any 
                "scan":    [{"connection": "claude_code", "model": "haiku"},
                            {"connection": "mixroute",    "model": "claude-haiku-5-5"}]},
     "budget": 40000,
-    "renew_tokens": 100000,
     "recommendations": "auto_lower"
   }
 }

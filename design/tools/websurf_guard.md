@@ -6,8 +6,10 @@
   browser.
 - **Host lists.** The origin a call names — an `open` URL's, a page action's `origin` — carries no
   credentials and is one the host lists admit: a blocked origin never; with an allowlist only a
-  listed one; a private, loopback or link-local host (127.0.0.0/8, ::1, 10/8, 172.16/12,
-  192.168/16, 169.254/16 with the cloud metadata address) only by an exact allow entry. The harness
+  listed one; a private or link-local host (10/8, 172.16/12, 192.168/16,
+  169.254/16 with the cloud metadata address) only by an exact allow entry. A loopback host
+  (`localhost`, `*.localhost`, 127.0.0.0/8, ::1) is the user's own machine, where a web project
+  under test is served by hand: it passes like a public origin, with no entry needed. The harness
   keeps no page of its own to judge: what the tab shows when the action plays is the extension's to
   check against the named origin.
 - **The landed page counts.** An answer whose page is on an origin the lists refuse is withheld but
@@ -41,8 +43,8 @@ The host lists are the `websurf` section of the server settings file `assassin_s
 (@ASSASSIN-SETTINGS), read at every use:
 `{"websurf": {"allow": ["https://example.com", "https://*.example.org", "http://192.168.1.10:8080"], "block": ["https://*.bank.example"], "rounds": 60}}`.
 An entry is an exact origin (the default port may be left out), `scheme://*.domain[:port]` for a
-domain and its subdomains, or `*` for any origin; a wildcard never admits an internal host. `block`
-wins over `allow`; an empty or missing `allow` admits every public origin, so with no settings WebSurf
-reaches the public web and nothing internal. Hosts are judged as written, the numeric IPv4 forms a
+domain and its subdomains, or `*` for any origin; a wildcard never admits a private or link-local host. `block`
+wins over `allow`; an empty or missing `allow` admits every public and loopback origin, so with no
+settings WebSurf reaches the public web and the user's own machine, and no private network. Hosts are judged as written, the numeric IPv4 forms a
 browser accepts (`127.1`, `2130706433`) included; names are not resolved. `rounds`, a positive
 integer, bounds the rounds of a turn that surfs.

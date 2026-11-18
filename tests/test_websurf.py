@@ -464,16 +464,22 @@ def test_a_blocked_origin_is_never_surfed_whatever_the_allowlist():
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-GUARD", "private")
-def test_private_loopback_and_link_local_hosts_pass_only_by_an_exact_allow_entry():
-    for url in ("http://127.0.0.1/", "http://127.1/", "http://2130706433/", "http://0x7f.0.0.1/", "http://localhost:8712/", "http://app.localhost/",
-                "http://LOCALHOST./", "http://[::1]/", "http://[::ffff:127.0.0.1]/", "http://10.1.2.3/", "http://192.168.1.1/", "http://172.16.0.1/",
-                "http://169.254.169.254/latest/meta-data/", "http://[fe80::1]/", "http://0.0.0.0/", "http://256.1.1.1/"):
+def test_private_and_link_local_hosts_pass_only_by_an_exact_allow_entry_and_loopback_hosts_like_public_ones():
+    for url in ("http://10.1.2.3/", "http://192.168.1.1/", "http://172.16.0.1/", "http://169.254.169.254/latest/meta-data/", "http://[fe80::1]/",
+                "http://0.0.0.0/", "http://256.1.1.1/"):
         refusal(url=url)
-        refusal(url=url, allow=["*", "http://*.localhost", "http://*.0.1"])
+        refusal(url=url, allow=["*", "http://*.1.2.3", "http://*.0.1"])
     assert opens("http://192.168.1.1/admin", ["http://192.168.1.1"]) and opens("http://localhost:8080/", ["http://localhost:8080"])
-    assert opens("http://2130706433/", ["http://127.0.0.1"])
     refusal(url="http://192.168.1.2/", allow=["http://192.168.1.1"])
     assert "internal" in refusal("fill", origin="http://169.254.169.254", selector="#q", value="x")
+    # loopback is the user's own machine, where a web project under test is served: open without any entry, under the same lists as any origin
+    for url in ("http://127.0.0.1/", "http://127.1/", "http://2130706433/", "http://0x7f.0.0.1/", "http://localhost:8712/", "http://app.localhost/",
+                "http://LOCALHOST./", "http://[::1]/", "http://[::ffff:127.0.0.1]/"):
+        assert opens(url) and opens(url, ["*"])
+        assert "allowlist" in refusal(url=url, allow=["https://example.com"])
+        assert "blocked" in refusal(url=url, block=["*"])
+    assert guarded("query", origin="http://localhost:3000")["origin"] == "http://localhost:3000"
+    assert opens("http://app.localhost/", ["http://*.localhost"]) and opens("http://localhost:3000/", ["http://localhost:3000"])
 
 
 @pytest.mark.syngate("SYNTHETIC-TOOL-WEBSURF-GUARD", "landed")

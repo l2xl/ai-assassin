@@ -97,10 +97,17 @@ def _address(host):
     return None
 
 
-def _internal(host, address):
-    """Whether the host is private, loopback, link-local or otherwise not on the public internet."""
+def _loopback(host, address):
+    """Whether the host is this machine's own: `localhost`, a `.localhost` name or a loopback address -- the sites a user tests by hand."""
     if address is None:
         return host == "localhost" or host.endswith(".localhost")
+    return (address.ipv4_mapped if address.version == 6 and address.ipv4_mapped else address).is_loopback
+
+
+def _internal(host, address):
+    """Whether the host is private, link-local or otherwise not on the public internet; loopback, the user's own machine, is not."""
+    if address is None or _loopback(host, address):
+        return False
     return not (address.ipv4_mapped if address.version == 6 and address.ipv4_mapped else address).is_global
 
 
@@ -142,7 +149,7 @@ def _names(entry, scheme, host, port, origin, wildcards=True):
 
 def _reason(parts, allow, block):
     """Why the host lists refuse the origin of `parts`, else None: a blocked origin never, with an allowlist only a listed one, an
-    internal host only by an exact allow entry -- a wildcard never admits one."""
+    internal host -- private or link-local, never loopback -- only by an exact allow entry, a wildcard never admitting one."""
     scheme, host, port, address, origin = parts
     internal = _internal(host, address)
     if any(_names(entry, scheme, host, port, origin) for entry in block):

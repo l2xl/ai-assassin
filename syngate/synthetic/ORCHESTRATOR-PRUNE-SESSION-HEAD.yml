@@ -1,7 +1,8 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
 order: 460
-test: {unit: ~, page: ~}
+test: {unit: f19c6a6b6afa62cf22169142c3f35f2b125f144b9ef3289da0179fedeba7f225, page: 5560ed8f85f462f38ae7e6fd90a2cea5acfa8944579f512a31825dde51792195}
+review: 60f00391e843778b60615b5f3e62895875321d6a31c80b0440a77330d786f6c8
 ---
 New session head
 of a conversation that starts a session anew — after a reset, a fold changed by hand or a new connection or model — is its turns as the pruning holds them: the user's messages, the AI texts and every step result no verdict cut, the stubs standing for the cut ones, never the message texts alone.

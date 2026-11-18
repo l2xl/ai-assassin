@@ -2,8 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 20
 sources: [src/ai_scratcher/prompts/delegate.md]
-test: d78a45d0d137d9da77e43189361460a61925544b7ff9a955807ae9640140cf15
-review: 7654cf8cae2bbb363e8946d22a3896825e042208050491cefba50974dffa495e
+test: bd40e3eeaba8317ad0f98716d32510dd1c1eb8db482b4f60095064a8e3c1cae0
+review: 34894752686612c2d18a9e8a7076829448ff59e775b17630b647e46c6ff28e3c
 ---
 Delegation skill
 is a default skill telling a turn to hand a request for a change to the item whose statement it details — adding that item first where none states it yet — and on to that item's separable children through the agent call, reviewing their reports and delegating anew, narrower, one closed by a limit.

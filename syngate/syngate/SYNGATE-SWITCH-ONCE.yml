@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-FEATURE-SWITCHES]
 order: 10
-test: ~
+test: 307dee79858bc46ccb4b34de70f60a97bc96929ee52595f252b1eb238b2bab87
+review: e374a814583d53a8f59b71b87c3824e0eaeaf583057ce2f843c0c85e39b8148a
 ---
 Single override per path
 makes a switch a layout problem of the item carrying it where an item above already overrides the feature, or where it repeats the value the item inherits.

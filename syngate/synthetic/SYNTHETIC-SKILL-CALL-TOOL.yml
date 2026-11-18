@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-SKILLS]
 sources: [src/ai_scratcher/prompts/call_tool.md]
-test: b685c8a0392fd5af5be7ac8567808e2bf94478c05a960580d3fdc303f1743e10
-review: 34366d4a434d0df62cc922a2a89bf042f5785ce5506602d786fd5901eb160243
+test: 9b0515da4190bcf5ee7810ba059a1463a99fc6da009a99962cc7797a91fa180c
+review: 7226e3b33446b902ce55aafd01d19ccbe0f264cd8652f6c2721ea54a37dbf65e
 ---
 Tool call skill
 is a default skill of every delivery stating the round of a turn — a text answer ends it as the reply, a calls answer goes on with their results as the next prompt — and no carrier of the answer.

@@ -1,7 +1,7 @@
 ---
 parents: [SYNTHETIC]
 order: 36
-review: 6ebec222c12c459d27f2996f6a80d8200f5ac3c18d18f32526d8872fed985a31
+review: 684d5e6f570bcd15416e13afd8266cd595f5866cc5aca070de96ccd2de383b86
 ---
 Subagent
 is every LLM session the harness runs, DAG-bound or off-context, each started through the harness and shown in the chat it was started from.

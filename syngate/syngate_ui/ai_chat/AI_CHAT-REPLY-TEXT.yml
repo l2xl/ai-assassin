@@ -1,8 +1,8 @@
 ---
 parents: [AI_CHAT-TURN-BLOCKS]
 order: 10
-test: b4d859c25d8717c10d0b50b1f07b811376700fbc130ec3795c46a353160620e5
-review: 09b500d1c0e27219e6a7e97f8c416bd3b792c09cb375525144ebae7771b03586
+test: a12d113c4d3de99848985985c10e13a1175fdcc363bf70f77b6fa4420040a217
+review: 0959e9d1db4849150a36026d3d98f4846fad605bbdbdf5f404ebd7d9c946c168
 ---
 Reply text
 is the AI's own text alone, the harness adding no line of the calls applied, which the turn's blocks already show; those lines, each repeated one once with its count, go only where a model reads the outcome without the log — the report a delegating turn receives and the history a new session starts from.

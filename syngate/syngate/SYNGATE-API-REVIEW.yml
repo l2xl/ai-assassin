@@ -1,8 +1,8 @@
 ---
 parents: [SYNGATE-API]
 order: 40
-test: 7a4b5a3de7387d1e757a766e6966d203a501541d9f96781e09f6038abff0f8c1
-review: 598ce99df179a4320caf62e2ef990952f16f179dfc5bb84dabb4081dbf41ad3a
+test: 926f9791e1ba227f60fd488448a27c8b93b0e2e304504cbf673adbaab02eaa98
+review: 2482065f462c5972f195771c4a8666ec221340726f145d0f3d4b36eae064b8a5
 ---
 Review node
 is `syngate review`, stamping the addressed items and freezing the routines bound to them, refused while the tree's review feature is off.

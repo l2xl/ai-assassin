@@ -2,7 +2,7 @@
 parents: [ORCHESTRATOR]
 order: 160
 sources: [src/ai_scratcher/pruning.py]
-review: c85ff59162e50e352017776aff478325259727513111eb71716c54bc7f205c4a
+review: 3e023d9688818e0b4636083a3b84c8e61c51d954abfa1ef2de26ee311ec743a9
 ---
 Turn pruning
 cuts out of the session, when a turn ends, the steps and AI texts of that turn which add nothing to it.

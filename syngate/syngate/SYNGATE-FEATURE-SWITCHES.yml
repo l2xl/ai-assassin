@@ -1,8 +1,8 @@
 ---
 parents: [SYNGATE-MODEL]
 order: 40
-test: 74c1e1215dbcb0af23f6ffc84fc2200346c9ab9be4805b1a600c8a14f1295165
-review: 6128f099ac0f7b661adca77d35063f8eda2214d61d1dc0aa5e327b9e9d37ea03
+test: b0f90f285a5bc65f2211c39195348eee3415c82f29249653cf08490f6e8c1e7e
+review: e257ab935be19cf739161b48b1239f036acf45c0f4aa6966ccb56fcc7b60c01f
 ---
 Feature keys
 `test` and `review` of an item switch the tree's test and review features and hold what the item carries under them: the root sets either for the tree, both off when absent, and an item below it for its own subtree, by a switch word or by the bindings, the test setup or the review stamp standing in the key.

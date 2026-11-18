@@ -2,7 +2,8 @@
 parents: [SYNGATE-TEST-SETUP]
 order: 70
 sources: [src/ai_scratcher/testtags.py, src/ai_scratcher/testselect.py, src/ai_scratcher/testreport.py]
-test: ~
+test: 549c8dd315453775bb6a862583bcaa64f57275a90781a490c4c295d27eec22ce
+review: 7841125d91341f8d46b72174074cf13f255d5a42ac3f8c844ab24f200a34eabc
 ---
 Setup run
 of `syngate test` and `review` finds the routines over the files of all setups, runs each addressed binding by the command of the setup holding for its item — without a shell, in the project root, under its `env` — and records the outcome the coverage file, the report or the exit status tells; a command that cannot start fails every binding it was to run, a binding no routine is tagged for is failed, a tag naming no item of the tree is passed over without a problem, and without a setup the built-in pytest and Catch2 runs hold.

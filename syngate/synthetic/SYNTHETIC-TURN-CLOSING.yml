@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-TURN-LIMITS]
 order: 20
-test: 6e0d2d1c971bc3ce4b77e505cb069c7e01b613e68b3d6da9cadc496eb7dcee2a
-review: 51b9ff4f08eef9446fb6be41065a89826fd5d31e8d5386a6674499656522bd97
+test: 0837572853285ffe4f0dd87abf94f70823780fd526616139369bcd0f63f3fd91
+review: 745554fba1be3cd361aff955853bd23125b75049d7a396e8ef453d0190bb34a6
 ---
 Closing report
 is the one text answer asked of a turn the harness closes, at its fuse or stalled: headed by the harness's line telling why it was closed, it is the turn's reply, a delegated turn thus reporting; calls in it are not run and end the turn refused.

@@ -2,7 +2,8 @@
 parents: [SYNGATE-TEST-SETUP]
 order: 40
 sources: [src/ai_scratcher/testtags.py]
-test: ~
+test: e4d66307441be9f6c6a63c29144d702e25e9e1f6265847946c4436e6e05abee0
+review: a2dee8ae406ca875fde66641d044063d1f152d69b0dc1c8f9bacd133af36ca88
 ---
 Comment tag
 binds the routine standing under it in any text file of a setup's `files`: a comment line ending in `syngate` and the UID, with an optional binding, gives the routine its name from the head below and its frozen span down to the last line indented deeper.

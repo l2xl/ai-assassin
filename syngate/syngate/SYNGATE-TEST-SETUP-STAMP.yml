@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-TEST-SETUP]
 order: 20
-test: ~
+test: d0059e3a133ee50d0ae01981b77a902db5ef3107f33cad592fd00ca29b942090
+review: f1f615bcc86ecf69a0c4c4f3bb7dedf53c7c6242a3e8731b3f7d7f5db0bd76d3
 ---
 Setup in review stamp
 enters the canonical JSON as `setup` only on an item carrying one, so a changed setup violates that item's review and every stamp of an item without a setup stands.

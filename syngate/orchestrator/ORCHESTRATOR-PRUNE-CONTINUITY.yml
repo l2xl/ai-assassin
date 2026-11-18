@@ -1,7 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: {unit: 82b60c8426d784abfa39f1a833cff800ecd2ef0203600018db9142330fb635c3, page: 838d19fd09f673fbc6db9a38d6f7da969356c7e27e14e77afc9313746701f440}
-review: caad41af2ae65fb450c1548520a00753e6fe485053bf0116f211883fef812d6a
+test: {unit: 5a4254063059cacc2a8226829390515d3e0d1233872800a537b5efa8869f3974, page: 0bbf57811b0f19d0ee675a4c70cca0cb65902cfdf281b0be4827cdf7f0f9587d}
+review: 84b27b1f14afb01e7c01ed134224de8d8c2eca37389045ff9c2c33218ade1c8a
 ---
 Session continuity
 holds whatever the session's size: no token bound ends a turn, restarts the session or stands in the settings, and what the session holds shrinks only by the prune verdicts brought into it.

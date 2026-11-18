@@ -2,7 +2,7 @@
 parents: [AI_CHAT-025, SYNTHETIC-SKILL-REPLY]
 order: 10
 test: ea4fd39ffb0292ba5b56a71550a97bbb4bd2fcd0611b0c171e19a45e26af5b03
-review: fb212d16c231230bae9f8b2324a210c3ac2e8cc35f36a0506b12844d94cefba5
+review: 5f1fb60723ffced1558e90c972e1d9cf6eae3c08bc257dbabb33026dc0c068bc
 ---
 Collapsible section
 of a rendered message is a `<details>` block with its `<summary>` line, shown folded to the summary unless marked `open`, the reader expanding or folding it and the choice kept while the log re-renders.

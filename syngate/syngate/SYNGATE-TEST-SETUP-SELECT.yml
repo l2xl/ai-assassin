@@ -2,7 +2,8 @@
 parents: [SYNGATE-TEST-SETUP]
 order: 50
 sources: [src/ai_scratcher/testselect.py]
-test: ~
+test: 3c03d9f3bed540673d808187c85246a7605e4c4e37eaa4871ff402fa4b0d93a6
+review: 2d4a6c0ba0ab15cf6f5ff4798aa60d28b827228433f24c7578bb21594c0e402c
 ---
 Run selection
 expands a setup's `run` line into the commands of the addressed bindings: plural placeholders joined into one command, singular ones one command per binding, none the whole suite once; a line mixing singular and plural ones is refused.

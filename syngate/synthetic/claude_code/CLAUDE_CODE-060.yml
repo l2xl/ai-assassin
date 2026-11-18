@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE, SYNTHETIC-ANSWER]
 order: 490
 test: bdb197f2c99af0b0d7fab18e623111831e23e916d1cd47a276a7ec35a4d74af5
-review: c9f94ece52dcbc154fd46b8bf21f55b2b4240fdd9fc2414f17c8eaa43df28570
+review: bf09baf70f7a774a79638e8c58422caa52fdb852f98083b6ba28f1368f276d04
 ---
 Answer schema
 of the Claude Code connector hands the calls of the tool library to the turn as the JSON schema of its structured answer, which carries the kind of the answer and its calls and has no field for text.

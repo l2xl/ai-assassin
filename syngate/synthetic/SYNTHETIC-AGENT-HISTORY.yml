@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-OFF-CONTEXT-AGENT]
 order: 70
 sources: [src/ai_scratcher/prompts/history.md]
-test: ~
+test: be252ec5dc8073b4f67f2d3ddd360d94379eb4920bdce30b982436a4603dad92
+review: 164c77bc56ccc491b3e49884bebab59097dd132ac898dba8882b6b57d3e1250b
 ---
 History agent
 is an agent with the log tool alone, told to report a summary of what the past chats hold on its start message over the exact turns it rests on.

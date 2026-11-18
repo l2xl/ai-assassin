@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 5
 sources: [src/ai_scratcher/prompts/call_tool_text.md]
-test: ~
+test: 1e56b1e74f5b26a01ae7c0fd41708f4ade8235bd288a93a0a71567ce982b3b5e
+review: 98c99982a550a5a557b39748bd673a223a5294511437982a30b7518b58e53040
 ---
 Text answer skill
 is a default skill of text delivery stating the answer as the content of the message: the answer object, or the plain answer with its calls in one fenced `syngate` block, the prose around it being their text.

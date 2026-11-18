@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-TEST-SETUP]
 order: 10
-test: ~
+test: cf3530e587303e4160c8ede490062084f01dc2d15fb2badcd98045a48ff813f3
+review: fe5b10b05bd2ea42f39cc07745b74ebb388673c320246b95df8ff0bae6151a9e
 ---
 Setup scope
 is the item carrying a setup and everything below it up to the next setup, the nearest one holding whole and the built-in one where none is above; an item carrying none whose parents hand it different setups takes its first parent's, which is no layout problem.

@@ -1,7 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: 91db4ba0ce099b2802f9dd7580e4c451455ed39ab52f45776008721f5bd3f7b8
-review: f67fd1f5d6e5b94604aa2593e2907549915ec7b066b4a9d6f6ea71224b6e227e
+test: 759437bf9a26f13a899dc2efe0804d2e37071bc32429a6905ee3f743b6792a1b
+review: 13f104b0fb30294b64bb43e025728a451443e385fb4203ddd3df2e908707acd0
 ---
 Late verdict
 of the prune agent, arriving after the next message, counts as one on a turn ahead of the tail.

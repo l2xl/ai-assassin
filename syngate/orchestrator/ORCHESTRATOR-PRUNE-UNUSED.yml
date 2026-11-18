@@ -1,8 +1,8 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
 order: 185
-test: 670dce1cd14c78a2fe407fd663577dce4863202afdc0fab7ba6b709e9535aef7
-review: 1dede8c76829176e17fee10a072012fa47aac46e203e9e9896585c97d8c5240b
+test: 64b91dac4e24e9e43140c2a6d070e4f026b13af5b5ae7488c938361d25a19808
+review: df1b9183bb1f916811aa57a53a84f54a786cc0ae8fbb31e3394b2b720b40184e
 ---
 Unused reading
 of the ended turn — a file read, a tree read or a search result the turn changed nothing by and its conclusions do not rest on, as the prune agent tells from the stubs of the turn's readings handed beside its texts — is pruned to its stub.

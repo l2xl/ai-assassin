@@ -2,7 +2,8 @@
 parents: [SYNGATE-TEST-SETUP]
 order: 60
 sources: [src/ai_scratcher/testreport.py]
-test: ~
+test: 7ec5461145891c3ea6d8a89a0a41d6559a8156e1ca01b2bad9116b154e80f313
+review: b0c1189a95e09d81e216ef6028c6fea645e252c3b88079f44954f9e5665a7b12
 ---
 Report discovery
 reads the results of a run from a JUnit, TAP or CTRF report told by its content and joins them to the addressed routines by name, a skipped test failed and a binding without a result failed with `no result`.

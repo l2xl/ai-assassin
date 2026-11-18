@@ -1,8 +1,8 @@
 ---
 parents: [CLAUDE_CODE, SYNTHETIC-SKILLS]
 order: 310
-test: 792723962ef1f5c68a792de0b6c078a69d6c1437b957b695e2dc353e40c10da9
-review: 0e5b43749d7216ff39329b2ee13bf6fe450a851a148f6be7266057bcc8fa36dd
+test: 50f4bd639594ff0b1ed06de3dbd4fc4ddecc6b17fdf760b9c09e5bc08ebc1823
+review: e8846a77a23164060d46c9d1db17d5c8955c19cec024e7f9727447f7de96ec2e
 ---
 Claude Code skill delivery
 hands every skill on request of the library to the CLI as a Claude Code skill, its text absent from the seed prompt.

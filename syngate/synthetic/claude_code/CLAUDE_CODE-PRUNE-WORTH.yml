@@ -2,7 +2,7 @@
 parents: [CLAUDE_CODE-ORCHESTRATOR-PRUNE]
 order: 50
 test: 8dfbd80a69d8c4e19d534ff45927936fe8aaf7be5dfee5992d75539a96476e5a
-review: 07253c3a810efe02714c5f9dd110b69bc2cf62db924039afd3f81bdd2ecc846f
+review: b0bce667199757e7aa520e2da1e8b379d0f30537831137dc1dac234aa1698438
 ---
 Replay worth
 is the pruning worth of a Claude Code session, the cache counted as expired five minutes after the session's last request.

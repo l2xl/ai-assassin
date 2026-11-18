@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-SUBAGENT]
 order: 40
-test: ~
+test: 0b1c1f7d20a8cdd7870846e2b1ae1c58f9dff5bbaf006106f2068c73f76d258d
+review: 54d8d61910235e0cf64de19b5fd28b430b563c728e42b398ca68646112c9629f
 ---
 Delegated reading
 is what the delegation skill tells a turn to prefer for work needing wide reading or many rounds: the task stated as an item — an existing child, or a new one under the anchored item holding the exact instructions — and run there by the agent call, so the starting session holds its report alone.

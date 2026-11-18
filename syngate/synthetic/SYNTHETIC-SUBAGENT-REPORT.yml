@@ -2,7 +2,8 @@
 parents: [SYNTHETIC-SUBAGENT]
 order: 30
 sources: [src/ai_scratcher/prompts/delegate.md]
-test: ~
+test: 8a157d25616cb5c82d64133b0ff82916a83aa51558f7284b1495a031f88dac3e
+review: 96f902672c3fddb709238f4f66d93246178d24a8bddedaf9aff710d4ec69b961
 ---
 Delegation report
 of a DAG-bound subagent is all its starting session receives of it: its closing text and the cumulative change — every item and project file it changed named once, as it stands at the turn's end — none of its calls, results or intermediate texts.

@@ -1,7 +1,7 @@
 ---
 parents: [ORCHESTRATOR-PRUNE]
-test: 05e16f7a8cb7be0977b5f3b540e609120c08ad59b95cadb8864318007d5a87e2
-review: 8dbea7fa371162919e83425be6781ce8e7f22cf6ecfcaaaacbeac1b400cfdb60
+test: a7d5f23a7dae763a308746b65671ee25f4d32e499d4322cbf4b2bf66f24b558b
+review: f1c3fbb059f48ada4b9460165f5fff5c0df1e63b1ef4086bc78574197a66a339
 ---
 AI text
 of the ended turn is pruned when the prune agent finds it states nothing the session lacks or is superseded by a later text of the turn, its closing reply above all.

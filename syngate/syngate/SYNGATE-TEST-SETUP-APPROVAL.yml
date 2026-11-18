@@ -2,7 +2,8 @@
 parents: [SYNGATE-TEST-SETUP]
 order: 80
 sources: [src/ai_scratcher/check_self_approval.py]
-test: ~
+test: ea33a0f7b35e02c5af561b4166cc80921c54858bedb07f462ecf00aeddbe646b
+review: f1ec650acc6ed5821822d27009010f19523dfb6527619fc092bee2678613ba88
 ---
 Setup self-approval
 is `check_self_approval` reading an item's routine shas under the `stamp` of its setup as it reads them from a plain `test` key, a commit changing them refused where it also changes the item's setup or a file the `files` of the tree's setups match.

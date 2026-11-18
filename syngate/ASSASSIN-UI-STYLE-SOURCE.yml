@@ -1,8 +1,8 @@
 ---
 parents: [ASSASSIN-UI]
 order: 20
-test: {styles: 74d892ba88e6eb8b7aba7e5e7384ab27e6b05148de38c68c2972f7584673cf9a, buttons: 012052e14fac38094e50b9f2ce03b97098e06ad85f1fa0aa0bbeef3ad3d5c09b}
-review: 2cf457299887a14ab40091da07a6619103a7b9ee7f81162a1a002dbd0d49f2ac
+test: {styles: 74d892ba88e6eb8b7aba7e5e7384ab27e6b05148de38c68c2972f7584673cf9a, buttons: c686c56b9fb9a677459233392659b4a2d517251846a70aeee55e56634e5b9d07}
+review: 3230ee96507228dae548d317bf4da39b2fb88b5c492f09dac775347b5107f5ef
 ---
 Single style source
 of the page is its one stylesheet, the tree and the content panel taking every visual definition from it.

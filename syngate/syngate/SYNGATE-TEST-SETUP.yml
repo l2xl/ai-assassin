@@ -1,6 +1,7 @@
 ---
 parents: [SYNGATE-FEATURE-SWITCHES]
 order: 75
+review: 1e8f584e3f013ec275824d146748f97bc00acb97417ba89bad891476638fca37
 ---
 Test setup
 makes the runner a property of the tree: an item's `test` key says how the routines bound under it are found, run and reported, so any suite a project builds runs under the same `test` and `review`.

@@ -1,6 +1,7 @@
 ---
 parents: [SYNGATE-FEATURE-SWITCHES]
-test: ~
+test: 6c328d7f8b703fb797fb576339900c46900c64ee29de8b2efef8ab13be395efb
+review: 0906d2f38bfea139c43bed1917a12ecb5a8950f16cbff3528150eb6b5d18a4d7
 ---
 Subtree switch override
 is `test: enabled|disabled` or `review: enabled|disabled` on an item below the root, setting the feature for that item and everything below it against the value it inherits.

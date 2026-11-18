@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-FEATURE-SWITCHES]
 order: 5
-test: ~
+test: 79c9d4ee50359babdefd8a484a7c75d0b81cd3ed1c9fc6b007ec1da91bdb1cf7
+review: 7acfef199895fd3dedf04eb2bc63ec457fe7e586b601d32b0917e4ddacdcf911
 ---
 Own key as enable switch
 is a binding, a test setup or a review stamp on an item whose parents all hand it the feature off, switching the feature on for that item and everything below it as `enabled` in its place would.

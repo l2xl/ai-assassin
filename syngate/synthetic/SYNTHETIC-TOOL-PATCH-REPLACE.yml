@@ -1,8 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-PATCH]
 order: 25
-test: 3b9609643f5cc27566eef14313f1eef611771417b99430897c773fbd506cfc33
-review: 08a3815458fb6857acadef6d3203676326592543a15b82a55c1a4090972d4640
+test: ce44d08414dea5d3e50a8ae5d273c3aea7adab0610ca7971dbaa2488a38fdfb4
+review: 8b3309dd9f1e9b75c00a4f49867dd1b1ad4a28665839208ff24516288d1cd5ca
 ---
 Exact replacement
 A replace call shall change the one occurrence of an exact text in a project file to its new text, refusing a text absent or repeated there and every path the patch guard refuses, under the Edit files switch.

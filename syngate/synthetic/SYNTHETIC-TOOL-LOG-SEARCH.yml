@@ -1,7 +1,8 @@
 ---
 parents: [SYNTHETIC-TOOL-LOG]
 order: 10
-test: ~
+test: f9b083bd48369a1fb196abb6982e1b25002952d583cf44ef4cc4479aef42820a
+review: 7b6ed510565d4d5e3d5106ee0e9bda3d3a8963255ee704c3e9c7dcd9e3830a5d
 ---
 Log search
 returns the parts of the turns holding every word asked, a quoted phrase as one, in the chats a UID or glob names or in every chat, each as its address and the text around the match.

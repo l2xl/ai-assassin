@@ -1,7 +1,8 @@
 ---
 parents: [SYNGATE-FEATURE-SWITCHES]
 order: 20
-test: ~
+test: 9eeaeb072bae24333d19a3bcf4f8de81971af7bbe408059b7a3014a4159dfa06
+review: 3b9819c933d423f7159a0abba3f8ca6a6d7f4bcfc2c2c4bc10d53900a0a11737
 ---
 Conflicting switch inheritance
 of an item whose parents hand it different values of a feature is a layout problem of that item, reddening it until the user settles the links or the switches above; meanwhile the feature reads as on for it.

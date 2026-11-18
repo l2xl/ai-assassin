@@ -2,8 +2,8 @@
 parents: [SYNTHETIC-SKILLS]
 order: 50
 sources: [src/ai_scratcher/prompts/reply.md]
-test: eea40d28f0eebaa50db1ad3f4faa99720982d184e53dd1ef0144fa4ce82efe3e
-review: a25f7d55660e253bebe15bbe1bdec58f7e77b725b58d6ef38baf8259cdf8812f
+test: 7e4dcb6dfc75cb3aa01c9babaf3c4c92abb6d389f007c1a6cdc4a9d48706aa5c
+review: 8e93acb34eb946c3f1e318938f292c03508efa3c94e10359420502fc70e6acbf
 ---
 Reply format skill
 is a default skill telling the AI not to repeat in its reply what the log of the turn already shows — the calls made, the files edited, the items changed, a line said twice — to lead with what the user needs and to write a long list, or one that only backs the lead up, as a collapsed section the user expands.

@@ -2,7 +2,7 @@
 parents: [ASSASSIN-UI-CONTENT]
 order: 150
 test: d55253be036bca58183244d8f078d07069e9449e944757c09e07b586e7e25ecc
-review: 07d31d4dc9c935f0b4c2e7bf8e5d228fcb850d3b00c9c5265326c688bff7f79d
+review: 5200b4011345637fee0619517fe7b2395acdfdf8299e99ddf77aaf5f6398f43f
 ---
 AI chat
 is part of every item's block in the content panel, the item's statement being the first message of the exchange and shown once as the content itself.

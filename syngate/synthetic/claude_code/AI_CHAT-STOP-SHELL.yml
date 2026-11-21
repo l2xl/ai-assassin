@@ -1,7 +1,8 @@
 ---
 parents: [AI_CHAT-STOP-BUTTON]
 order: 90
-test: ~
+test: 4fd4f7a7ed6d796e4fda91215899bec0f7e0713d537753da0ea115722592a638
+review: e1d08d2e4ae6eeb87f6a4314d728cf5f0184b6031932bde46f95cad5d59b1669
 ---
 Shell stop
 ends a shell command the turn runs, with every process it started, the instant the turn is stopped, its call reporting it was stopped.

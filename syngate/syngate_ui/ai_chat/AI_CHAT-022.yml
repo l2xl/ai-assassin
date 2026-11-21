@@ -1,9 +1,9 @@
 ---
 parents: [AI-CHAT]
 order: 20
-test: {send: da9e6f3191e7b3f4e72a39461e91209481dd055c1b86292e2f846b36400060af, done: 64e2f6377786228f1ecbee6e01d9944f80aa1c0d6044423e08002352e52ab638,
-  refusal: 2e0fa3533fbf3bd5c4605e3faeda430a275dce8df68ceeda1218356c2807e9a4}
-review: 53e0c3315e1a62a5bfb755399c886f3a70fd7f5cc303e8a8cadac4ae535e0929
+test: {send: d3ca055058c8d06982711624403c132500d2b48552a32fd5c4cd8917e48cccdd, done: 64e2f6377786228f1ecbee6e01d9944f80aa1c0d6044423e08002352e52ab638,
+  refusal: a7dab51589b4224a51f810fe4fc331c41338c0282b1f176c21d724ee9e04d847}
+review: 05be658de56423657d7ff8654192be2611a3fbaa4abe63f030188f93d261206f
 ---
 Description editor
 of an item is where its chat starts or goes on: entering it shows the chat and its controls without sending anything, and Ctrl/⌘+Enter saves the statement and sends it.

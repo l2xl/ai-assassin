@@ -1,8 +1,8 @@
 ---
 parents: [ORCHESTRATOR-RECOMMEND, AI-CHAT]
 order: 270
-test: 806893472e7185b353646b77f88ededb41ab034069e9c4f6b89622e5bb5333f1
-review: b6b28ddd9c426541d9d5341a5b46737dc082d0f061869b6f763195bee167c333
+test: e72ea29da1d076e5fbe9384339f215c8c4300a7e7ba568840f755b64f9f13df6
+review: c772deada4a0cb5d5f12752766b8d331474df34ec2fc779255fcb086b018c438
 ---
 Recommendation message
 stands in the log inside the turn it holds, right under the request line of the call waiting on it — after the turn's blocks where no call waits — the blocks of the turn staying shown: the recommended model or permission as a pill styled as the setup and permission pills, the deny mark — a red cross in a circle — keeping the current setup, and the drop-down choosing the chat's behaviour.

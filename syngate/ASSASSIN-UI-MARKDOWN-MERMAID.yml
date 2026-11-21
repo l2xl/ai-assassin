@@ -1,6 +1,7 @@
 ---
 parents: [ASSASSIN-UI-MARKDOWN]
-test: {draw: ~, error: ~}
+test: {draw: 7a99b660b58bd66e48c0521ca47e613237ff33ab6ba80fe20fe092b31dab4e7e, error: f7b19665cbed7137ca4c53b5c98f29fd43247f8bbb3dcb3587ebeb118abfaff7}
+review: 51cda5e9e6bc3edfbf74bb5df95eb67a42f252856c49f4e14fefae647ede2b6f
 ---
 Mermaid diagram
 of a fenced block tagged `mermaid` shows as its drawing wherever markdown is rendered, drawn once per source and colour scheme in a tab; a diagram that cannot be drawn keeps its source, followed by the reason.

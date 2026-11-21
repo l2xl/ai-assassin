@@ -1,8 +1,8 @@
 ---
 parents: [AI-CHAT]
 order: 95
-test: 7fe0e4616954e339d138ab0998c445d64594fffd83ea8699ca48778dacde1404
-review: 7e8dd96897dc81ad1ee534b3b21438903a75a93eebf98a4398cdccf17c8a306e
+test: 1315b70248b2d1a8c8e596fd06875c2b1a39387dca5a74b36398f452864d305c
+review: ffb6430809a063987a9eb52bae2d9fd1c1ff67a0f123f8c7c4a7d7a801b8ee95
 ---
 Turn steps in order
 are blocks of the log in the order they happened, with no reply chosen above them: the messages the AI said on the way are AI messages of their own, each text shown once however many ways the connection reported it, every call of a batch is its call lines, and every other step — each changed file on its own — is a line of the harness that unfolds to its whole input and result; the reply is the last block, closed by the turn's activity line.

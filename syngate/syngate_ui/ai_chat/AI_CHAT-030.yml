@@ -1,9 +1,9 @@
 ---
 parents: [AI-CHAT]
 order: 100
-test: {hide: 85607556444bd277271e51544a9f7e2dab314ef523e129d0b7932b357177ef08, history: 1bc63742b248b9ca5df1ad88410e97b5c4cc35c09f87cacf55ed1ce1ac44478c,
+test: {hide: 8d41f75313a3d8f5429d1ce14ef6a93d5a90c7650c94eb4ee9f2f34841d25076, history: 1bc63742b248b9ca5df1ad88410e97b5c4cc35c09f87cacf55ed1ce1ac44478c,
   esc: b95f51f65237c94fd857d200f8e03d7dd6ac4629cea035f420c4990bdbcd4ba8}
-review: 68327e2103763ecdca3839c73d16921644d4863e3e83a42926db19d298255fda
+review: d1aa6439fb4bf17d1282c5713789cbe2e3cadea6d948fa13189b9a67ee06172c
 ---
 Chat pill
 leads the block's strip, its role following the context: `▴ done` while the statement is edited, `cancel` on an open chat holding no turn yet and `▴ done` on one holding turns — each closing the editor and the chat, which keeps its history and session, and becoming `▾`, which lists the item's conversations — `■ stop` while a turn runs, and a green `➤ send` while the reply line holds text, whatever the chat's state; the strip holds no other send pill.

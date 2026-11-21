@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-MARKDOWN]
 order: 10
-test: ~
+test: 84ff159b07507c7c1d5da7624649239b206b6d9d19a7a640739f6bb4600fe27d
+review: 40e4fd8e8e719f0f1d3b1e9f0186263db6d5e86aa2645b15cb0f924ee7beffb8
 ---
 Diagram frame
 runs the drawing library in a sandboxed frame of an opaque origin served without the session token, the page taking only the drawing back and showing it as an image.

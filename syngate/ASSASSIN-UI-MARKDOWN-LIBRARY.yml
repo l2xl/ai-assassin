@@ -1,7 +1,8 @@
 ---
 parents: [ASSASSIN-UI-MARKDOWN]
 order: 20
-test: ~
+test: 992806ec323a889d86872940b862908ba950ff7cfa8a581b7fdda179889a4dd4
+review: 5bcf55c34e784f6279decfec73d794c407db1d99e950e657652c368539a55d77
 ---
 Diagram library
 is Mermaid of one pinned version from the jsDelivr CDN, unless the `markdown` section of the server settings names another copy by its http or https URL.

@@ -1,0 +1,9 @@
+---
+parents: [ASSASSIN-UI]
+order: 135
+sources: [src/ai_scratcher/markdown.js, src/ai_scratcher/markdown_frame.html]
+---
+Markdown renderer
+turns every markdown text the page shows — an item's statement, a file view, a chat message of either role, a step of a turn — into HTML by one set of rules, the diagrams among them.
+
+[design/ui/markdown.md](design/ui/markdown.md)

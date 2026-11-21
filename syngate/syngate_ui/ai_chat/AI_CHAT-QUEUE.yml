@@ -5,6 +5,6 @@ test: 690ef14fb5a4c5b2cd24879e4e47cd5e79d19b73a80bfb706be56204bbd1d3c2
 review: 720781531c443a28146bd4ff4181489cdb8720ff86532ab928225d7843e1a53d
 ---
 Queued message
-is what a message sent from the reply line while a turn of the chat runs becomes instead of a refusal: it stands at the end of the log until the AI takes it — at the running turn's next step, shown there among its blocks, or as the next turn of the same session the moment the running one ends — and until then its mark withdraws it back into the reply line.
+is what a message sent from the reply line while a turn of the chat runs becomes instead of a refusal: it stands at the end of the log, a spinner at its left and no hint above it, until the AI takes it — at the running turn's next step, shown there among its blocks, or as the next turn of the same session the moment the running one ends — and until then its mark withdraws it back into the reply line.
 
 [design/chat/queue.md](design/chat/queue.md)

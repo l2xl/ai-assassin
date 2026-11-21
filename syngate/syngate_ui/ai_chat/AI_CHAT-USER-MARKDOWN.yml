@@ -1,0 +1,6 @@
+---
+parents: [AI_CHAT-025]
+test: ~
+---
+User message text
+is rendered as markdown like the AI's, every line break typed inside a paragraph kept.

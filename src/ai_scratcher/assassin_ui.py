@@ -156,6 +156,13 @@ QUEUED_NOTE = "\n\nThe user wrote while you were working:\n\n{text}"
 # The engine's own files: the page, read for every request, and the Python sources, watched so a change re-executes the server in place
 # once nothing runs; the restarted process takes the session token and the listening socket over from these variables.
 PAGE_FILE = Path(__file__).resolve().parent / "assassin_ui.html"
+# The markdown renderer, inlined into the page in its slot as the page is served, and the diagram frame it draws in: a page of its own served
+# at MARKDOWN_FRAME_PATH without the token, loading the drawing library -- MERMAID_URL unless `markdown.mermaid` of the server settings names a copy.
+MARKDOWN_FILE = Path(__file__).resolve().parent / "markdown.js"
+MARKDOWN_SLOT = b'<script src="markdown.js"></script>'
+MARKDOWN_FRAME_FILE = Path(__file__).resolve().parent / "markdown_frame.html"
+MARKDOWN_FRAME_PATH = "/markdown-frame"
+MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs"
 ENGINE_DIR = Path(__file__).resolve().parent
 ENGINE_POLL = 1.0
 TOKEN_ENV = "ASSASSIN_TOKEN"
@@ -348,9 +355,10 @@ class Turn:
         self.stopped = False
         self.started = time.monotonic()
         self.steps, self.origins = [], []
-        self.children, self.job = [], None
+        self.children, self.job, self.procs = [], None, []  # the turns it delegated, the test run it awaits, the shell processes it runs
         self.rounds, self.pruning = 0, None  # the rounds the turn sent to its connection, the thread of its prune agent
         self.held, self.offer, self.answer = None, None, None  # what the turn asks while it is held, the recommendation it offers, the user's answer
+        self.batch = None  # the calls step of the batch in flight, which a recommendation asked meanwhile holds
         self.cond = threading.Condition()
 
     def elapsed(self):
@@ -531,21 +539,21 @@ class Chat:
         return {key: entry[key] for key in ("turn", "user", "steps", "reply")}
 
     def turn_entries(self):
-        """The turns kept of the chat -- of the live conversation and the filed ones, the turn in flight with its steps so far --
+        """The turns kept of the chat -- of the live conversation and the filed ones, the turn in flight with its steps so far, the batch still running left out --
         as {uid, turn, time, user, steps, reply}, by turn number, the later record of a number replacing the earlier; what the log tool reads."""
         found = {}
         for log in [*(stored["log"] for stored in self.archive), self.log]:
             for at, m in enumerate(log):
                 if isinstance(m.get("turn"), int) and isinstance(m.get("steps"), list):
                     found[m["turn"]] = self._entry(log, at, self.uid)
-        if self.running and self.turn.steps:  # a finished turn is read from its logged answer, with its time and reply
+        if self.running and (steps := [step for step in self.turn.steps if "pending" not in step]):  # a finished turn is read from its logged answer, with its time and reply
             number = int(self.turn.id.rpartition(":")[2])
             ahead = []
             for m in reversed(self.log):
                 if m["role"] != "user":
                     break
                 ahead.insert(0, str(m.get("text") or ""))
-            found[number] = {"uid": self.uid, "turn": number, "time": None, "user": ahead, "steps": list(self.turn.steps), "reply": ""}
+            found[number] = {"uid": self.uid, "turn": number, "time": None, "user": ahead, "steps": steps, "reply": ""}
         return [found[number] for number in sorted(found)]
 
     def folded_texts(self):
@@ -612,6 +620,14 @@ class Chat:
         m.pop("folded", None)
         m.pop("cuts", None)
         return {**m, "cuts": cuts} if cuts else m
+
+
+def kill_group(proc):
+    """Kill the process `proc` with its whole process group, one already gone left as it is."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 class JobRunner:
@@ -792,6 +808,8 @@ class AssassinApp:
     def services_alert(self):
         """Raise the blocking alert of the model services as the `asked` of every chat that holds no other question -- none, or the alert's earlier wording."""
         alert = self.health.alert()
+        if alert != self.services_asked:  # told once per wording: the server's log says why every chat stands blocked
+            print(f"assassin: model services alert, every chat blocked until it clears: {alert}", file=sys.stderr, flush=True)
         with self._chat_lock:
             previous, self.services_asked = self.services_asked, alert
             for chat in self.chats.values():
@@ -803,10 +821,28 @@ class AssassinApp:
         """Every role answers again: the alert leaves the chats running a turn, then `alert_cleared` frees the others."""
         with self._chat_lock:
             previous, self.services_asked = self.services_asked, None
+            if previous is not None:
+                print("assassin: model services alert cleared, every role answers", file=sys.stderr, flush=True)
             for chat in self.chats.values():
                 if chat.running and previous is not None and chat.asked == previous:
                     chat.asked = None
         self.alert_cleared()
+
+    def services_state(self):
+        """The diagnosis of a stuck chat (ORCHESTRATOR-SERVICES-DIAGNOSE): the health of the model services -- the alert, each failing role with
+        the locators tried and their failures, the locator in use of each role -- and every chat not idle: its state, what it is asked, its
+        queued messages and its running turn, held or not."""
+        with self._chat_lock:
+            chats = {}
+            for uid, chat in self.chats.items():
+                state = self.chat_state(chat)
+                if state["state"] == "waiting" and not chat.queue:
+                    continue
+                held = chat.turn.held if chat.running else None
+                chats[uid] = {**state, "queue": [m["text"] for m in chat.queue], "turn": chat.turn.id if chat.running else None,
+                              **({"held": held} if held is not None else {})}
+            asked = self.services_asked
+        return {**self.health.state(), "services_asked": asked, "chats": chats}
 
     def _measure(self, items, uid, message):
         """The measurement of the seed context of `uid` for `message`: the token budget and signal weights of the `orchestrator` settings, the chat's
@@ -971,6 +1007,14 @@ class AssassinApp:
         """(allow, block): the WebSurf host lists of the server settings, each the strings of its list; empty while it names none."""
         section = self.settings("websurf")
         return tuple([entry for entry in section[key] if isinstance(entry, str)] if isinstance(section.get(key), list) else [] for key in ("allow", "block"))
+
+    def mermaid_url(self):
+        """The ES module of the drawing library the diagram frame loads: `markdown.mermaid` of the server settings where it is an http or https
+        URL of a host alone, with no character that would leave its place in the frame's script or policy, else `MERMAID_URL`."""
+        url = self.settings("markdown").get("mermaid")
+        parts = urlsplit(url) if isinstance(url, str) else None
+        plain = parts is not None and not re.search(r"[\s'\"<>;\\]", url) and "@" not in parts.netloc
+        return url if plain and parts.scheme in ("http", "https") and parts.hostname else MERMAID_URL
 
     def surf_rounds(self):
         """The rounds a turn that has surfed may run: `websurf.rounds` of the server settings, else `websurf.ROUNDS`."""
@@ -1241,7 +1285,7 @@ class AssassinApp:
                 if inner["state"] == "blocked":
                     asked = f"@{uid} {inner['asked']}".rstrip()
         if asked is not None:
-            return {"state": "blocked", "asked": asked}
+            return {"state": "blocked", "asked": asked, **({"services": True} if asked == self.services_asked else {})}
         last = chat.log[-1]["role"] if chat.log else None
         return {"state": "working" if chat.running else "agents" if chat.agents() else "failed" if last == "error" else "stopped" if last == "stopped" else "waiting"}
 
@@ -1561,6 +1605,9 @@ class AssassinApp:
         the `review` of a security scan's findings -- is what the page shows as the recommendation message or the context review while the turn is held."""
         chat = self.chats.get(turn.id.rpartition(":")[0])
         with turn.cond:
+            at = next((index for index, origin in enumerate(turn.origins) if origin is turn.batch), None) if turn.batch is not None else None
+            if offer is not None and "review" not in offer and at is not None:
+                offer = {**offer, "step": at}  # the batch whose first call waiting is the one held: the page shows the recommendation under it
             turn.held, turn.offer, turn.answer = asked, offer, None
         with self._chat_lock:
             chat.asked = asked
@@ -1575,8 +1622,8 @@ class AssassinApp:
             with turn.cond:
                 turn.held = turn.offer = None
             with self._chat_lock:
-                if chat.asked == asked:
-                    chat.asked = None
+                if chat.asked == asked:  # the blocking alert standing meanwhile stands over the chat again, never lifted by the answer
+                    chat.asked = self.services_asked
                 self._bump(settled=False)
 
     def _scan_hold(self, turn, call=None, recommendation=None):
@@ -1667,7 +1714,8 @@ class AssassinApp:
 
     def stop_turn(self, key, withdraw=True):
         """End a running turn the instant the stop lands: its gate closes, so nothing of it is applied past this mark; the turns it
-        delegated are stopped the same way, the test run it awaits is cancelled and its connector's live process is interrupted;
+        delegated are stopped the same way, the test run it awaits is cancelled, the shell commands it runs are killed with their
+        process groups and its connector's live process is interrupted;
         the exchange then reports as stopped. A stop the user pressed `withdraw`s the messages queued meanwhile, handing their texts
         back -- `unqueued` -- rather than sending them; the stop of a send-now keeps them for the next turn."""
         turn, unqueued = self._turn(key), []
@@ -1680,6 +1728,9 @@ class AssassinApp:
         with turn.cond:
             turn.stopped = True
             turn.cond.notify_all()
+            procs = list(turn.procs)
+        for proc in procs:
+            kill_group(proc)
         for child in turn.children:
             if child.outcome is None and not child.stopped:
                 self.stop_turn(child.id, withdraw=False)
@@ -1741,13 +1792,35 @@ class AssassinApp:
                 turn.add_step({"kind": "user", "text": message["text"], "at": turn.elapsed()})
             return text + QUEUED_NOTE.format(text="\n\n".join(m["text"] for m in waiting)) if waiting else text
 
-        def batch_step(lines, batch=(), inputs=()):
-            if turn and lines:
-                turn.add_step({"kind": "calls", "tools": [call["tool"] for call in batch], "lines": list(lines),
-                               "inputs": [*inputs, *[None] * (len(lines) - len(inputs))][:len(lines)], "at": turn.elapsed()})
+        def batch_step(lines, batch=(), inputs=(), final=True):
+            """Announce the calls step of the batch: as the answer arrives and with every result while it runs -- the calls not answered yet its
+            `pending` -- and once it is over, the calls it never ran its `skipped`; the same step each time, so its record is replaced."""
+            if not turn or not (lines or turn.batch is not None or not final and batch):
+                return
+            answered = [*inputs, *[None] * (len(lines) - len(inputs))][:len(lines)]
+            left = list(batch)
+            for given in answered:
+                for one in given if isinstance(given, list) else [given]:
+                    if (found := next((index for index, entry in enumerate(left) if entry is one), None)) is not None:
+                        del left[found]
+            step = turn.batch if turn.batch is not None else {"kind": "calls", "at": turn.elapsed()}
+            step.update(tools=[call.get("tool") for call in batch], lines=list(lines), inputs=answered)
+            step.pop("pending", None)
+            step.pop("skipped", None)
+            if left:
+                step["skipped" if final else "pending"] = left
+            turn.batch = None if final else step
+            turn.add_step(step)
+
+        def heard(step, shift):
+            """Record a step the connection announced; the calls of its answer, told ahead of its return, open the batch's step at once."""
+            if step.get("kind") == "answer":  # no step of its own: a `calls` step a connection announces is one it ran itself
+                batch_step((), [call for call in step.get("calls") or () if isinstance(call, dict)], final=False)
+            else:
+                turn.add_step(step, shift)
 
         def stopped(lines=(), batch=(), shown=(), inputs=()):
-            batch_step(lines, batch, inputs)
+            batch_step(lines, batch or (turn.batch or {}).get("pending", ()) if turn else batch, inputs)  # calls announced and never run stay as skipped
             return ApiError(409, "turn stopped", session=session, **applied_lines([*applied, *shown]))
 
         for done in itertools.count():
@@ -1757,7 +1830,7 @@ class AssassinApp:
                 raise ApiError(422, out, session=session, **applied_lines(applied))
             if closing:  # the turn is not failed at once: it is asked for its report
                 closed, text, why = True, text + synthetic.TURN_CLOSING, synthetic.CLOSED_STALL if stalled else synthetic.CLOSED_FUSE
-            on_step = (lambda step, shift=turn.elapsed(): turn.add_step(step, shift)) if turn else None
+            on_step = (lambda step, shift=turn.elapsed(): heard(step, shift)) if turn else None
             context, text = self._session_context(connector, uid, message, text, session, keep, turn, data.get("retry"), done == 0 or restarted, agent)
             restarted = False
             try:
@@ -1773,6 +1846,7 @@ class AssassinApp:
             except synthetic.connection_error as err:
                 if halted():
                     raise stopped() from None
+                batch_step(())  # calls announced by an answer that never came
                 raise ApiError(502, str(err)) from None
             if halted():
                 raise stopped()
@@ -1788,6 +1862,7 @@ class AssassinApp:
                 out = synthetic.ROUNDS_OUT.format(rounds=bound()) if events.surfed else "answer refused: the exchange kept querying"
                 raise ApiError(422, out, session=session, **applied_lines(applied))
             if kind == "chat":
+                batch_step(())  # calls announced by an answer the connection then replaced
                 return {"ok": True, "reply": synthetic.TURN_CLOSED.format(why=why) + payload if closed else payload, **applied_lines(applied), "session": session, **({"calls": calls} if calls else {})}
             items, results, shown, refusal, detail, inputs, refused = self._load(), [], [], None, "", [], None
             named = lambda call: synthetic.call_target(uid, call)
@@ -1795,6 +1870,7 @@ class AssassinApp:
             runs = [call for call in payload if synthetic.is_run(call)]
             delegations = [call for call in payload if synthetic.is_delegation(call)]
             for call in payload:
+                batch_step(results, payload, inputs, final=False)  # the calls answered so far, then those waiting
                 if synthetic.is_run(call) or synthetic.is_delegation(call):
                     continue
                 if halted():
@@ -1893,7 +1969,7 @@ class AssassinApp:
                             refusal, refused = denied(f"shell {call['command']}", ApiError(403, granted or SHELL_REFUSAL)), call
                             break
                     try:
-                        line = self._shell(call)
+                        line = self._shell(call, turn)
                     except ApiError as err:
                         refusal, refused = denied(f"shell {call['command']}", err), call
                         break
@@ -1942,6 +2018,7 @@ class AssassinApp:
             if runs and refusal is None:
                 if halted():
                     raise stopped(results, payload, shown, inputs)
+                batch_step(results, payload, inputs, final=False)
                 try:
                     results.append(self._run_calls(items, [(named(call), call.get("name") or None) for call in runs], turn))
                     inputs.append(runs[0] if len(runs) == 1 else runs)
@@ -1949,6 +2026,7 @@ class AssassinApp:
                 except ApiError as err:
                     refusal, refused = denied(f"test {' '.join(dict.fromkeys(named(call) for call in runs))}", err), runs[0] if len(runs) == 1 else runs
             if delegations and refusal is None:
+                batch_step(results, payload, inputs, final=False)
                 reported = len(results)
                 delegated = self._delegate(items, uid, data, delegations, turn, results, change)
                 shown += results[reported:]
@@ -2268,22 +2346,39 @@ class AssassinApp:
             shown.append(recommend.applied_line(rec))
         return True
 
-    def _shell(self, call):
-        """Run the command line of a shell call with `sh -c` in the project root, without stdin, within `SHELL_TIMEOUT` seconds. -> the line
-        telling its exit status and output, cut past `SHELL_LIMIT` characters; a command naming the tree is refused as an `ApiError`."""
+    def _shell(self, call, turn=None):
+        """Run the command line of a shell call with `sh -c` in the project root, without stdin, within `SHELL_TIMEOUT` seconds, in a process
+        group of its own the stop of the `turn` kills. -> the line telling its exit status and output, cut past `SHELL_LIMIT` characters, or
+        that it timed out or was stopped; a command naming the tree is refused as an `ApiError`."""
         command = call["command"]
         if SHELL_TREE_RE.search(command):
             raise ApiError(403, SHELL_TREE)
         try:
-            done = subprocess.run(command, shell=True, cwd=self.root, stdin=subprocess.DEVNULL, capture_output=True, text=True, errors="replace",
-                                  timeout=SHELL_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            return f"- shell {command}:\ntimed out after {SHELL_TIMEOUT} s"
+            proc = subprocess.Popen(command, shell=True, cwd=self.root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, errors="replace", start_new_session=True)
         except OSError as err:
             raise ApiError(500, f"the shell did not start: {err}") from None
-        output = done.stdout + done.stderr
+        if turn is not None:
+            with turn.cond:
+                turn.procs.append(proc)
+                stopped = turn.stopped
+            if stopped:
+                kill_group(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=SHELL_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            kill_group(proc)
+            proc.communicate()
+            return f"- shell {command}:\ntimed out after {SHELL_TIMEOUT} s"
+        finally:
+            if turn is not None:
+                with turn.cond:
+                    turn.procs.remove(proc)
+        if turn is not None and turn.stopped:
+            return f"- shell {command}:\nstopped with the turn"
+        output = stdout + stderr
         cut = f"\n… cut at {SHELL_LIMIT} characters" if len(output) > SHELL_LIMIT else ""
-        return f"- shell {command}:\n" + f"exit {done.returncode}\n{output[:SHELL_LIMIT]}{cut}".rstrip("\n")
+        return f"- shell {command}:\n" + f"exit {proc.returncode}\n{output[:SHELL_LIMIT]}{cut}".rstrip("\n")
 
     def _grep(self, call):
         """Run a grep call of an answer by the program of the grep prompt the chat's library offers, through the tool's guard, the server
@@ -2695,14 +2790,19 @@ class AssassinApp:
             self.engine.update(restarting=False, requested=False, error=f"the restart failed: {err}")
 
 
+def page_source():
+    """The page as it is served, before its nonces: its file with the markdown renderer inlined in its slot."""
+    return PAGE_FILE.read_bytes().replace(MARKDOWN_SLOT, b"<script>\n" + MARKDOWN_FILE.read_bytes() + b"</script>", 1)
+
+
 def page_sha(page=None):
-    """The version of the page: the sha256 of its file as it is now, the first 16 hex digits."""
-    return hashlib.sha256(PAGE_FILE.read_bytes() if page is None else page).hexdigest()[:16]
+    """The version of the page: the sha256 of its source as it is now, the markdown renderer included, the first 16 hex digits."""
+    return hashlib.sha256(page_source() if page is None else page).hexdigest()[:16]
 
 
 def _page_bytes(nonce):
     """The page with its script and style nonced and its version on the root element, which the page compares with the served one."""
-    page = PAGE_FILE.read_bytes()
+    page = page_source()
     return (page.replace(b"<script>", b'<script nonce="' + nonce + b'">').replace(b"<style>", b'<style nonce="' + nonce + b'">')
             .replace(b'<html lang="en">', b'<html lang="en" data-page="' + page_sha(page).encode() + b'">', 1))
 
@@ -2732,7 +2832,25 @@ def preflight():
 
 def _csp(nonce):
     return (f"default-src 'none'; script-src 'nonce-{nonce}'; style-src-elem 'nonce-{nonce}'; style-src-attr 'unsafe-inline'; "
-            "connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'")
+            "connect-src 'self'; img-src 'self' data:; frame-src 'self'; base-uri 'none'; form-action 'none'")
+
+
+def library_origin(url):
+    """The origin of the drawing library's URL, as the diagram frame's policy admits it."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _frame_bytes(nonce, library):
+    """The diagram frame with its script nonced and the drawing library's URL in it."""
+    page = MARKDOWN_FRAME_FILE.read_bytes()
+    return (page.replace(b'<script type="module">', b'<script type="module" nonce="' + nonce + b'">', 1)
+            .replace(b"import(LIBRARY_URL)", b"import(" + json.dumps(library).replace("</", "<\\/").encode() + b")", 1))
+
+
+def _frame_csp(nonce, library):
+    return (f"default-src 'none'; script-src 'nonce-{nonce}' {library_origin(library)}; style-src 'unsafe-inline'; img-src data:; font-src data:; "
+            "base-uri 'none'; form-action 'none'")
 
 
 # Served without the token: browsers request it on their own, and it reveals nothing.
@@ -2797,6 +2915,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if path == websurf.PATH:
             self._websurf()
             return
+        if path == MARKDOWN_FRAME_PATH:
+            self._markdown_frame()
+            return
         if not self._authorized():
             return
         try:
@@ -2821,6 +2942,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 since = query.get("since")
                 self._json(200, self.app.chats_snapshot(_number(since[0], "since", int) if since else None,
                                                         min(_number((query.get("wait") or ["0"])[0], "wait"), 30)))
+            elif path == "/api/services":
+                self._json(200, self.app.services_state())
             elif (match := re.fullmatch(TURN_ROUTE, path)):
                 wait = (parse_qs(urlsplit(self.path).query).get("wait") or ["0"])[0]
                 self._json(200, self.app.turn_snapshot(match.group(1), min(_number(wait, "wait"), 30)))
@@ -2862,7 +2985,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             elif path == "/api/turn":
                 self._json(200, self.app.start_turn(payload))
             elif (match := re.fullmatch(TURN_ROUTE + "/stop", path)):
-                self._json(200, self.app.stop_turn(match.group(1)))
+                self._json(200, self.app.stop_turn(match.group(1), withdraw=not payload.get("send")))  # `send`: the queue goes as the next turn
             elif (match := re.fullmatch(TURN_ROUTE + "/release", path)):
                 if payload.get("answer") is None:
                     raise ApiError(400, "'answer' is missing: the answer to what the held turn asks")
@@ -2882,6 +3005,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             pass
         except Exception as exc:
             self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
+
+    def _markdown_frame(self):
+        """The diagram frame on a loopback host, served without the token: it holds nothing of the session and runs sandboxed, an opaque origin."""
+        if urlsplit("//" + (self.headers.get("Host") or "")).hostname not in LOOPBACK_HOSTS:
+            self._json(403, {"error": "requests must address a loopback host"})
+            return
+        nonce, library = secrets.token_urlsafe(16), self.app.mermaid_url()
+        self._send(200, "text/html; charset=utf-8", _frame_bytes(nonce.encode(), library),
+                   extra=[("Content-Security-Policy", _frame_csp(nonce, library)), ("Cache-Control", "no-store")])
 
     def _websurf(self):
         """The WebSurf bridge: a WebSocket upgrade from a browser extension on a loopback host, refused otherwise, then served by the
@@ -3052,6 +3184,7 @@ def serve(port=None, coverage=(), build_dir=DEFAULT_BUILD_DIR, open_browser=True
     coverage = list(coverage) or [str(Path(root) / name) for name in DEFAULT_COVERAGE if (Path(root) / name).is_file()]
     app = AssassinApp(root=root, coverage=coverage, build_dir=build_dir, token=token)
     threading.Thread(target=app.health.check, daemon=True).start()  # the model services are checked when the server starts
+    threading.Thread(target=app.health.watch, daemon=True).start()  # and the failed ones again while the alert stands
     try:
         server = make_server(app, port, fd=int(fd) if fd else None)
     except (OSError, ValueError) as exc:

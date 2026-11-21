@@ -10,10 +10,11 @@ the description, the controls on the panel's bottom-left border, `.block-ai`).
 - **By editing.** The page draws no line between editing the item and chatting about it: the
   editor and the chat are one interaction with one `▴ done`. Entering the editor shows the chat
   with the AI controls on the bottom border — connector · model · effort (`.chat-setup`), the
-  permission switches (`.chat-mode`), `➤ send` (`.chat-send`) — so the setup can be chosen before
-  anything is sent. Which conversation it shows depends on whether a chat is active in the block:
+  permission switches (`.chat-mode`) — so the setup can be chosen before anything is sent; the
+  statement is sent by Ctrl/⌘+Enter, the strip holding no send pill while it is edited. Which
+  conversation it shows depends on whether a chat is active in the block:
 
-  | Before the edit | The editor shows | `➤ send` / Ctrl/⌘+Enter | `▴ done` / Esc |
+  | Before the edit | The editor shows | Ctrl/⌘+Enter | `▴ done` / Esc |
   |---|---|---|---|
   | no chat shown — none yet, or a hidden one | a new, empty conversation | the saved statement as the first message of a new conversation (`/api/turn` with `statement`, `fresh` when a live one holds messages): the old one is filed behind `▾`, nothing asked, nothing erased | saves the item and closes editor and chat; no conversation is begun, filed or sent |
   | the chat shown in the block | that conversation | the saved statement announced into it | saves the item and closes editor and chat; the history stays, the change is announced with the next turn |

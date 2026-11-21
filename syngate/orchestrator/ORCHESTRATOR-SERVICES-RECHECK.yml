@@ -1,0 +1,8 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+order: 430
+sources: [src/ai_scratcher/services.py]
+test: ~
+---
+Alert recheck
+probes the failed roles again every minute while the blocking alert stands, so an alert a passing failure raised clears by itself.

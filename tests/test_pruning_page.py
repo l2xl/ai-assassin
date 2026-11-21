@@ -12,8 +12,9 @@ import pytest
 
 import assassin_ui
 import synthetic
-from test_assassin_ui import app, call, server  # noqa: F401 -- the server fixtures of the page tests
+from test_assassin_ui import app, call, chrome, enter_reply, item_page, send, server  # noqa: F401 -- the server fixtures of the page tests
 from test_assassin_ui_api import Scripted, calls, turn
+from test_setup_tool import Listed
 
 STUB = "tree read — read with log]"
 SESSION = [{"role": "user", "content": "Look"}, {"role": "assistant", "content": "{}"}, {"role": "user", "content": "results"},
@@ -147,6 +148,14 @@ def test_the_prune_switch_marks_every_step_and_ai_message_and_takes_effect_with_
     base, app = server
     page = (assassin_ui.Path(assassin_ui.__file__).parent / "assassin_ui.html").read_text(encoding="utf-8")
     assert 'class="prune-mark' in page and "togglePrune(chat" in page and 'pruneMark(index, "reply", m)' in page  # the mark of a step line and of an AI message
+    icon = page[page.index("const PRUNE_ICON"):page.index("function pruneMark")]
+    assert icon.count("<svg") == 1 and 'stroke="currentColor"' in icon and 'aria-hidden="true"' in icon  # an icon of our own, in the text colour
+    assert 'class="prune-eye"' in icon and 'class="prune-cross"' in icon and not any(fetched in icon for fetched in ("<img", "<use", "href", "url("))
+    mark = page[page.index("function pruneMark"):page.index("function togglePrune")]
+    assert "${PRUNE_ICON}</button>" in mark and 'title="${title}" aria-label="${title}"' in mark and 'aria-pressed="${next}"' in mark
+    assert ".prune-mark .prune-cross, .prune-mark.on .prune-eye { display: none; }" in page and ".prune-mark.on .prune-cross { display: inline; }" in page  # an eye on what is kept, a cross on what was pruned
+    assert ".prune-mark::before" not in page and ".prune-mark.now::before" not in page  # no drawn word is left
+    assert "grid-template-columns: auto minmax(0, 1fr) 3.4rem" in page  # the column of a call response's mark stays
     connection = Rewritable(calls({"tool": "query", "uid": "LEAF-001"}), {"kind": "text", "text": "Read it."})
     connection.replays = []
     connection.turn_span = lambda session, rounds: {"session": session, "start": 0, "rounds": rounds, "tokens": None}
@@ -169,3 +178,28 @@ def test_the_prune_switch_marks_every_step_and_ai_message_and_takes_effect_with_
     assert any(step.get("kind") == "context" and "brought in from turn 1" in step["text"] for step in second["steps"])
     shown = logged(base, app)[1]
     assert shown["pruned"] is True and "pruned" not in shown["steps"][number - 1] and "prune_next" not in shown
+
+
+LOG = "document.querySelector('#doc .block[data-uid=LEAF-001] .chat-log')"
+
+
+@pytest.mark.syngate("ORCHESTRATOR-PRUNE-SWITCH", "marks")
+def test_every_step_block_and_ai_message_shows_the_switch_in_one_right_column_an_eye_on_the_kept_and_a_cross_on_the_pruned(server, chrome):
+    page = item_page(server, chrome, echo=Listed(calls({"tool": "query", "uid": "@"}, {"tool": "query", "uid": "ROOT"}), {"kind": "text", "text": "Read."}))
+    enter_reply(page, "LEAF-001")
+    send(page, "LEAF-001", "Read it.")
+    reply = f"{LOG}.querySelector('.chat-msg.ai:not(.interim) > .prune-mark')"
+    page.wait(reply)
+    blocks = f"[...{LOG}.querySelectorAll('.call-answer, .chat-step:not(.call-request):not(.call-response), .chat-msg.ai')]"
+    assert page.eval(f"{blocks}.map((block) => block.querySelectorAll(':scope > .prune-mark').length)") == [1, 1, 1]  # each call of the batch and the reply
+    assert page.eval(f"{LOG}.querySelectorAll('.chat-msg.user .prune-mark').length") == 0  # never on what the user wrote
+    edges = page.eval(f"[...{LOG}.querySelectorAll('.prune-mark')].map((mark) => mark.getBoundingClientRect().right)")
+    assert max(edges) - min(edges) <= 1 and page.eval(f"{LOG}.getBoundingClientRect().right") - max(edges) <= 1  # one column, at the right edge
+    clear = page.eval(f"[...{LOG}.querySelectorAll('.chat-msg.ai')].map((row) => row.querySelector('.msg-body').getBoundingClientRect().right <= row.querySelector('.prune-mark').getBoundingClientRect().left + 1)")
+    assert clear == [True]  # beside the text, not over it
+    icons = (f"[...{LOG}.querySelectorAll('.prune-mark')].map((mark) => [mark.getAttribute('aria-pressed') === 'true', "
+             "getComputedStyle(mark.querySelector('.prune-eye')).display !== 'none', getComputedStyle(mark.querySelector('.prune-cross')).display !== 'none'])")
+    assert all(eye != pruned and cross == pruned for pruned, eye, cross in page.eval(icons))  # an eye on the kept, a cross on the pruned
+    assert page.eval(f"{reply}.getAttribute('aria-pressed')") == "false"
+    page.eval(f"{reply}.click()")
+    page.wait(f"{reply}.getAttribute('aria-pressed') === 'true' && getComputedStyle({reply}.querySelector('.prune-cross')).display !== 'none'")  # set to be pruned: the cross

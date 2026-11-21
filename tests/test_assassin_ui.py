@@ -11,6 +11,7 @@ gated by a per-session token and a loopback Host check."""
 
 import fcntl
 import http.client
+import http.server
 import json
 import os
 import select
@@ -885,7 +886,7 @@ def test_the_reply_line_waits_under_every_item_outside_the_tab_order_with_its_hi
     hint = f"getComputedStyle({LEAF_BLOCK}.querySelector('.chat-input'), '::placeholder').color"
     assert page.eval(hint) == "rgba(0, 0, 0, 0)"  # the hint is there for the hover, invisible at rest
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
-    assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, OPEN_HINT, 0, 8]]  # send with setup, four permissions, the advanced list, the behaviour, hide
+    assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, OPEN_HINT, 0, 9]]  # send and hide, one of them shown, setup, four permissions, the advanced list, the behaviour
     page.wait(f"{hint} === {json.dumps(css_color(page, '--dim'))}")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-hide').click()")
     assert page.eval(rest) == [[True, REST_HINT, -1, 0], [True, REST_HINT, -1, 0]]
@@ -949,10 +950,11 @@ def test_entering_the_reply_line_of_a_hidden_chat_joins_a_running_turn_else_show
 def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_statement_first_or_into_the_shown_conversation(server, chrome):
     page = item_page(server, chrome)
     edit_leaf(page, "It shall leaf better.")
-    controls = f"[...{LEAF_BLOCK}.querySelectorAll('.block-ai .chat-send, .block-ai .chat-setup, .block-ai .chat-mode, .block-ai .chat-advanced')].length"
-    assert page.eval(controls) == 7  # send, setup, the four permission switches and the advanced list, before anything is sent
+    controls = f"[...{LEAF_BLOCK}.querySelectorAll('.block-ai .chat-setup, .block-ai .chat-mode, .block-ai .chat-advanced')].length"
+    assert page.eval(controls) == 6  # setup, the four permission switches and the advanced list, before anything is sent
+    assert page.eval(f"Boolean({LEAF_BLOCK}.querySelector('.block-ai .chat-send'))") is False  # no send pill: the keyboard sends the statement
     pick(page, "model", "model-b")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-send').click()")
+    page.eval(CTRL_ENTER % "(() => { const text = document.querySelector('#doc .block.editing textarea'); text.focus(); return text; })()")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf better."
     assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("It shall leaf better.|It shall leaf better.|model-b|low|edit,internet|None")
@@ -962,7 +964,7 @@ def test_editing_the_description_offers_the_ai_controls_and_sends_the_saved_stat
     page.wait(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg.ai').length === 2")
     assert tree_item(server, "LEAF-001")["description_raw"].strip() == "It shall leaf by keyboard."
     announced = assassin_ui.STATEMENT_NOTE.format(uid="LEAF-001", statement="It shall leaf by keyboard.")
-    assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user .msg-part')].map((el) => el.textContent)") == [announced]
+    assert page.eval(f"[...{LEAF_BLOCK}.querySelectorAll('.chat-msg.user .msg-part p')].map((el) => el.textContent)") == announced.split("\n\n")  # rendered as markdown
     base, app = server
     assert call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"][-1]["text"].endswith(f"|{announced}|model-b|low|edit,internet|session-1")  # into the shown conversation
     assert page.eval("state.chats.get('LEAF-001').archive.length") == 0
@@ -1262,7 +1264,7 @@ def test_a_selection_inside_a_message_gets_the_three_marks_on_the_border_lines_c
     settled(page, "LEAF-001", 4)
     assert app.chats["LEAF-001"].log[2] == {"role": "user", "text": CHILD_ASK + "be extracted"}  # the selected text alone goes to the AI
     assert page.eval(f"[{SEL_TOOLS}.matches(':popover-open'), document.querySelectorAll('.has-selection').length, getSelection().isCollapsed]") == [False, 0, True]
-    select_text(page, f"{LEAF_BLOCK}.querySelector('.chat-msg.user .msg-part').lastChild", 0, 3)
+    select_text(page, f"{LEAF_BLOCK}.querySelector('.chat-msg.user .msg-part p').firstChild", 0, 3)
     page.wait(f"{SEL_TOOLS}.matches(':popover-open')")
     page.eval(f"{SEL_TOOLS}.querySelector('.msg-sibling').click()")
     settled(page, "LEAF-001", 6)
@@ -1473,8 +1475,14 @@ MENU_RESUME = "[...document.querySelectorAll('#status-menu [data-chat-resume]')]
 def test_the_hide_pill_hides_the_chat_and_becomes_the_drop_down_showing_it_again(server, chrome):
     base, app = server
     page = open_chat(server, chrome)
-    send(page, "LEAF-001", "Kept")
+    role = f"[...{LEAF_BLOCK}.querySelectorAll('.block-ai > button')].filter((el) => el.checkVisibility()).map((el) => [el.className, el.textContent.trim(), getComputedStyle(el).color])[0]"
+    assert page.eval(role)[:2] == ["pill chat-hide", "cancel"]  # an open chat without turns: the pill cancels
+    page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').value = 'Kept'")
+    assert page.eval(role) == ["pill chat-send", "➤ send", css_color(page, "--green")]  # text in the reply line: the pill sends
+    assert page.eval(f"{LEAF_BLOCK}.querySelectorAll('.block-ai .chat-send').length") == 1  # the one send of the strip
+    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-send').click()")
     page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai')")
+    assert page.eval(role)[:2] == ["pill chat-hide", "▴ done"]  # the line emptied by the send, the chat holding a turn
     closer = f"{LEAF_BLOCK}.querySelector('.block-ai .chat-hide')"
     assert page.eval(f"[{closer}.textContent, {closer}.tagName, getComputedStyle({closer}).color]") == ["▴ done", "BUTTON", css_color(page, "--dim")]
     page.eval(f"{closer}.click()")
@@ -1505,7 +1513,7 @@ def test_the_hide_pill_hides_the_chat_and_becomes_the_drop_down_showing_it_again
     page.eval(f"{closer}.click()")
     edit_leaf(page, "It shall leaf anew.")
     page.eval("window.confirm = () => { throw new Error('nothing is erased, nothing to confirm'); }")
-    page.eval(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-send').click()")
+    page.eval(CTRL_ENTER % "document.querySelector('#doc .block.editing textarea')")
     page.wait(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg:not(.note)').length === 1 && {LEAF_BLOCK}.querySelector('.chat-msg.ai')")
     assert page.eval(users) == []  # the old conversation is filed, the statement being the new one's first message
     assert page.eval(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai').textContent").endswith("|It shall leaf anew.|model-a|low|edit,internet|None")  # a new session, not the old one
@@ -2056,7 +2064,15 @@ def test_while_a_turn_runs_the_hide_pill_is_a_stop_button_pressed_once_and_the_t
     assert page.eval(pills) == [False, True, True]
     stop = f"{LEAF}.querySelector('.block-ai .chat-stop')"
     assert page.eval(f"[{stop}.tagName, {stop}.textContent, {stop}.disabled, getComputedStyle({stop}).color]") == ["BUTTON", "■ stop", False, css_color(page, "--red")]
+    shown = f"[{stop}.checkVisibility(), {LEAF}.querySelector('.block-ai .chat-send').checkVisibility()]"
+    page.eval(f"{LEAF}.querySelector('.chat-input').value = 'typed'")
+    assert page.eval(shown) == [False, True]  # text in the reply line: the pill sends, whatever the turn
+    page.eval(f"{LEAF}.querySelector('.chat-input').value = ''")
+    assert page.eval(shown) == [True, False]
     turn = app.chats["LEAF-001"].turn
+    deadline = time.monotonic() + 10  # the stop lands in the second round, the first one's batch answered
+    while [step["kind"] for step in turn.steps].count("diff") < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
     page.eval(f"{stop}.click(); {stop}.click()")
     assert page.eval(f"[{stop}.textContent.trim(), {stop}.disabled, Boolean({stop}.querySelector('.spinner'))]") == ["stopping…", True, True]  # one press; then it waits
     page.wait(f"{LEAF}.querySelector('.chat-msg.stopped')")
@@ -2067,9 +2083,10 @@ def test_while_a_turn_runs_the_hide_pill_is_a_stop_button_pressed_once_and_the_t
     assert page.eval(f"[...{LEAF}.querySelectorAll('.chat-msg.stopped .msg-tools button')].map((el) => el.className)") == ["msg-fold"]  # not an error: no retry, nothing to keep
     assert page.eval(pills) == [True, False, False] and page.eval("state.stopping.size") == 0
     assert page.eval(f"{LEAF}.querySelector('.chat-msg.stopped + .turn-activity .turn-head').textContent").startswith("2 tool calls · 2 subagents · 1 file changed · ")  # a tally, never a fold
-    calls = f"[...{LEAF}.querySelectorAll('.chat-step .step-line')].find((line) => line.textContent.startsWith('query'))"  # every step is a block of the log
-    page.eval(f"{calls}.click()")
-    assert page.eval(f"[{calls}.tagName, {calls}.textContent.startsWith('queryLEAF-001: '), [...{calls}.parentElement.querySelectorAll('.step-detail .step-label')].map((el) => el.textContent)]") == ["BUTTON", True, ["call", "read"]]  # a read is not applied
+    request = f"[...{LEAF}.querySelectorAll('.chat-step.call-request .step-line')].find((line) => line.textContent.startsWith('query@'))"
+    response = f"[...{LEAF}.querySelectorAll('.chat-step.call-response .call-text')].find((text) => text.textContent.startsWith('LEAF-001: '))"  # every call a request line and its response
+    page.eval(f"{request}.click()")
+    assert page.eval(f"[{request}.tagName, {response}.closest('.turn-step').querySelector('.step-line').tagName, [...{request}.parentElement.querySelectorAll('.step-detail .step-label')].map((el) => el.textContent)]") == ["BUTTON", "BUTTON", ["call"]]  # a read is not applied
 
 
 class BackgroundConnector(EchoConnector):
@@ -2200,17 +2217,14 @@ def test_sending_while_a_turn_runs_or_with_an_empty_statement_keeps_the_editor_a
     edit_leaf(page, "It shall leaf meanwhile.")
     page.eval(CTRL_ENTER % "document.querySelector('#doc .block.editing textarea')")
     assert page.eval(TOASTS) == ["toast info:a turn of LEAF-001 is running — wait for it or stop it"]
-    held = f"[state.editing, {LEAF}.querySelector('.chat-input').placeholder, {LEAF}.querySelector('.chat-pill').classList.contains('busy'), {LEAF}.querySelector('.chat-send').title]"
-    assert page.eval(held) == ["ROOT/LEAF-001", WAIT_HINT, True, "a turn of LEAF-001 is running — wait for it or stop it"]
-    page.eval(f"{LEAF}.querySelector('.chat-input').value = 'Waiting'")
-    page.eval(f"{LEAF}.querySelector('.block-ai .chat-send').click()")
-    assert page.eval(TOASTS) == ["toast info:a turn of LEAF-001 is running — wait for it or stop it"] * 2 and page.eval(f"{LEAF}.querySelector('.chat-input').value") == "Waiting"
+    held = f"[state.editing, {LEAF}.querySelector('.chat-input').placeholder, {LEAF}.querySelector('.chat-pill').classList.contains('busy'), Boolean({LEAF}.querySelector('.chat-send'))]"
+    assert page.eval(held) == ["ROOT/LEAF-001", WAIT_HINT, True, False]
     assert [m["role"] for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"]] == ["user"]
     gated.release.set()
     page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
     page.eval("document.getElementById('toasts').replaceChildren()")
     edit_leaf(page, " ")
-    page.eval(f"{LEAF}.querySelector('.block-ai .chat-send').click()")
+    page.eval(CTRL_ENTER % "document.querySelector('#doc .block.editing textarea')")
     page.wait("document.querySelector('#toasts .toast')")
     assert page.eval(TOASTS) == ["toast info:the statement is empty — nothing to send"] and page.eval("state.editing") == "ROOT/LEAF-001"
     assert [m["role"] for m in call(base, app, "/api/chats")[1]["chats"]["LEAF-001"]["log"]] == ["user", "ai"]
@@ -2502,8 +2516,10 @@ def test_the_keys_walk_the_focused_pane_tab_reaches_the_selected_row_its_tools_a
     enter_reply(page, "LEAF-001")
     page.eval(f"{LEAF_BLOCK}.querySelector('.chat-input').focus()")
     assert tab(page) == "pill" and page.eval("document.activeElement.classList.contains('chat-hide')")  # Tab from the reply line reaches the state pill first
-    strip = [tab(page) for _ in range(7)]
-    assert strip == ["chat-send", "rev", "pill", "pill", "pill", "pill", "pill"]  # then send, setup, the four permissions and the advanced list
+    strip = [tab(page) for _ in range(6)]
+    assert strip == ["chat-setup", "pill", "pill", "pill", "pill", "pill"]  # then setup, the four permissions and the advanced list
+    divider = f"getComputedStyle({LEAF_BLOCK}.querySelector('.chat-setup')).borderLeftStyle"
+    assert page.eval(divider) == "none"  # the setup pill alone, no divider left of it
     assert page.eval("[...document.querySelectorAll('.block-ai .pill.chat-mode, .block-ai .pill.chat-advanced')].length + 3") == 8 and page.eval("document.activeElement.classList.contains('chat-advanced')")
     send(page, "LEAF-001", "Slow one")
     page.wait(f"{LEAF_BLOCK}.querySelector('.block-ai .chat-stop')")
@@ -2737,23 +2753,33 @@ def test_a_turns_steps_are_blocks_of_the_log_in_order_each_call_its_own_line_unf
     page = open_chat(server, chrome, echo=narrated)
     send(page, "LEAF-001", "Hi")
     page.wait(f"{LEAF}.querySelector('.chat-msg.ai:not(.interim)')")
-    blocks = f"[...{LEAF}.querySelector('.chat-log').children].map((el) => [el.className, (el.querySelector('.step-line, .msg-part') || el).textContent.trim().slice(0, 24)])"
+    blocks = f"[...{LEAF}.querySelector('.chat-log').children].map((el) => [el.className, (el.querySelector('.call-text') || el.querySelector('.step-line, .msg-part') || el).textContent.trim().slice(0, 24)])"
     round = [["chat-step", "reasoningThinking about "], ["chat-step", "Readdocs/GUIDE.md · 0.1 "], ["chat-step", "agent @ROOTCheck the roo"],
              ["chat-step", "changeddocs/GUIDE.md"]]
+    sent_lines = next(step for step in app.chats["LEAF-001"].log[-1]["steps"] if step["kind"] == "calls")["lines"]
+    assert sent_lines[1].startswith("- context of LEAF-001:\n")
+    sent_context = sent_lines[1].partition("\n")[2].strip()[:24]
     assert page.eval(blocks) == [
         ["chat-msg user", "Hi"], *round,
         ["chat-msg ai interim", "Let me look first."],  # said beside the calls: an AI message of its own, before what the calls brought
-        ["chat-step", "queryLEAF-001: {\"uid\": \""], ["chat-step", "contextcontext of LEAF-0"], *round,  # one line per call of the batch
+        ["chat-step call-request", "query@"], ["chat-step call-response", "LEAF-001: {\"uid\": \"LEAF-"],  # every call of the batch: its request, its response
+        ["chat-step call-request", "context@"], ["chat-step call-response", sent_context], *round,  # less the heading naming the call again
         ["chat-msg ai", "late reply to Results of"],  # the reply is the last block, no step folded under it
         ["turn-activity", "2 tool calls · 2 subagen"]]
     assert page.eval(f"{LEAF}.querySelectorAll('.turn-activity .turn-steps, .turn-activity button').length") == 0
     steps = app.chats["LEAF-001"].log[-1]["steps"]
     assert [step["inputs"] for step in steps if step["kind"] == "calls"] == [batch]  # every line of a batch knows its call
-    query = f"[...{LEAF}.querySelectorAll('.chat-step .step-line')].find((line) => line.textContent.startsWith('query'))"
-    page.eval(f"{query}.click()")
-    detail = f"[...{query}.parentElement.querySelectorAll('.step-detail > *')].map((el) => el.textContent)"
-    shown = page.eval(detail)
-    assert shown[:2] == ["call", json.dumps(batch[0], indent=2)] and shown[2] == "read" and shown[3].startswith("- LEAF-001: {\"uid\": \"LEAF-001\"")
+    request = f"{LEAF}.querySelector('.call-request .step-line')"
+    page.eval(f"{request}.click()")
+    page.wait(f"{request}.parentElement.querySelector('.step-detail')")
+    assert page.eval(f"[...{request}.parentElement.querySelectorAll('.step-detail > *')].map((el) => el.textContent)") == ["call", json.dumps(batch[0], indent=2)]
+    line = next(step for step in steps if step["kind"] == "calls")["lines"][0][2:]  # a one-line result: less its bullet alone
+    handle, sent = f"{LEAF}.querySelector('.call-response .step-line')", f"{LEAF}.querySelector('.call-response .call-text')"
+    look = f"[{sent}.textContent, getComputedStyle({sent}).webkitLineClamp, {handle}.textContent, {handle}.getAttribute('aria-label'), {LEAF}.querySelectorAll('.call-response .step-detail, .call-response .step-label, .call-response .step-kind').length]"
+    assert page.eval(look) == [line, "2", "", "unfold the response", 0]  # the text the AI is sent, verbatim under no label, two lines of it
+    page.eval(f"{handle}.click()")
+    page.wait(f"{handle}.getAttribute('aria-expanded') === 'true'")
+    assert page.eval(look) == [line, "none", "", "fold the response", 0]  # unclamped in place, shown once
 
 
 class QueueConnector(EchoConnector):
@@ -2795,20 +2821,25 @@ def test_a_message_sent_while_a_turn_runs_is_queued_reaches_the_ai_at_its_next_s
     page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
     queue(page, "Mid")
     page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued')")
-    queued = f"[...{LEAF}.querySelectorAll('.chat-msg.user.queued')].map((el) => el.textContent.trim())"
-    assert page.eval(queued) == ["queued — goes to the AI at its next stepMid"] and page.eval(f"{LEAF}.querySelector('.chat-input').value") == ""
+    queued = f"[...{LEAF}.querySelectorAll('.chat-msg.user.queued')].map((el) => el.querySelector('.msg-body').textContent.trim())"
+    marks = f"(() => {{ const el = {LEAF}.querySelector('.chat-msg.user.queued'); return [Boolean(el.querySelector('.spinner')), Boolean(el.querySelector('.msg-from'))]; }})()"
+    assert page.eval(marks) == [True, False]  # a spinner at its left, no hint above it
+    assert page.eval(queued) == ["Mid"] and page.eval(f"{LEAF}.querySelector('.chat-input').value") == ""
     assert page.eval(TOASTS) == []  # not refused
     first.set()
     page.wait(f"{LEAF}.querySelector('.chat-msg.user.delivered')")  # the next round took it, in its place among the turn's blocks
+    deadline = time.monotonic() + 10  # the step is recorded ahead of the round's dispatch
+    while len(connector.heard) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert connector.heard[1][0].startswith(synthetic.RESULTS_PREAMBLE) and connector.heard[1][0].endswith(assassin_ui.QUEUED_NOTE.format(text="Mid"))
     order = f"[...{LEAF}.querySelector('.chat-log').children].map((el) => el.className)"
-    assert page.eval(order) == ["chat-msg user", "chat-step", "chat-msg user delivered", "turn-activity"] and page.eval(queued) == []
+    assert page.eval(order) == ["chat-msg user", "chat-step call-request", "chat-step call-response", "chat-msg user delivered", "turn-activity"] and page.eval(queued) == []
     queue(page, "Oops")
     page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued .msg-drop')")
     page.eval(f"{LEAF}.querySelector('.chat-msg.user.queued .msg-drop').click()")  # withdrawn: back into the reply line
     page.wait(f"!{LEAF}.querySelector('.chat-msg.user.queued') && {LEAF}.querySelector('.chat-input').value === 'Oops'")
     assert app.chats["LEAF-001"].queue == []
-    queue(page, "Later")
+    send(page, "LEAF-001", "Later")  # the green send pill of a running turn queues too
     page.wait(f"{LEAF}.querySelector('.chat-msg.user.queued')")
     second.set()  # the turn ends on text: what is still queued goes at once as the next turn, in the same session
     page.wait(f"{LEAF}.querySelectorAll('.chat-msg.ai:not(.interim)').length === 2 && !{LEAF}.querySelector('.block-ai .chat-stop')")
@@ -2819,7 +2850,7 @@ def test_a_message_sent_while_a_turn_runs_is_queued_reaches_the_ai_at_its_next_s
 
 
 @pytest.mark.syngate("AI_CHAT-SEND-NOW")
-def test_send_bang_stops_the_running_turn_and_sends_the_message_in_the_same_session_while_stop_withdraws_the_queue(server, chrome):
+def test_the_send_pill_of_a_queued_message_stops_the_running_turn_and_sends_the_queue_in_the_same_session_while_stop_withdraws_it(server, chrome):
     _, app = server
     slow, again = threading.Event(), threading.Event()
     connector = QueueConnector(({"kind": "text", "text": "Hello."}, None), ({"kind": "text", "text": "never"}, slow),
@@ -2827,12 +2858,16 @@ def test_send_bang_stops_the_running_turn_and_sends_the_message_in_the_same_sess
     page = open_chat(server, chrome, echo=connector)
     send(page, "LEAF-001", "Hi")
     page.wait(f"{LEAF}.querySelector('.chat-msg.ai')")
-    assert page.eval(f"{LEAF}.querySelector('.chat-send').textContent") == "➤ send"
     send(page, "LEAF-001", "Slow")
     page.wait(f"{LEAF}.querySelector('.block-ai .chat-stop')")
-    sender = f"{LEAF}.querySelector('.chat-send')"
-    assert page.eval(f"[{sender}.textContent, getComputedStyle({sender}).pointerEvents]") == ["➤ send!", "auto"]  # no longer disabled
-    send(page, "LEAF-001", "Now")  # send!: stop, send, carry on
+    queue(page, "Now")
+    pill = f"{LEAF}.querySelector('.chat-msg.user.queued .queue-send')"
+    page.wait(pill)
+    look = f"[{pill}.tagName, {pill}.textContent.trim(), getComputedStyle({pill}).color, getComputedStyle({pill}.querySelector('.go')).color, getComputedStyle({pill}).borderTopLeftRadius]"
+    assert page.eval(look) == ["BUTTON", "➤ send", css_color(page, "--red"), css_color(page, "--green"), "999px"]  # red stops, the green triangle sends
+    right = f"(() => {{ const p = {pill}.getBoundingClientRect(), m = {pill}.closest('.chat-msg').getBoundingClientRect(), t = {pill}.closest('.chat-msg').querySelector('.msg-body').getBoundingClientRect(); return [m.right - p.right < 2, p.left >= t.right, Math.abs(p.top - t.top) < 12]; }})()"
+    assert page.eval(right) == [True, True, True]  # inlined at the right of the message, level with its first line
+    page.eval(f"{pill}.click()")  # stop, send, carry on
     page.wait(f"{LEAF}.querySelectorAll('.chat-msg.ai').length === 2 && !{LEAF}.querySelector('.block-ai .chat-stop')")
     assert [m["role"] for m in app.chats["LEAF-001"].log] == ["user", "ai", "user", "stopped", "user", "ai"]
     assert connector.heard[2] == ("Now", "session-1")  # the session the stopped turn ran in
@@ -2866,3 +2901,159 @@ def test_a_details_section_of_a_reply_renders_collapsed_to_its_summary_expands_a
     assert [fold[0] for fold in page.eval(folds)] == [True, False]
     page.eval(f"{LEAF}.querySelector('.block-ai .chat-stop').click()")
     page.wait(f"!{LEAF}.querySelector('.block-ai .chat-stop')")
+
+
+@pytest.mark.syngate("AI_CHAT-USER-MARKDOWN")
+def test_a_user_message_renders_as_markdown_with_the_line_breaks_it_was_typed_with(server, chrome):
+    page = open_chat(server, chrome, echo=QueueConnector(({"kind": "text", "text": "A **bold** reply\nwhose lines join."}, None)))
+    send(page, "LEAF-001", "First line with **bold**\\nsecond line")
+    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-part p')")
+    look = f"(() => {{ const user = {LEAF_BLOCK}.querySelector('.chat-msg.user .msg-part p'), ai = {LEAF_BLOCK}.querySelector('.chat-msg.ai .msg-part p');" \
+           " return [user.querySelector('strong')?.textContent, user.querySelectorAll('br').length, user.textContent, ai.querySelector('strong')?.textContent, ai.querySelectorAll('br').length]; })()"
+    assert page.eval(look) == ["bold", 1, "First line with boldsecond line", "bold", 0]  # the user's break kept, the reply's lines joined
+
+
+# A stand-in of the drawing library: an ES module drawing every source as an SVG whose <desc> tells how many drawings the frame made so far,
+# the frame's origin, whether the page's document is in reach, whether the frame's URL carries a token, and the theme and labels it was set up with.
+MERMAID_STUB = b"""let drawn = 0, config = {};
+export default {
+  initialize(given) { config = given; },
+  async render(id, source) {
+    if (source.includes("broken")) throw new Error("Parse error on line 1");
+    drawn += 1;
+    let reach;
+    try { reach = typeof parent.document; } catch (err) { reach = "blocked"; }
+    const facts = [drawn, self.origin, reach, location.href.includes("token"), config.theme, config.htmlLabels].join(" ");
+    return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40"><desc>${facts}</desc><text x="4" y="24">${source.replace(/[<&]/g, "")}</text></svg>` };
+  },
+};
+"""
+MERMAID = "```mermaid\ngraph TD\n  A --> B\n```"
+BLOCK2 = "document.querySelector('#doc .block[data-uid=\"LEAF-002\"]')"
+# The facts of every drawing shown under the element `%s`, read back from the SVG of its image.
+FACTS = "[...%s.querySelectorAll('.md-mermaid img.md-diagram')].map((img) => decodeURIComponent(img.src.slice(img.src.indexOf(',') + 1)).split('<desc>')[1].split('</desc>')[0].split(' '))"
+
+
+@pytest.fixture
+def diagram_library(server):
+    """The stand-in library served on a loopback port of its own, named by the `markdown` section of the server settings."""
+    _, app = server
+
+    class Library(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(MERMAID_STUB)))
+            self.end_headers()
+            self.wfile.write(MERMAID_STUB)
+
+        def log_message(self, *args):
+            pass
+
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Library)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{httpd.server_address[1]}/mermaid.mjs"
+    (app.root / assassin_ui.SETTINGS_FILE).write_text(json.dumps({"markdown": {"mermaid": url}}))
+    yield url
+    httpd.shutdown()
+    thread.join()
+
+
+@pytest.mark.syngate("ASSASSIN-UI-MARKDOWN-MERMAID", "draw")
+def test_a_mermaid_block_shows_as_its_drawing_in_statements_files_and_both_roles_of_the_chat_drawn_once_per_source(server, chrome, syngate_tree, diagram_library):
+    _, app = server
+    syngate_dir, make_item = syngate_tree
+    (app.root / "docs").mkdir()
+    (app.root / "docs" / "FLOW.md").write_text(f"# Flow\n\n{MERMAID}\n")
+    make_item(syngate_dir, "LEAF-002", f"Drawn leaf\n\nIt shall draw.\n\n{MERMAID}\n\n[flow](docs/FLOW.md)\n", parents=("ROOT",), tests=None)
+    reply = "Here:\n\n```mermaid\ngraph LR\n  C --> D\n```"
+    page = item_page(server, chrome, echo=QueueConnector(({"kind": "text", "text": reply}, None), ({"kind": "text", "text": "Again."}, None)))
+    page.wait(f"{BLOCK2}.querySelector('.block-body .md-mermaid img.md-diagram')")
+    shown = f"(() => {{ const box = {BLOCK2}.querySelector('.block-body .md-mermaid'); return [box.querySelector('pre').hidden, box.querySelector('img').naturalWidth > 0, box.querySelector('img').getBoundingClientRect().width <= box.getBoundingClientRect().width]; }})()"
+    page.wait(f"{BLOCK2}.querySelector('.block-body .md-mermaid img').complete")
+    assert page.eval(shown) == [True, True, True]  # the drawing in place of the source, within the width it stands in
+    page.eval(f"{BLOCK2}.querySelector('a.filelink').click()")
+    page.wait(f"{BLOCK2}.querySelector('.file-view .md-mermaid img.md-diagram')")
+    enter_reply(page, "LEAF-001")
+    send(page, "LEAF-001", "Mine:\\n\\n```mermaid\\ngraph LR\\n  E --> F\\n```")
+    page.wait(f"{LEAF_BLOCK}.querySelector('.chat-msg.user .md-mermaid img.md-diagram') && {LEAF_BLOCK}.querySelector('.chat-msg.ai .md-mermaid img.md-diagram')")
+    send(page, "LEAF-001", "Again?")  # the log re-renders: the drawings kept are shown, none is drawn again
+    page.wait(f"{LEAF_BLOCK}.querySelectorAll('.chat-msg.ai').length === 2 && {LEAF_BLOCK}.querySelectorAll('.chat-msg .md-mermaid img.md-diagram').length === 2")
+    statement, file, chat = page.eval(FACTS % f"{BLOCK2}.querySelector('.block-body')"), page.eval(FACTS % f"{BLOCK2}.querySelector('.file-view')"), page.eval(FACTS % LEAF_BLOCK)
+    assert statement == file and len(chat) == 2  # one source, one drawing, in the statement and in the file
+    assert sorted(facts[0] for facts in statement + chat) == ["1", "2", "3"]  # three sources, three drawings, however often shown
+    assert {(facts[4], facts[5]) for facts in statement + chat} == {("default", "false")}  # the light scheme's theme, labels as SVG text
+
+
+@pytest.mark.syngate("ASSASSIN-UI-MARKDOWN-MERMAID", "error")
+def test_a_diagram_that_cannot_be_drawn_keeps_its_source_followed_by_the_reason(server, chrome, syngate_tree, diagram_library):
+    _, app = server
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "LEAF-002", "Broken leaf\n\n```mermaid\nbroken diagram\n```\n", parents=("ROOT",), tests=None)
+    look = f"(() => {{ const box = {BLOCK2}.querySelector('.md-mermaid'); return [box.querySelector('.md-diagram-error').textContent, box.querySelector('pre').hidden, box.querySelector('pre').textContent, box.querySelectorAll('img').length]; }})()"
+    page = item_page(server, chrome)
+    page.wait(f"{BLOCK2}.querySelector('.md-mermaid .md-diagram-error')")
+    assert page.eval(look) == ["diagram not drawn: Parse error on line 1", False, "broken diagram", 0]  # a syntax error
+    (app.root / assassin_ui.SETTINGS_FILE).write_text(json.dumps({"markdown": {"mermaid": "http://127.0.0.1:9/mermaid.mjs"}}))
+    page = item_page(server, chrome)
+    page.wait(f"{BLOCK2}.querySelector('.md-mermaid .md-diagram-error')")
+    reason, hidden, source, images = page.eval(look)
+    assert reason.startswith("diagram not drawn: ") and len(reason) > len("diagram not drawn: ") and [hidden, source, images] == [False, "broken diagram", 0]  # the library out of reach
+
+
+@pytest.mark.syngate("ASSASSIN-UI-MARKDOWN-SANDBOX")
+def test_the_drawing_library_runs_in_a_sandboxed_frame_of_an_opaque_origin_served_without_the_token(server, chrome, syngate_tree, diagram_library):
+    base, app = server
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "LEAF-002", f"Drawn leaf\n\n{MERMAID}\n", parents=("ROOT",), tests=None)
+    page = item_page(server, chrome)
+    page.wait(f"{BLOCK2}.querySelector('.md-mermaid img.md-diagram')")
+    frame = "(() => { const f = document.querySelector('iframe.md-diagram-frame'), at = new URL(f.src); return [f.getAttribute('sandbox'), at.pathname, at.search, f.contentDocument === null, Boolean(f.closest('#doc, #tree'))]; })()"
+    assert page.eval(frame) == ["allow-scripts", "/markdown-frame", "", True, False]
+    assert page.eval(FACTS % BLOCK2)[0][1:4] == ["null", "blocked", "false"]  # an opaque origin, the page's document out of reach, no token
+    assert page.eval(f"{BLOCK2}.querySelector('.md-mermaid img.md-diagram').src.startsWith('data:image/svg+xml')") is True  # taken back as an image
+    with urllib.request.urlopen(base + "/markdown-frame") as response:  # no token asked
+        policy, body = response.headers["Content-Security-Policy"], response.read().decode()
+    nonce = policy.split("script-src 'nonce-")[1].split("'")[0]
+    assert "default-src 'none'" in policy and f'nonce="{nonce}"' in body and app.token not in body and app.token not in policy
+    request = urllib.request.Request(base + "/", headers={"X-Assassin-Token": app.token})
+    with urllib.request.urlopen(request) as response:
+        assert "frame-src 'self'" in response.headers["Content-Security-Policy"]
+
+
+@pytest.mark.syngate("ASSASSIN-UI-MARKDOWN-LIBRARY")
+def test_the_diagram_frame_loads_the_pinned_library_unless_the_settings_name_another_copy(server):
+    base, app = server
+    settings = app.root / assassin_ui.SETTINGS_FILE
+
+    def frame():
+        with urllib.request.urlopen(base + "/markdown-frame") as response:
+            policy, body = response.headers["Content-Security-Policy"], response.read().decode()
+        return policy.split("script-src")[1].split(";")[0], body
+
+    assert assassin_ui.MERMAID_URL == "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs"
+    scripts, body = frame()
+    assert json.dumps(assassin_ui.MERMAID_URL) in body and " https://cdn.jsdelivr.net" in scripts
+    settings.write_text(json.dumps({"markdown": {"mermaid": "http://127.0.0.1:8000/lib/mermaid.mjs"}}))
+    scripts, body = frame()
+    assert '"http://127.0.0.1:8000/lib/mermaid.mjs"' in body and " http://127.0.0.1:8000" in scripts and "jsdelivr" not in body + scripts
+    for wrong in ("javascript:alert(1)", "file:///etc/passwd", 42, "https://user@x.example/m.mjs", "https://x.example/a'b.mjs"):
+        settings.write_text(json.dumps({"markdown": {"mermaid": wrong}}))
+        scripts, body = frame()
+        assert json.dumps(assassin_ui.MERMAID_URL) in body and " https://cdn.jsdelivr.net" in scripts, wrong
+
+
+def test_the_pinned_mermaid_library_draws_a_diagram(server, chrome, syngate_tree):
+    try:
+        urllib.request.urlopen(assassin_ui.MERMAID_URL, timeout=5).close()
+    except OSError:
+        pytest.skip("the Mermaid CDN is out of reach")
+    syngate_dir, make_item = syngate_tree
+    make_item(syngate_dir, "LEAF-002", f"Drawn leaf\n\n{MERMAID}\n", parents=("ROOT",), tests=None)
+    page = item_page(server, chrome)
+    page.wait(f"{BLOCK2}.querySelector('.md-mermaid img.md-diagram, .md-mermaid .md-diagram-error')", timeout=60)
+    assert page.eval(f"{BLOCK2}.querySelector('.md-diagram-error')?.textContent ?? null") is None
+    svg = page.eval(f"(() => {{ const src = {BLOCK2}.querySelector('img.md-diagram').src; return decodeURIComponent(src.slice(src.indexOf(',') + 1)); }})()")
+    assert svg.startswith("<svg") and ">A<" in svg and ">B<" in svg  # the nodes drawn as SVG text

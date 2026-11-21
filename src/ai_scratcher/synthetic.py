@@ -914,8 +914,8 @@ class turn_steps:
     answer follows, the reply -- no step, kept as `text` -- on a text answer or at the result. `text` is what the model wrote ahead of
     its last answer, "" where a call made it a message; None while no answer tool was called and nothing was written ahead of the result."""
 
-    def __init__(self, on_step=None):
-        self.on_step = on_step or (lambda step: None)
+    def __init__(self, on_step=None, on_calls=None):
+        self.on_step, self.on_calls = on_step or (lambda step: None), on_calls  # `on_calls` hears the calls of an answer as its answer tool is called
         self.started, self.wall = time.monotonic(), time.time()
         self.steps, self.result, self.noise, self.text = [], None, [], None
         self.open, self.agents, self.top, self.seen, self.held = {}, {}, {}, set(), []
@@ -967,6 +967,8 @@ class turn_steps:
                 if name == ANSWER_TOOL:
                     self.text = written  # whatever text the tool was given is not read: the answer's text is what was written
             if name == ANSWER_TOOL:
+                if parent is None and self.on_calls and isinstance(given.get("calls"), list) and given["calls"]:
+                    self.on_calls(given["calls"])  # told now: the CLI hands the answer over only once it has closed its turn
                 if key is not None:
                     self.seen.add(key)
                 return
@@ -1221,7 +1223,7 @@ class claude_code_connector:
         root = Path(self.cwd or os.getcwd())
         if stopped():
             raise connection_error("turn stopped")
-        before, steps = project_snapshot(root), turn_steps(on_step)
+        before, steps = project_snapshot(root), turn_steps(on_step, (lambda calls: on_step({"kind": "answer", "calls": calls})) if on_step else None)
         permission = next((self.modes[mode][4] for mode in modes if self.modes[mode][4]), None)
         tools = list(dict.fromkeys(tool for mode in modes for tool in self.modes[mode][5]))
         effort = effort if effort in self.model_efforts.get(model, self.efforts) else None

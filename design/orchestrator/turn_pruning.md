@@ -27,8 +27,12 @@ already answers, passing test output, a closing text restating the calls applied
   into an AI message.
 - **Pruned is a state of its own**, not the user's fold. A pruned message stays in the log in full
   under its mark. The **prune switch** is that mark, on every step line and AI message of the log,
-  the user's messages aside: dim `prune` on what the session holds, `pruned` on what it does not;
-  a click returns a pruned one to the session or cuts a kept one. It takes effect with the chat's
+  the user's messages aside: a dim icon of a page of text lines, drawn by the page itself in the
+  text colour — an eye over it on what the session keeps, a cross over it on what is pruned or
+  set to be — whose tooltip and accessible name tell the state in words; a click returns a pruned
+  one to the session or cuts a kept one. Every block of a step carries the switch of its step —
+  each call of a batch, each file of a diff — and all of them stand in one column at the right
+  edge of the log, a step line's and an AI message's alike. It takes effect with the chat's
   next message, brought into the running session, which is not ended for it — and, being the
   user's act, it asks no worth. The user's fold stays what it was: text the user took out of the
   exchange.

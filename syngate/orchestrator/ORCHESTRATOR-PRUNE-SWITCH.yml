@@ -1,8 +1,9 @@
 ---
 parents: [ORCHESTRATOR-PRUNE, AI-CHAT]
 order: 350
-test: {unit: 05080333bc487c867042a9669c74c05122a2b266dcf67768b61ff4f2bbb8162e, page: c579964e5bf971170d561a2faa4ee7c8406930fc29ab030f037ea5cdfe1e1a86}
+test: {unit: 05080333bc487c867042a9669c74c05122a2b266dcf67768b61ff4f2bbb8162e, page: c579964e5bf971170d561a2faa4ee7c8406930fc29ab030f037ea5cdfe1e1a86,
+  marks: ~}
 review: 1811eaf12d7a175963fd761546f210a81a70c9da2884327258f3f408e514a84f
 ---
 Prune switch
-is a mark on every step line and AI message of the log, the user's messages aside, which returns a pruned one to the session or cuts a kept one, taking effect with the chat's next message without ending the running session.
+is a mark on every step line and AI message of the log, the user's messages aside — an icon of a page of text lines, an eye over it on what the session holds and a cross over it on what was pruned — which returns a pruned one to the session or cuts a kept one, taking effect with the chat's next message without ending the running session.

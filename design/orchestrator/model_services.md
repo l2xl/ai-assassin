@@ -59,4 +59,16 @@ holds the turn on the same alert.
 A message sent while the alert stands is not lost and not dispatched: it waits as the chat's
 queued message, shown as queued, and is sent by itself once every role answers — on the alert's
 retry or on the next health check that passes. The chat is **blocked** for as long as the alert
-stands, with or without a turn.
+stands, with or without a turn; a question a held turn asked meanwhile, once answered, leaves the
+chat under the alert again.
+
+**Recovery.** An alert must never outlive its cause. A call to a role marked failed that answers —
+the role served again by the head of its list — drops the role's failure, and the alert clears once
+no role fails. While the alert stands, the failed roles are probed again every minute, so an alert
+raised by a passing failure (a CLI exiting once, a model server restarting) clears by itself; the
+retry is the user's way not to wait for it. The server's log names every alert it raises and clears.
+
+**Diagnosis.** `GET /api/services` and the `assassin-status` command read the same picture: the
+alert, each failing role with the locators tried and their failures, the locator in use of each
+role, and every chat that is not idle with what it is asked, its queued messages and its running or
+held turn. `assassin-status --retry` retries the alert from the terminal.

@@ -247,3 +247,90 @@ def test_a_message_under_the_alert_waits_queued_and_is_sent_by_itself_once_every
     app.health.retry()
     assert _until(lambda: any(message["role"] == "ai" for message in app.chats["LEAF-001"].log)), app.chats["LEAF-001"].log
     assert "Hello." in heard.heard[0]["text"] and not app.chats["LEAF-001"].queue
+
+
+@pytest.mark.syngate("ORCHESTRATOR-SERVICES-RECOVER")
+def test_a_call_that_answers_on_a_failed_role_clears_its_failure_and_the_alert():
+    probe, cleared = Probe(), []
+    health = services.health(lambda: services.role_locators(SECTION), probe, on_clear=lambda: cleared.append(True))
+    health.check()
+    cleared.clear()
+    health.failed("agents.default", services.service_error("claude exited with 1"))  # a single locator: nothing to move on to
+    assert health.blocked() and health.alert() == "agents.default → claude_code: claude exited with 1"
+    assert health.serve("agents.default", lambda locator: "verdict") == "verdict"
+    assert not health.blocked() and health.alert() is None and cleared == [True]
+    health.failed("embed", services.service_error("connection refused"))
+    health.failed("rerank", services.service_error("connection refused"))
+    assert health.hold("embed", lambda: [[0.0]]) == [[0.0]]  # an answering held call clears its own role alone
+    assert health.alert() == "rerank → rer: connection refused" and cleared == [True]
+    assert health.serve("embed", lambda locator: "again") == "again" and cleared == [True]  # a role that never failed clears nothing
+
+
+@pytest.mark.syngate("ORCHESTRATOR-SERVICES-RECHECK")
+def test_the_failed_roles_are_checked_again_while_the_alert_stands_until_they_answer():
+    probe, cleared, stop = Probe("rerank"), [], threading.Event()
+    health = services.health(lambda: services.role_locators(SECTION), probe, on_clear=lambda: cleared.append(True))
+    health.check()
+    probe.calls.clear()
+    watcher = threading.Thread(target=health.watch, args=(0.02, stop), daemon=True)
+    watcher.start()
+    try:
+        assert _until(lambda: probe.calls.count("rerank") >= 2) and health.blocked() and set(probe.calls) == {"rerank"}  # the failed role alone
+        probe.down.clear()
+        assert _until(lambda: not health.blocked()) and cleared == [True]
+        seen = len(probe.calls)
+        threading.Event().wait(0.1)
+        assert len(probe.calls) == seen  # nothing failing: nothing probed
+    finally:
+        stop.set()
+        watcher.join(5)
+    assert not watcher.is_alive()
+
+
+def test_an_answered_hold_leaves_its_chat_under_the_alert_still_standing(app):
+    from test_held_turns import ASKED, held_turn, state
+    answers = []
+    key = held_turn(app, answers)
+    app.health.probe = Probe("embed")
+    app.settings_file.write_text(json.dumps({"orchestrator": SECTION}))
+    app.health.check()  # the alert rises while the turn is held: the held question stays what the chat shows
+    assert state(app, "LEAF-001") == {"state": "blocked", "asked": ASKED}
+    app.release(key, "yes")
+    assert app.turn_snapshot(key, wait=10)["reply"] == "held on yes"
+    assert state(app, "LEAF-001") == {"state": "blocked", "asked": ALERT, "services": True}  # not lifted by the answer
+    app.health.probe.down.clear()
+    app.health.retry()
+    assert state(app, "LEAF-001") == {"state": "waiting"}
+
+
+@pytest.mark.syngate("ORCHESTRATOR-SERVICES-DIAGNOSE")
+def test_the_diagnosis_names_the_failing_roles_and_every_stuck_chat_with_its_queued_messages(app):
+    from ai_scratcher import assassin_status
+    probe = Probe("embed")
+    heard = _served(app, probe)
+    app._chat("LEAF-001")
+    app.health.check()
+    app.start_turn({"uid": "ROOT", "text": "Meanwhile.", "connector": "heard", "model": "model-a", "effort": "low"})
+    found = app.services_state()
+    assert found["alert"] == ALERT and found["services_asked"] == ALERT and found["checked"]
+    assert found["failures"] == {"embed": [{"locator": {"connection": "emb", "model": "bge-m3"}, "error": "connection refused"}]}
+    assert found["active"]["rerank"] == {"connection": "rer", "model": "bge-reranker"}
+    assert found["chats"]["ROOT"] == {"state": "blocked", "asked": ALERT, "services": True, "queue": ["Meanwhile."], "turn": None}
+    assert found["chats"]["LEAF-001"]["queue"] == [] and not heard.heard
+    out = io.StringIO()
+    assassin_status.report(found, out)
+    text = out.getvalue()
+    assert f"BLOCKING ALERT — {ALERT}" in text and "✗ embed → emb/bge-m3: connection refused" in text
+    assert "ROOT: blocked" in text and "queued: Meanwhile." in text and "1 idle chats standing under the alert" in text
+    probe.down.clear()
+    app.health.retry()
+    assert _until(lambda: not app.services_state()["chats"].get("ROOT", {}).get("queue")) and app.services_state()["alert"] is None
+
+
+def test_the_status_tool_finds_the_server_record_above_and_tells_a_gone_server(tmp_path, capsys):
+    from ai_scratcher import assassin_status
+    (tmp_path / "sub").mkdir()
+    assert assassin_status.main(["--root", str(tmp_path / "sub")]) == 2
+    (tmp_path / assassin_status.SERVER_FILE).write_text(json.dumps({"pid": 2 ** 22 + 12345, "port": 1, "token": "t"}))
+    assert assassin_status.find_record(tmp_path / "sub")[0] == tmp_path / assassin_status.SERVER_FILE
+    assert assassin_status.main(["--root", str(tmp_path / "sub")]) == 1 and "is gone" in capsys.readouterr().err

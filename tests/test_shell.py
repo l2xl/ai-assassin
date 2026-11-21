@@ -5,6 +5,9 @@
 """The shell tool of the AI and the Raw command switch that gates it: a shell call of a turn refused while the switch is off, run in the
 project root with it on, its exit status and output coming back as the next prompt, and a command naming the tree refused."""
 
+import threading
+import time
+
 import pytest
 
 import assassin_ui
@@ -59,3 +62,18 @@ def test_a_shell_command_naming_the_tree_is_refused(server):
         with pytest.raises(assassin_ui.ApiError, match="naming syngate is refused"):
             app._shell({"tool": "shell", "command": command})
     assert app._shell({"tool": "shell", "command": "echo syngate_ui.py"}).endswith("exit 0\nsyngate_ui.py")
+
+
+@pytest.mark.syngate("AI_CHAT-STOP-SHELL")
+def test_a_stop_ends_the_shell_command_of_the_turn_with_every_process_it_started(server, tmp_path):
+    _, app = server
+    turn = assassin_ui.Turn("ROOT:1", "echo")
+    app._turn = lambda key: turn
+    late = tmp_path / "late"
+    command = f"(sleep 1; touch {late}) & sleep 30"
+    threading.Timer(0.3, app.stop_turn, args=("ROOT:1",)).start()
+    started = time.monotonic()
+    assert app._shell({"tool": "shell", "command": command}, turn) == f"- shell {command}:\nstopped with the turn"
+    assert time.monotonic() - started < 5 and turn.procs == []
+    time.sleep(1.5)
+    assert not late.exists()  # the process group went with the shell

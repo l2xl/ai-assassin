@@ -1,0 +1,8 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+order: 440
+sources: [src/ai_scratcher/assassin_status.py, src/ai_scratcher/assassin_ui.py]
+test: ~
+---
+Stuck chat diagnosis
+reports the blocking alert with each failing role, the model locators tried and their failures, the locator in use of each role, and every chat that is not idle with what it is asked, its queued messages and its running or held turn, both from the server and from the assassin-status command, which can also retry the alert.

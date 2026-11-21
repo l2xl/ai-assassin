@@ -2,8 +2,8 @@
 
 **Styles.** A message is a full-width row of the log (`.chat-msg`) whose body (`.msg-body`) is
 the bubble: the user's (`.chat-msg.user`) styled as the description text, flush left on the panel
-background, shown as typed, not rendered; the AI's reply (`.chat-msg.ai`) shifted right and
-highlighted — the roles switch one body style, nothing more. A reply a delegated turn produced is
+background, its line breaks kept; the AI's reply (`.chat-msg.ai`) shifted right and
+highlighted — the roles switch one body style, nothing more, the text of both being rendered markdown. A reply a delegated turn produced is
 headed `delegated by UID (turn n)` (`.msg-from`).
 
 **Collapsible sections**. A reply renders a `<details>` block — its

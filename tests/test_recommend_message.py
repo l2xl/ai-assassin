@@ -2,8 +2,9 @@
 # Copyright (c) 2026 l2xl (l2xl/at/proton.me)
 # Distributed under the Intellectual Property Reserve License, v2 (IPRL)
 
-"""The recommendation message (ORCHESTRATOR-RECOMMEND-MESSAGE): a turn held on an asked recommendation stands in the log as the recommended
-model as a pill, the deny mark and the behaviour drop-down, which answer the held turn from the page."""
+"""The recommendation message (ORCHESTRATOR-RECOMMEND-MESSAGE): a turn held on an asked recommendation shows it under the request line of the
+call it holds, the turn's blocks staying shown: the recommended model as a pill, the deny mark and the behaviour drop-down, which answer the held
+turn from the page."""
 
 import time
 
@@ -18,7 +19,8 @@ MESSAGE = "document.querySelector('#doc .block[data-uid=LEAF-001] .chat-log .cha
 SHOWN = (f"(() => {{ const m = {MESSAGE}, log = m.closest('.chat-log'); return {{ pill: m.querySelector('.pill.rec-accept').textContent, "
          "deny: Boolean(m.querySelector('button.rec-deny svg circle')), behaviour: m.querySelector('select.rec-behaviour').value, "
          "options: [...m.querySelectorAll('select.rec-behaviour option')].map((o) => o.value), "
-         f"turn: Boolean(log.querySelector('.turn-activity, .chat-msg.note:not(.recommendation)')) }}; }})()")
+         "under: m.previousElementSibling?.classList.contains('call-request') ? m.previousElementSibling.querySelector('.step-line').textContent : null, "
+         f"turn: Boolean(log.querySelector('.turn-activity')) }}; }})()")
 
 
 def until(check, seconds=10):
@@ -29,13 +31,14 @@ def until(check, seconds=10):
 
 
 @pytest.mark.syngate("ORCHESTRATOR-RECOMMEND-MESSAGE")
-def test_a_held_recommendation_shows_its_pill_deny_mark_and_behaviour_drop_down_in_place_of_the_turn(server, chrome):
+def test_a_held_recommendation_shows_its_pill_deny_mark_and_behaviour_drop_down_under_the_call_it_holds(server, chrome):
     base, app = server
     page = item_page(server, chrome, echo=Listed(calls(PICK), {"kind": "text", "text": "Stayed."}, calls({**PICK, "effort": "high"})), big=Big())
     enter_reply(page, "LEAF-001")
     send(page, "LEAF-001", "Pick.")
     page.wait(MESSAGE)
-    assert page.eval(SHOWN) == {"pill": "Scripted · big-1", "deny": True, "behaviour": "auto_lower", "options": ["ask", "auto_lower", "auto"], "turn": False}
+    assert page.eval(SHOWN) == {"pill": "Scripted · big-1", "deny": True, "behaviour": "auto_lower", "options": ["ask", "auto_lower", "auto"],
+                                "under": "setupbig big-1 hard", "turn": True}  # under the setup call's request, the turn shown around it
     page.eval(f"(() => {{ const pick = {MESSAGE}.querySelector('select.rec-behaviour'); pick.value = 'ask'; pick.dispatchEvent(new Event('change', {{ bubbles: true }})); }})()")
     until(lambda: app.chats["LEAF-001"].setup.get("recommendations") == "ask")
     page.eval(f"{MESSAGE}.querySelector('.rec-deny').click()")

@@ -1,0 +1,8 @@
+---
+parents: [ORCHESTRATOR-SERVICES]
+order: 420
+sources: [src/ai_scratcher/services.py]
+test: ~
+---
+Answering call
+to a role marked failed clears its failure, and the blocking alert once every role answers again.

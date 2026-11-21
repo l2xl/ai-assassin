@@ -1,0 +1,9 @@
+---
+parents: [AI-CHAT]
+order: 97
+test: {live: ~, page: ~, early: ~}
+---
+Call lines
+of a batch are the request line of every call, shown as soon as the answer carrying the batch arrives — while the connection still holds the answer, where it tells the calls ahead of its return — and unfolding to the call, each followed by its response: the text the AI is sent for the call, less the heading that only names the call again, verbatim in the body of an AI message with no label or summary of the harness, starting level with its fold handle, collapsed to its first lines and unfolding in place to the whole of it once the call is answered; until then it tells whether the call runs or waits, and a call its batch ended before says it was not run.
+
+The body of every response spans the same width, whatever its text: from its fold handle, which stands under the first letter of its request's tool name, to the place kept at the right for the prune mark.

@@ -7,6 +7,7 @@ alert that stands while one of them is not configured or does not answer."""
 
 import json
 import shutil
+import sys
 import threading
 import urllib.request
 
@@ -22,6 +23,8 @@ PROBE_TIMEOUT = 60
 NOT_CONFIGURED = "not configured — give it a model locator in the orchestrator section of the server settings"
 # Seconds between two looks at whether a held call was stopped meanwhile.
 HOLD_POLL = 0.5
+# Seconds between two checks of the failed roles while the alert stands (ORCHESTRATOR-SERVICES-RECHECK).
+RECHECK = 60
 
 
 class service_error(Exception):
@@ -261,6 +264,37 @@ class health:
             self.on_fail()
         return moved
 
+    def recovered(self, role):
+        """A call to `role` answered: a role marked failed answers again, its failure dropped, and the alert clears once no role fails
+        (ORCHESTRATOR-SERVICES-RECOVER). -> whether the role was failed."""
+        with self.lock:
+            if role not in self.failures:
+                return False
+            self.failures.pop(role)
+            clear = not self.failures
+            self.lock.notify_all()
+        if clear:
+            self.on_clear()
+        return True
+
+    def watch(self, interval=RECHECK, stop=None):
+        """Check the failed roles again every `interval` seconds while the alert stands, until `stop` -- a `threading.Event` -- is set, so an
+        alert raised by a passing failure clears by itself (ORCHESTRATOR-SERVICES-RECHECK)."""
+        stop = stop or threading.Event()
+        while not stop.wait(interval):
+            if self.blocked():
+                try:
+                    self.retry()
+                except Exception as err:  # the watch outlives a failing callback: the next round checks again
+                    print(f"assassin: model services recheck: {type(err).__name__}: {err}", file=sys.stderr)
+
+    def state(self):
+        """The health as the diagnosis reads it: {alert, checked, failures: {role: [{locator, error}]}, active: {role: locator}}."""
+        with self.lock:
+            failures, active, checked = dict(self.failures), dict(self.active), self.checked
+        return {"alert": self.alert(), "checked": checked, "active": active,
+                "failures": {role: [{"locator": locator, "error": error} for locator, error in tried] for role, tried in failures.items()}}
+
     def blocked(self):
         with self.lock:
             return bool(self.failures)
@@ -284,10 +318,13 @@ class health:
                     raise
                 continue
             try:
-                return call(resolved)
+                answer = call(resolved)
             except errors as err:
                 if self.failed(role, err) is None:
                     raise
+                continue
+            self.recovered(role)
+            return answer
 
     def hold(self, role, call, stopped=lambda: False, errors=(Exception,)):
         """The answer of `call()` to `role`: a call failing with one of `errors` moves the role on and is made again on the next answering
@@ -295,7 +332,7 @@ class health:
         `stopped` meanwhile raises the failure."""
         while True:
             try:
-                return call()
+                answer = call()
             except errors as err:
                 if stopped():
                     raise
@@ -305,3 +342,6 @@ class health:
                         self.lock.wait(HOLD_POLL)
                 if stopped():
                     raise
+                continue
+            self.recovered(role)
+            return answer

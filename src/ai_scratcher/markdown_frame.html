@@ -1,0 +1,51 @@
+<!doctype html>
+<!--
+  Open Trader
+  Copyright (c) 2026 l2xl (l2xl/at/proton.me)
+  Distributed under the Intellectual Property Reserve License, v2 (IPRL)
+
+  The diagram frame of the AI Assassin page (design/ui/markdown.md): served at /markdown-frame without the session token and loaded
+  sandboxed to scripts alone, an opaque origin. It runs the drawing library -- the module named in place of LIBRARY_URL -- and answers
+  every {id, source, theme} the page posts with {id, svg} or {id, error}; it says {ready} once it listens.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>diagram renderer</title>
+</head>
+<body>
+<script type="module">
+const library = import(LIBRARY_URL).then((module) => module.default || module);
+let queue = Promise.resolve();
+
+// The SVG sized by its view box, so it stands as an image of its own size, scaled down by the page alone.
+function sized(svg) {
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml"), root = doc.documentElement;
+  if (doc.querySelector("parsererror") || root.localName !== "svg") return svg;
+  const box = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+  if (box.length === 4 && box.every(Number.isFinite) && box[2] > 0 && box[3] > 0) {
+    root.setAttribute("width", String(box[2]));
+    root.setAttribute("height", String(box[3]));
+    root.style.removeProperty("max-width");
+  }
+  return new XMLSerializer().serializeToString(root);
+}
+
+addEventListener("message", (event) => {
+  if (event.source !== parent || !event.data || typeof event.data !== "object") return;
+  const { id, source, theme } = event.data;
+  queue = queue.then(async () => {
+    try {
+      const mermaid = await library;
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: theme === "dark" ? "dark" : "default", htmlLabels: false, flowchart: { htmlLabels: false } });
+      const { svg } = await mermaid.render(`diagram-${id}`, String(source));
+      parent.postMessage({ id, svg: sized(svg) }, "*");
+    } catch (err) {
+      parent.postMessage({ id, error: String(err?.message || err).replace(/\s+/g, " ").trim().slice(0, 300) || "the library failed" }, "*");
+    }
+  });
+});
+parent.postMessage({ ready: true }, "*");
+</script>
+</body>
+</html>

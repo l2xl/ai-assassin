@@ -6,4 +6,4 @@ test: {send: da9e6f3191e7b3f4e72a39461e91209481dd055c1b86292e2f846b36400060af, d
 review: 53e0c3315e1a62a5bfb755399c886f3a70fd7f5cc303e8a8cadac4ae535e0929
 ---
 Description editor
-of an item is where its chat starts or goes on: entering it shows the chat and its controls without sending anything, and `➤ send` saves the statement and sends it.
+of an item is where its chat starts or goes on: entering it shows the chat and its controls without sending anything, and Ctrl/⌘+Enter saves the statement and sends it.

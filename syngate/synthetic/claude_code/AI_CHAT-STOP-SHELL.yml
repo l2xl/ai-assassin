@@ -1,0 +1,7 @@
+---
+parents: [AI_CHAT-STOP-BUTTON]
+order: 90
+test: ~
+---
+Shell stop
+ends a shell command the turn runs, with every process it started, the instant the turn is stopped, its call reporting it was stopped.

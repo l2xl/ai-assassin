@@ -93,7 +93,7 @@ except FileNotFoundError:
     ROOT = Path.cwd()
 SYNGATE_DIR = ROOT / "syngate"
 
-UID_RE = re.compile(r"^[A-Z][A-Z_]*(-[A-Z0-9_]+)*$")
+UID_RE = re.compile(r"^[A-Z](?:[A-Z0-9_-]*[A-Z0-9])?$")
 BINDING_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 KNOWN_FIELDS = {"header", "description", "parents", "order", "sources", "test", "review", "tests", "reviewed"}

@@ -277,7 +277,7 @@ ANSWER_REFUSED = "Your last answer was refused, none of it was applied: {error}\
 EMPTY_ANSWER = "a text answer carries no text: write the reply that ends the turn, or hand over calls"
 RESULTS_PREAMBLE = "Results of the calls in your last answer:\n"
 # A message names an item the way a file is named: `@UID` brings the item's statement into the turn.
-REFERENCE_RE = re.compile(r"@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\b")
+REFERENCE_RE = re.compile(r"@([A-Z](?:[A-Z0-9_-]*[A-Z0-9])?)\b")
 HISTORY_PREAMBLE = "The exchange so far, as kept by the user:\n"
 TREE_FEATURES = "\n# Tree features\ntest: {}\n"
 

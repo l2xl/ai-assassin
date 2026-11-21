@@ -1033,7 +1033,7 @@ function endDrag() {
 // ---- markdown: escape first, then a small CommonMark subset over the escaped text; never raw HTML --
 
 // A known item's UID written `@UID` (or the older `[UID]`) is a jump link to its block; the text is left as written, escaped already.
-const UID_TAG_RE = /\[([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\]|@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)(?![\w-])/g;
+const UID_TAG_RE = /\[([A-Z](?:[A-Z0-9_-]*[A-Z0-9])?)\]|@([A-Z](?:[A-Z0-9_-]*[A-Z0-9])?)(?![\w-])/g;
 const uidLink = (uid) => (state.model.items[uid] ? `<a class="jump" data-uid="${esc(uid)}">@${esc(uid)}</a>` : "@" + esc(uid));
 const jumps = (html) =>html.replace(UID_TAG_RE, (m, tagged, at) => state.model.items[tagged || at] ? `<a class="jump" data-uid="${tagged || at}">${tagged || m}</a>` : m);
 const dirname = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";

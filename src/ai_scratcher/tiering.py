@@ -22,7 +22,7 @@ DENSE_SEGMENTS = 16  # the segments of a long message the dense signal embeds: i
 RERANK_SEGMENTS = 6  # those the reranker scores against every statement of the shortlist: the first three and the last three
 TREE_EDITS = ("add", "edit", "remove", "move", "rename")
 ACTIVITY_WEIGHTS = {"edited": 3, "named": 2, "read": 1}
-REFERENCE_RE = re.compile(r"@([A-Z][A-Z_]*(?:-[A-Z0-9_]+)*)\b")
+REFERENCE_RE = re.compile(r"@([A-Z](?:[A-Z0-9_-]*[A-Z0-9])?)\b")
 CODE_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_.]*)`")
 
 

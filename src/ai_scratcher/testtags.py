@@ -11,7 +11,7 @@ from pathlib import Path
 from .syngatelib import BINDING_NAME_RE, UID_RE, Location
 
 OPENER = r"(?:/{2,}|/\*+|\*+|<!--|--+|#+|;+|%+|\{-)"
-UID_PATTERN = r"[A-Z][A-Z_]*(?:-[A-Z0-9_]+)*"
+UID_PATTERN = r"[A-Z](?:[A-Z0-9_-]*[A-Z0-9])?"
 TAG_RE = re.compile(rf"^\s*{OPENER}\s*(?:\S*[:\s])?syngate(?::\s*|\s+)({UID_PATTERN})(?:[ \t]+([a-z0-9_]+))?[ \t]*(?:\*/|-->|-\}}|)[ \t]*$")
 COMMENT_STARTS = ("//", "/*", "*", "<!--", "--", "#", ";", "%", "{-")
 CLOSER_RE = re.compile(r"^(?:[\])}]|end\W*$)")

@@ -80,6 +80,8 @@ def test_the_structured_answer_skill_is_a_default_skill_of_native_delivery_telli
     assert skill.default and skill.delivery == "native" and skill.text.startswith("# Structured answer\n")
     for phrase in (f"`{synthetic.ANSWER_TOOL}`", "takes the `kind` and the `calls` and no text", "Call it once to close the round", "`kind: text` to end the turn",
                    "Write your reply once, as text", "is your whole reply", "nothing written ahead of it is an empty answer, refused", "said on the way",
+                   "asked to call it, call it at once and write nothing more", "the text you already wrote stands ahead of the call and is the reply",
+                   "Once the tool has answered, write nothing",
                    "workflow you launch is awaited", "background is killed when the turn ends"):
         assert phrase in skill.text
     assert "`text`" not in skill.text and "call_tool_answer" not in synthetic.SKILLS  # no text field of the tool is offered

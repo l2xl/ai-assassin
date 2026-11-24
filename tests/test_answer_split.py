@@ -94,3 +94,19 @@ def test_a_text_answer_carrying_no_text_is_refused_back_to_the_model_within_the_
     assert "carries no text" in outcome["applied"][0] and outcome["reply"] == "Read it."  # the turn did not end on the empty reply
     assert all(heard["text"].startswith("Your last answer was refused") and "carries no text" in heard["text"] for heard in scripted.heard[1:])
     assert len(scripted.heard) == 3  # the two refusals, then the text answer
+
+
+@pytest.mark.syngate("SYNTHETIC-ANSWER-NO-CALLS")
+def test_an_empty_call_list_is_admitted_by_the_schema_ends_a_text_answer_and_refuses_a_calls_answer(server):
+    base, app = server
+    query = {"tool": "query", "uid": "@"}
+    assert synthetic.parse_reply({"kind": "text", "text": "Done.", "calls": []}) == ("chat", "Done.")  # an empty list is no call
+    assert synthetic.parse_reply({"kind": "calls", "calls": [query]}) == ("calls", [query])
+    with pytest.raises(synthetic.protocol_error, match="non-empty"):
+        synthetic.parse_reply({"kind": "calls", "calls": []})
+    for text in (True, False):
+        assert "minItems" not in synthetic.answer_schema(synthetic.LIBRARY, text=text)["properties"]["calls"]  # `calls: []` passes the schema
+    app.connectors = {"echo": (scripted := Scripted({"kind": "calls", "calls": []}, {"kind": "text", "text": "Done.", "calls": []}))}
+    outcome = turn(base, app, "ROOT", "Show the status.")
+    assert outcome["reply"] == "Done." and len(outcome["applied"]) == 1 and "non-empty" in outcome["applied"][0]
+    assert len(scripted.heard) == 2 and scripted.heard[1]["text"].startswith("Your last answer was refused")  # the empty text answer ended the turn

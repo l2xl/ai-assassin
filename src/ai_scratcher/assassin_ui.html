@@ -158,6 +158,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .md code { font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; font-size: 0.86em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
 .md pre { padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: 4px; background: var(--accent-soft); overflow-x: auto; }
 .md pre code { background: none; padding: 0; font-size: 0.8rem; }
+.md pre.file-text { margin: 0; overflow-wrap: normal; tab-size: 4; }
 .md blockquote { margin-left: 0; padding-left: 0.8em; border-left: 3px solid var(--line); color: var(--dim); }
 .md table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.85rem; } .md th, .md td { border: 1px solid var(--line); padding: 0.2em 0.6em; vertical-align: top; text-align: left; }
 .md hr { border: none; border-top: 1px solid var(--line); margin: 0.8em 0; }
@@ -1244,7 +1245,8 @@ function decorateFileView(el, f) {
   else {
     body.dataset.mode = "view";
     setHtml(body, f.error ? `<div class="block-problems">${esc(f.error)}</div>` : f.text == null ? '<div class="note">loading…</div>'
-      : `<div class="block-text md">${md(currentText(f.path, "file"), dirname(f.path))}</div>`);
+      : f.path.endsWith(".md") ? `<div class="block-text md">${md(currentText(f.path, "file"), dirname(f.path))}</div>`
+      : `<div class="block-text md"><pre class="file-text"><code>${esc(currentText(f.path, "file"))}</code></pre></div>`);
   }
   decorateFiles(el.querySelector(":scope > .sub-files"), path);
 }

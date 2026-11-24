@@ -1174,32 +1174,29 @@ class AssassinApp:
 
     def _file_at(self, rel):
         """(absolute path, writable) for a normalised project-relative path;
-        secrets sit untracked next to the tree (keys, databases), so anything
-        outside git is served only when it is markdown."""
+        any file inside the project is served -- `_text` admits UTF-8 text alone -- but git's own folder
+        and the server's settings and stored chats; only markdown is writable."""
         if not rel or Path(rel).is_absolute() or ".." in Path(rel).parts or rel != Path(rel).as_posix() or rel.startswith("-"):
             raise ApiError(400, f"'{rel}' is not a normalised project-relative path")
         path = (self.root / rel).resolve()
         if not path.is_relative_to(self.root.resolve()) or not path.is_file():
             raise ApiError(404, f"no file {rel}")
-        writable = path.suffix == ".md"
-        if not writable and not self._tracked(rel):
-            raise ApiError(403, f"{rel} is neither tracked by git nor markdown")
-        return path, writable
-
-    def _tracked(self, rel):
-        try:
-            return subprocess.run(["git", "ls-files", "--error-unmatch", "--", rel], cwd=self.root, capture_output=True).returncode == 0
-        except OSError:
-            return False
+        inner = path.relative_to(self.root.resolve())
+        if inner.parts[0] == ".git" or inner.as_posix() in UNREADABLE:
+            raise ApiError(403, f"{rel} is not served: it is git's own or the server's")
+        return path, path.suffix == ".md"
 
     @staticmethod
     def _text(path, rel):
         if path.stat().st_size > FILE_LIMIT:
             raise ApiError(413, f"{rel} exceeds {FILE_LIMIT >> 10} KiB")
         try:
-            return path.read_text(encoding="utf-8")
+            text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
+            raise ApiError(415, f"{rel} is not UTF-8 text") from None
+        if "\0" in text:
             raise ApiError(415, f"{rel} is not UTF-8 text")
+        return text
 
     def read_file(self, rel):
         path, writable = self._file_at(rel)

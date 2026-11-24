@@ -6,6 +6,6 @@ test: 95fd339243a402e6f8f9f138e77878937e18c02793b355c628b220ec3e96ea04
 review: 3d7f74491c919bb9a980db5d1257beec5b36ec3ead408fb97fb96073bc49c13d
 ---
 Structured answer skill
-is a default skill of native delivery telling the model to write its reply as text and to close the round with the answer tool, which takes the kind and the calls and no text.
+is a default skill of native delivery telling the model to write its reply as text and to close the round with the answer tool, which takes the kind and the calls and no text, and to answer the CLI's request for the tool with the tool alone, writing nothing again.
 
 It also tells what the CLI alone does: a workflow launched is awaited, a background shell killed at the turn's end.

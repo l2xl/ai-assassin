@@ -5,4 +5,4 @@ test: {read: f9742f67fb850be2e7f02cc6e4589f1eece581ad73b68033c35fe6356f3e30b2, s
 review: e984c06c25afdb3b0eb6ee1f1a55f734890fcc72b8cbaeb44e5433444c6292ac
 ---
 File view
-opens a file linked from an item inline, served only from inside the project.
+opens a text file linked from an item inline — markdown rendered, any other text verbatim — served only from inside the project.

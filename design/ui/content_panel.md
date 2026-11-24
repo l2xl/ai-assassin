@@ -15,9 +15,10 @@ The chat strip on the block's bottom-left border leads with one pill whose role 
 - **Files open inside the item.** A link to a file (`.filelink`) opens the file inside the block
   of the item that references it, the way the AI chat does: the block grows to hold the file
   view, the item's border (when revealed) enclosing description, chat and file alike. No separate
-  file panel is placed next to or under the block. Only git-tracked files and markdown inside the
-  project are served, and only markdown unchanged on disk since it was loaded is written: keys,
-  coverage and chats sit untracked next to the tree.
+  file panel is placed next to or under the block. Any UTF-8 text file inside the project is
+  served — sources, JSON, configs, tracked or not — markdown rendered, every other text shown
+  verbatim as a code block; binary files, git's own folder and the server's settings and stored
+  chats are not. Only markdown unchanged on disk since it was loaded is written.
 - **No nested rectangles.** A sub-element — a file view, a chat message, a tests section — is
   never drawn as its own bordered box. It is delimited by horizontal rules (`border-top` /
   `border-bottom`), by a left or right shift and by alignment: the user's messages flush left as

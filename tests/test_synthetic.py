@@ -235,7 +235,8 @@ def test_the_test_setup_skill_is_a_skill_on_request_stating_the_setup_tags_place
     assert skill.text not in shipped and "- `test_setup`: " in shipped
     for phrase in ('"setup": {"run"', '"setup": null', "nearest one wins whole", "`syngate:`", "// syngate: VAULT-DEPOSIT", "@custom:syngate",
                    "exactly one tagged routine", "without a shell", "`{ids}`", "`{names}`", "`{tags}`", "`{uids}`", "`{paths}`", "{names:|}",
-                   "`{report}`", "SYNGATE_COVERAGE_FILE", "SYNGATE_SELECT_FILE", "JUnit", "TAP", "CTRF", "exit status", "no result"):
+                   "`{report}`", "SYNGATE_COVERAGE_FILE", "SYNGATE_SELECT_FILE", "JUnit", "TAP", "CTRF", "exit status", "no result",
+                   "--match-test ^({names:|})[(]", "unescaped", "wrapper script", "enclosing `describe` titles"):
         assert phrase in skill.text
     assert "design/" not in skill.text and ".md" not in skill.text  # self-contained for any project
     assert "`test_setup` skill" in synthetic.LIBRARY["syngate_api"].text and "`test_setup` skill" in synthetic.SKILLS["deliver"].text
@@ -1016,6 +1017,31 @@ def test_the_text_written_ahead_of_a_text_answer_or_of_the_streams_end_is_the_re
     assert dispatched(reply, answer(kind="text", text="In the tool."))[0] == {"kind": "text", "text": "All done."}
     assert dispatched(note, read, read_back, answer(kind="text"))[0] == {"kind": "text", "text": ""}  # the harness refuses it as empty
     assert dispatched(reply)[0] == {"kind": "text", "text": "All done."}
+
+
+@pytest.mark.syngate("CLAUDE_CODE-ANSWER-ASKED")
+def test_the_text_written_before_the_cli_asked_for_the_answer_tool_stays_the_answers_and_a_text_written_again_is_not_dropped(tmp_path):
+    text = lambda words: {"type": "text", "text": words}
+    nudge = _said(text("[structured-output-enforce] call the StructuredOutput tool"), role="user")
+    first, again, thought = _said(text("All done.")), _said(text("All done, again.")), _said({"type": "thinking", "thinking": "Now the tool."})
+    answer = lambda **given: _said(_use("s1", "StructuredOutput", **given))
+    closing = {"type": "result", "subtype": "success", "is_error": False, "result": "The last words of the CLI."}
+
+    def fed(*events):
+        """(the steps of a turn fed the events, the text it wrote as its answer's)."""
+        turn = synthetic.turn_steps()
+        for event in events:
+            turn.feed(json.dumps(event))
+        return _without_at(turn.steps), turn.text
+
+    # the tool alone answers the CLI's request: the text written before it is the reply, generated once
+    assert fed(first, nudge, answer(kind="text"), closing) == ([], "All done.")
+    assert fed(first, nudge, thought, answer(kind="text"), closing) == ([{"kind": "reasoning", "text": "Now the tool."}], "All done.")
+    assert fed(first, nudge, answer(kind="calls", calls=[{"tool": "query", "uid": "@"}])) == ([{"kind": "message", "text": "All done."}], "")
+    # a text written again is the instructions' fault and stays in sight: the connector drops none
+    assert fed(first, nudge, again, answer(kind="text"), closing) == ([], "All done.\n\nAll done, again.")
+    answered, steps, _ = _announced(_streaming(tmp_path, [first, nudge, answer(kind="text")]), "Go.")
+    assert answered == {"kind": "text", "text": "All done."} and steps == []
 
 
 @pytest.mark.syngate("CLAUDE_CODE-100")

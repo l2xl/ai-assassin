@@ -299,7 +299,7 @@ def answer_schema(library, text=True):
     shapes = list({name: _call_schema(name, spec) for entry in tools for name, spec in (entry.calls or {}).items()}.values())  # one shape per call, as `library_calls` keeps it
     return {"type": "object", "description": "\n".join(entry.text for entry in tools),
             "properties": {"kind": {"enum": ["text", "calls"] if shapes else ["text"]}, **({"text": STRING} if text else {}),
-                           **({"calls": {"type": "array", "minItems": 1, "items": {"anyOf": shapes}}} if shapes else {})},
+                           **({"calls": {"type": "array", "items": {"anyOf": shapes}}} if shapes else {})},  # a text answer may give `calls: []`: refused by the schema, the model would add a call to pass
             "required": ["kind"], "additionalProperties": False}
 
 

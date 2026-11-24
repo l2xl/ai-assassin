@@ -1,0 +1,9 @@
+---
+parents: [CLAUDE_CODE-060]
+order: 340
+test: ~
+---
+Answer tool asked for
+by the CLI of a Claude Code turn — the model ended its response on text without the answer tool — leaves the text already written the answer's: the reply of a text answer or the message of a calls answer, the response calling the tool writing none. A text the model writes again joins it, the connector dropping none.
+
+That the model then writes nothing more is told by the structured answer skill.

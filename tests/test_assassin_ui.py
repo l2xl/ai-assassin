@@ -471,15 +471,24 @@ def test_linked_files_are_served_only_from_inside_the_project(server, tmp_path_f
     base, app = server
     (app.root / "docs").mkdir()
     (app.root / "docs" / "GUIDE.md").write_text("# Guide\n")
-    (app.root / "key.txt").write_text("secret\n")
+    (app.root / "tool.py").write_text("print('hi')\n")
+    (app.root / "data.json").write_text('{"a": 1}\n')
+    (app.root / "blob.bin").write_bytes(b"\x00\x01\x02")
+    (app.root / assassin_ui.SETTINGS_FILE).write_text("{}")
+    (app.root / ".git").mkdir(exist_ok=True)
+    (app.root / ".git" / "config").write_text("[core]\n")
     outside = tmp_path_factory.mktemp("outside") / "LEAK.md"
     outside.write_text("# Leak\n")
     (app.root / "docs" / "LINK.md").symlink_to(outside)
     status, served = call(base, app, "/api/file?path=docs/GUIDE.md")
     assert status == 200 and served["text"] == "# Guide\n" and served["writable"] is True
+    for path, text in (("tool.py", "print('hi')\n"), ("data.json", '{"a": 1}\n')):  # any text file, tracked or not, is served read-only
+        status, served_text = call(base, app, f"/api/file?path={path}")
+        assert status == 200 and served_text["text"] == text and served_text["writable"] is False
     _, state = call(base, app, "/api/fingerprint?file=docs/GUIDE.md&file=docs/GONE.md")
     assert state["files"] == {"docs/GUIDE.md": served["sha"], "docs/GONE.md": None}
-    for path, code in (("key.txt", 403), ("../GUIDE.md", 400), ("docs/../key.txt", 400), ("docs/LINK.md", 404), ("docs/GONE.md", 404)):  # untracked non-markdown; traversal; symlink escape; missing
+    for path, code in (("blob.bin", 415), (assassin_ui.SETTINGS_FILE, 403), (".git/config", 403), ("../GUIDE.md", 400), ("docs/../tool.py", 400),
+                       ("docs/LINK.md", 404), ("docs/GONE.md", 404)):  # binary; server's own files; git; traversal; symlink escape; missing
         with pytest.raises(urllib.error.HTTPError) as denied:
             call(base, app, f"/api/file?path={path}")
         assert denied.value.code == code, path

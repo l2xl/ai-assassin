@@ -1,0 +1,7 @@
+---
+parents: [SYNTHETIC-ANSWER]
+order: 510
+test: ~
+---
+Empty call list
+is no call: the answer schema admits `calls: []`, a text answer giving it ending the turn as its reply and a calls answer giving it being refused back to the model within the turn.

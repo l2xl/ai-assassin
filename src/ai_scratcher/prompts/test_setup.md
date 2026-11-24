@@ -8,7 +8,7 @@ Without a setup the tree runs two built-in suites: pytest routines marked `@pyte
 ## The setup
 Give it with the `edit` call, only where the user asks for it:
 ```syngate
-[{"tool": "edit", "uid": "VAULT", "setup": {"run": "forge test --junit --match-test ^({names:|})$", "files": ["test/**/*.t.sol"], "report": "junit", "env": {"FOUNDRY_FUZZ_SEED": "0x01"}}}]
+[{"tool": "edit", "uid": "VAULT", "setup": {"run": "forge test --junit --match-test ^({names:|})[(]", "files": ["test/**/*.t.sol"], "report": "junit", "env": {"FOUNDRY_FUZZ_SEED": "0x01"}}}]
 ```
 - `run` is required; `files`, `report` and `env` are optional. `"setup": null` removes it.
 - It holds for its item and everything below, up to the next setup: setups may nest — a contracts branch under forge inside a tree under pytest — and the nearest one wins whole, no key merged from the one above. An item under no setup keeps the built-in suites.
@@ -36,7 +36,7 @@ Each declared binding needs exactly one tagged routine over the files of all set
 | `{uids}` | the UID | a script of the project's own |
 | `{paths}` | the routine's file, each once | runners taking files |
 
-- **Joined:** `{names:|}` joins the values with the text after the colon inside the word it stands in — `--match-test ^({names:|})$`, `"{tags:,}"`. A word that is a bare plural placeholder, `{ids}`, becomes one word per value.
+- **Joined:** `{names:|}` joins the values with the text after the colon inside the word it stands in — `--match-test ^({names:|})[(]`, `"{tags:,}"`. The values enter as they are, unescaped: a routine name holding characters its runner's filter reads as a pattern — `(`, `.`, `$`, `?` in a regular expression — selects wrongly, so name the routines plainly or select by `{paths}`. A word that is a bare plural placeholder, `{ids}`, becomes one word per value.
 - **One by one:** the singular forms `{id}`, `{name}`, `{tag}`, `{uid}`, `{binding}`, `{path}`, `{line}` run the command once per binding; a command mixing singular and plural forms is refused.
 - **Whole suite:** a command with no selection placeholder runs the suite once and only the addressed bindings' results are taken — always correct, the slowest.
 - `{report}` is a scratch file for a runner writing its report to a path, `{root}` the project root. A script gets the same by environment: `SYNGATE_COVERAGE_FILE`, `SYNGATE_REPORT_FILE` and `SYNGATE_SELECT_FILE`, a JSONL of `{uid, binding, tag, name, path, line}`.
@@ -49,6 +49,14 @@ The first source holding any result serves the whole run:
 3. the exit status, for a command run one by one: 0 passes, the output is the log.
 
 A JUnit, TAP or CTRF result belongs to an addressed routine when its test name is the routine's name, or that name followed by a `(…)` signature or a `[…]` parameter; where two addressed routines share a name, the result's class or file must name the routine's file stem. Several results of one binding all count, any failed one failing it; a skipped test fails, since it did not run; a binding with no result fails with `no result` and the tail of the output. So pick a runner output that names tests the way their heads do, and a `run` line that prints or writes one of these formats.
+
+## Fitting a runner
+The setup fits the suite as it is; what it cannot say goes into a script of the project, never into the leaves.
+- **How the runner names a test** decides the filter and the join. forge matches `--match-test` against the signature and reports `test_Deposit()`: close the pattern with `[(]`, not `$`, which matches nothing. jest and vitest filter (`-t`) and report a test by its enclosing `describe` titles joined to its own: only a top-level `it` or `test` is reported under the name its head gives, so tag those, or have the runner report bare names. A parameterised or fuzzed routine reports one result per case, all counted.
+- **A suite in a folder or a toolchain of its own** — a submodule, a package with its own `node_modules`, a pinned compiler — needs a wrapper script, since `run` has no shell: no `cd`, `&&`, variable assignment or version manager. `sh web/test/run.sh --reporter=junit --outputFile={report} {paths} -t "^({names:|})$"` runs a script that enters its folder, picks the toolchain and passes its arguments on. `{paths}`, `{report}` and the `env` values reach it as the project root sees them: the script strips its folder's prefix from the paths and resolves relative values against the folder it was called from.
+- **Several suites over one subtree** — unit and end-to-end tests of the same leaves — share one setup when one command runs both, the leaf telling them apart by binding names (`balances`, `e2e_balances`), so the `test` call's `name` reruns one slow binding alone; suites of different runners take a setup each, on the items that part them.
+- **What the run needs beforehand** — installed dependencies, a build, a local chain — is the command's to bring up or to fail on plainly: every binding then fails with that one reason, which names the environment and is not mended in the tests.
+- **A filtered-out test is skipped, and skipped fails.** Where the runner reports the tests its filter left out as skipped, the addressed ones must not be among them: a `skip` or `only` mark on an addressed routine fails its binding.
 
 ## Steps
 1. Tag every routine of a changed leaf in its source, in the form its language takes.

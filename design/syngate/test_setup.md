@@ -17,7 +17,7 @@ setup lives in the item's `test` key.
 ```yaml
 test:
   stamp: {deposit: ~, overdraw: 4be1…}   # what the key held before: ~, a sha, or name: sha|~
-  run: forge test --junit --match-test ^({names:|})$
+  run: forge test --junit --match-test ^({names:|})[(]
   files: [test/**/*.t.sol]
   report: junit                          # optional, detected without it
   env: {FOUNDRY_FUZZ_SEED: "0x01"}       # optional
@@ -88,7 +88,7 @@ selects differently, and each of those ways is a join of the same five facts:
 | `{paths}` | the routine's file, each once | runners taking files |
 
 - **Joined.** `{names:|}` joins the values with the text after the colon inside the word it stands
-  in: `--match-test ^({names:|})$`, `"{tags:,}"`. A word that is a bare plural placeholder —
+  in: `--match-test ^({names:|})[(]`, `"{tags:,}"`. A word that is a bare plural placeholder —
   `{ids}` — becomes one word per value.
 - **One by one.** The singular forms `{id}`, `{name}`, `{tag}`, `{uid}`, `{binding}`, `{path}`,
   `{line}` run the command once for each binding; a command mixing them with plural ones is refused.

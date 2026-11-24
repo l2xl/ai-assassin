@@ -6,7 +6,8 @@ them, a connection only carries them.
 
 - **Answer.** One object per round, `{"kind": "text"|"calls", "text", "calls": [...]}`
   (`synthetic.answer_schema`, built from the tool definitions of the prompt library), `text` and
-  `calls` not exclusive.
+  `calls` not exclusive: an answer carrying calls is read as calls whatever its kind, and an empty
+  list is no call — the schema admits it, since a model refused `calls: []` would add a call to pass.
 - **Reply.** The `text` of a `kind: text` answer. It ends the turn and there is one per turn: what
   the chat shows last, what a delegating turn receives as its subagent's report, what the history
   of a new session keeps.
@@ -52,6 +53,13 @@ apart. The reasoning written behind a held text waits with it and is a step eith
 place. A text answer with nothing written ahead of it carries no text and is refused like any
 malformed answer. The structured answer skill (`call_tool_structured.md`, native delivery only) tells the
 model to write its reply as text and to close the round with the tool, which takes no text.
+
+**The tool asked for.** A response of the CLI's model that ends on text without the answer tool is
+asked for the tool by the CLI. The text already written is still held and stays the answer's — the
+reply of a text answer, the message of a calls answer — so the skill tells the model to call the
+tool then and write nothing more: the reply is generated once. The connector joins every text held
+since the last call and drops none: a text the model writes again shows twice, a fault of the
+instructions to mend there, never one the connector hides.
 
 **What each connection is told.** The tool call skill states the round every connection runs and
 names no carrier. The answer object and the fenced block of a plain answer are told to connections
